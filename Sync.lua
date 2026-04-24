@@ -89,6 +89,47 @@ local function DispatchAddonMessage(message, channel)
     end
 end
 
+local function GetDB()
+    SoftcoreDB = SoftcoreDB or {}
+    SoftcoreDB.sync = SoftcoreDB.sync or {}
+    SoftcoreDB.sync.remoteSequences = SoftcoreDB.sync.remoteSequences or {}
+    SoftcoreDB.sync.localSequence = SoftcoreDB.sync.localSequence or 0
+    SoftcoreDB.run = SoftcoreDB.run or {}
+    SoftcoreDB.run.conflicts = SoftcoreDB.run.conflicts or {}
+    return SoftcoreDB
+end
+
+local function NextSequence()
+    local db = GetDB()
+    db.sync.localSequence = (db.sync.localSequence or 0) + 1
+    return db.sync.localSequence
+end
+
+local function AddMetadata(payload)
+    local db = GetDB()
+    local status = SC:GetPlayerStatus()
+
+    payload.runId = status.runId
+    payload.rulesetVersion = status.rulesetVersion
+    payload.rulesetHash = status.rulesetHash
+    payload.addonVersion = SC.version
+    payload.playerKey = status.playerKey
+    payload.sequence = NextSequence()
+    payload.sentAt = time()
+    payload.partyStatus = status.partyStatus
+
+    return payload
+end
+
+local function SendPayload(payload)
+    local channel = GetSyncChannel()
+    if not channel then
+        return
+    end
+
+    DispatchAddonMessage(Encode(AddMetadata(payload)), channel)
+end
+
 local function RegisterPrefix()
     if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then
         C_ChatInfo.RegisterAddonMessagePrefix(PREFIX)
@@ -136,6 +177,47 @@ local function LocalPlayerKey()
     return PlayerKey(name, realm)
 end
 
+local function RecordConflict(playerKey, conflictType, localValue, remoteValue)
+    local db = GetDB()
+    local key = playerKey .. ":" .. conflictType
+
+    db.run.conflicts[key] = {
+        playerKey = playerKey,
+        type = conflictType,
+        localValue = localValue,
+        remoteValue = remoteValue,
+        active = true,
+        detectedAt = time(),
+    }
+end
+
+local function ClearConflict(playerKey, conflictType)
+    local db = GetDB()
+    local key = playerKey .. ":" .. conflictType
+
+    if db.run.conflicts[key] then
+        db.run.conflicts[key].active = false
+        db.run.conflicts[key].clearedAt = time()
+    end
+end
+
+local function ShouldIgnoreStale(payload, playerKey)
+    local sequence = tonumber(payload.sequence)
+    if not sequence then
+        return false
+    end
+
+    local db = GetDB()
+    local lastSequence = tonumber(db.sync.remoteSequences[playerKey] or 0)
+
+    if sequence <= lastSequence then
+        return true
+    end
+
+    db.sync.remoteSequences[playerKey] = sequence
+    return false
+end
+
 local function GetDisplayStatus(status)
     if not status or status.unsynced then
         return "UNSYNCED"
@@ -153,8 +235,12 @@ local function GetDisplayStatus(status)
         return "UNSYNCED"
     end
 
-    if status.participantStatus == "LEFT" or status.participantStatus == "RETIRED" or status.participantStatus == "DECLINED" then
+    if status.participantStatus == "OUT_OF_PARTY" or status.participantStatus == "RETIRED" or status.participantStatus == "DECLINED" or status.participantStatus == "NOT_IN_RUN" then
         return "INACTIVE"
+    end
+
+    if status.participantStatus == "RUN_MISMATCH" then
+        return "RUN_MISMATCH"
     end
 
     if status.active and status.participantStatus ~= "INACTIVE" then
@@ -234,8 +320,6 @@ function SC:Sync_BuildPayload(reason)
     return {
         type = "STATUS",
         reason = reason or "UPDATE",
-        runId = status.runId,
-        playerKey = status.playerKey,
         name = status.name,
         realm = status.realm,
         class = status.class,
@@ -247,31 +331,68 @@ function SC:Sync_BuildPayload(reason)
         deaths = status.deaths or 0,
         warnings = status.warnings or 0,
         participantStatus = status.participantStatus,
-        partyStatus = status.partyStatus,
         version = status.version,
+        addonVersion = status.version,
+        rulesetVersion = status.rulesetVersion,
+        rulesetHash = status.rulesetHash,
         timestamp = status.timestamp,
     }
 end
 
 function SC:Sync_BroadcastStatus(reason)
-    local channel = GetSyncChannel()
-    if not channel then
-        return
-    end
-
     local payload = self:Sync_BuildPayload(reason)
     if not payload then
         return
     end
 
-    DispatchAddonMessage(Encode(payload), channel)
+    SendPayload(payload)
+end
+
+function SC:Sync_SendHello()
+    SendPayload({
+        type = "HELLO",
+    })
+end
+
+function SC:Sync_RequestFullState()
+    SendPayload({
+        type = "FULL_STATE_REQUEST",
+    })
+    self:Sync_BroadcastStatus("RESYNC")
+end
+
+function SC:Sync_SendFullState()
+    local db = GetDB()
+    local status = self:GetPlayerStatus()
+
+    SendPayload({
+        type = "FULL_STATE_RESPONSE",
+        name = status.name,
+        realm = status.realm,
+        class = status.class,
+        level = status.level,
+        zone = status.zone,
+        active = db.run.active and 1 or 0,
+        valid = db.run.valid and 1 or 0,
+        failed = db.run.failed and 1 or 0,
+        deaths = db.run.deathCount or 0,
+        warnings = db.run.warningCount or 0,
+        participantStatus = status.participantStatus,
+        participantCount = #(db.run.participantOrder or {}),
+        rulesetVersion = status.rulesetVersion,
+        rulesetHash = status.rulesetHash,
+    })
+end
+
+function SC:Sync_SendProposal(proposalType, proposalId)
+    SendPayload({
+        type = proposalType,
+        proposalId = proposalId,
+    })
 end
 
 function SC:Sync_HandleMessage(message, sender)
     local payload = Decode(message)
-    if payload.type ~= "STATUS" then
-        return
-    end
 
     local name = payload.name
     local realm = payload.realm
@@ -283,6 +404,57 @@ function SC:Sync_HandleMessage(message, sender)
     local key = PlayerKey(name, realm)
     if key == LocalPlayerKey() then
         return
+    end
+
+    if ShouldIgnoreStale(payload, key) then
+        return
+    end
+
+    if payload.type == "FULL_STATE_REQUEST" then
+        self:Sync_SendFullState()
+        return
+    end
+
+    if payload.type == "HELLO" then
+        self:Sync_BroadcastStatus("HELLO")
+        return
+    end
+
+    if payload.type == "PROPOSAL" or payload.type == "PROPOSAL_ACCEPT" or payload.type == "PROPOSAL_DECLINE" or payload.type == "AMENDMENT_PROPOSE" or payload.type == "AMENDMENT_ACCEPT" or payload.type == "AMENDMENT_DECLINE" or payload.type == "VIOLATION_CLEAR" then
+        self:AddLog("SYNC_" .. payload.type, "Received " .. payload.type .. " from " .. key, {
+            playerKey = key,
+            proposalId = payload.proposalId,
+        })
+        return
+    end
+
+    if payload.type ~= "STATUS" and payload.type ~= "FULL_STATE_RESPONSE" then
+        return
+    end
+
+    local localRunId = (self.db and self.db.run and self.db.run.runId) or nil
+    local remoteRunId = payload.runId
+    local localRulesetHash = self.GetRulesetHash and self:GetRulesetHash() or ""
+    local remoteRulesetHash = payload.rulesetHash
+
+    local participantStatus = payload.participantStatus
+    if localRunId and remoteRunId and localRunId ~= remoteRunId then
+        participantStatus = "RUN_MISMATCH"
+        RecordConflict(key, "RUN_MISMATCH", localRunId, remoteRunId)
+    else
+        ClearConflict(key, "RUN_MISMATCH")
+    end
+
+    if remoteRulesetHash and remoteRulesetHash ~= "" and localRulesetHash ~= "" and remoteRulesetHash ~= localRulesetHash then
+        RecordConflict(key, "RULESET_MISMATCH", localRulesetHash, remoteRulesetHash)
+    else
+        ClearConflict(key, "RULESET_MISMATCH")
+    end
+
+    if payload.addonVersion and payload.addonVersion ~= SC.version then
+        RecordConflict(key, "ADDON_VERSION_MISMATCH", SC.version, payload.addonVersion)
+    else
+        ClearConflict(key, "ADDON_VERSION_MISMATCH")
     end
 
     self.groupStatuses[key] = {
@@ -298,9 +470,13 @@ function SC:Sync_HandleMessage(message, sender)
         failed = payload.failed == "1",
         deaths = tonumber(payload.deaths) or 0,
         warnings = tonumber(payload.warnings) or 0,
-        participantStatus = payload.participantStatus,
+        participantStatus = participantStatus,
         partyStatus = payload.partyStatus,
-        version = payload.version,
+        version = payload.addonVersion or payload.version,
+        addonVersion = payload.addonVersion or payload.version,
+        rulesetVersion = tonumber(payload.rulesetVersion) or 0,
+        rulesetHash = payload.rulesetHash,
+        sequence = tonumber(payload.sequence) or 0,
         timestamp = tonumber(payload.timestamp) or 0,
         lastSeen = time(),
         unsynced = false,
@@ -314,12 +490,14 @@ function SC:Sync_HandleMessage(message, sender)
         participant.currentLevel = tonumber(payload.level) or participant.currentLevel
         participant.joinedAt = participant.joinedAt or time()
 
-        if payload.participantStatus == "FAILED" then
+        if participantStatus == "RUN_MISMATCH" then
+            participant.status = "RUN_MISMATCH"
+        elseif participantStatus == "FAILED" then
             participant.status = "FAILED"
             participant.failedAt = participant.failedAt or time()
             participant.failReason = participant.failReason or "Synced failure"
-        elseif participant.status ~= "FAILED" and participant.status ~= "RETIRED" and payload.participantStatus then
-            participant.status = payload.participantStatus
+        elseif participant.status ~= "FAILED" and participant.status ~= "RETIRED" and participantStatus then
+            participant.status = participantStatus
         end
     end
 
@@ -348,6 +526,7 @@ function SC:Sync_Initialize()
     -- Give other clients a moment to register their prefix after reload/login.
     if C_Timer and C_Timer.After then
         C_Timer.After(2, function()
+            SC:Sync_SendHello()
             SC:Sync_BroadcastStatus("LOGIN")
         end)
         C_Timer.After(UNSYNCED_AFTER, function()

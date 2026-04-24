@@ -24,6 +24,24 @@ local RULE_ORDER = {
     "dungeonRepeat",
 }
 
+local HASH_RULE_ORDER = {
+    "death",
+    "failedMemberBlocksParty",
+    "allowLateJoin",
+    "allowReplacementCharacters",
+    "requireLeaderApprovalForJoin",
+    "auctionHouse",
+    "mailbox",
+    "trade",
+    "mounts",
+    "flying",
+    "flightPaths",
+    "outsiderGrouping",
+    "unsyncedMembers",
+    "maxLevelGap",
+    "dungeonRepeat",
+}
+
 local BOOLEAN_RULES = {
     failedMemberBlocksParty = true,
     allowLateJoin = true,
@@ -211,6 +229,10 @@ function SC:ProposeRuleAmendment(newRules, reason)
         amendmentId = amendment.id,
     })
 
+    if self.Sync_SendProposal then
+        self:Sync_SendProposal("AMENDMENT_PROPOSE", amendment.id)
+    end
+
     return amendment
 end
 
@@ -226,6 +248,9 @@ function SC:AcceptRuleAmendment(amendmentId)
                 self:AddLog("RULE_AMENDMENT_ACCEPTED", "Rule amendment accepted.", {
                     amendmentId = amendment.id,
                 })
+                if self.Sync_SendProposal then
+                    self:Sync_SendProposal("AMENDMENT_ACCEPT", amendment.id)
+                end
             end
 
             return amendment
@@ -247,6 +272,9 @@ function SC:DeclineRuleAmendment(amendmentId)
                 self:AddLog("RULE_AMENDMENT_DECLINED", "Rule amendment declined.", {
                     amendmentId = amendment.id,
                 })
+                if self.Sync_SendProposal then
+                    self:Sync_SendProposal("AMENDMENT_DECLINE", amendment.id)
+                end
             end
 
             return amendment
@@ -276,6 +304,8 @@ function SC:ApplyRuleAmendment(amendmentId)
                     })
                 end
 
+                db.run.ruleset.version = (tonumber(db.run.ruleset.version) or 1) + 1
+
                 amendment.status = "APPLIED"
                 amendment.appliedAt = time()
                 self:AddLog("RULE_AMENDMENT_APPLIED", "Rule amendment applied prospectively.", {
@@ -292,4 +322,20 @@ end
 
 function SC:GetRuleOrder()
     return RULE_ORDER
+end
+
+function SC:GetRulesetHash()
+    local db = GetDB()
+    local text = ""
+    local checksum = 0
+
+    for _, ruleName in ipairs(HASH_RULE_ORDER) do
+        text = text .. ruleName .. "=" .. tostring(db.run.ruleset[ruleName]) .. ";"
+    end
+
+    for index = 1, string.len(text) do
+        checksum = (checksum + (string.byte(text, index) * index)) % 1000000007
+    end
+
+    return tostring(checksum)
 end

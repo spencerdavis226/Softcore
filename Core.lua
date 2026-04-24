@@ -7,7 +7,7 @@ Softcore = Softcore or {}
 local SC = Softcore
 
 SC.name = "Softcore"
-SC.version = "0.2.7"
+SC.version = "0.2.8"
 SC.maxLogEntries = 30
 
 local function Print(message)
@@ -88,6 +88,15 @@ local function CreateDefaultRuleset()
     }
 end
 
+local function CreateDefaultGovernance()
+    return {
+        mode = "ACTIVE_PARTY_MAJORITY",
+        allowAnyActiveParticipantToPropose = true,
+        requireVoteForRuleChanges = true,
+        requireVoteForViolationClears = false,
+    }
+end
+
 local function GetCurrentPartyKeys()
     local keys = {}
 
@@ -124,10 +133,24 @@ local function EnsureRunDefaults(run)
     run.participants = run.participants or {}
     run.participantOrder = run.participantOrder or {}
     run.partyStatus = run.partyStatus or "INACTIVE"
+    run.governance = run.governance or CreateDefaultGovernance()
+    run.conflicts = run.conflicts or {}
 
     for key, value in pairs(CreateDefaultRuleset()) do
         if run.ruleset[key] == nil then
             run.ruleset[key] = value
+        end
+    end
+
+    for key, value in pairs(CreateDefaultGovernance()) do
+        if run.governance[key] == nil then
+            run.governance[key] = value
+        end
+    end
+
+    for _, participant in pairs(run.participants) do
+        if participant.status == "LEFT" then
+            participant.status = "OUT_OF_PARTY"
         end
     end
 end
@@ -145,6 +168,9 @@ local function EnsureDatabase()
     SoftcoreDB.nextIds.violation = SoftcoreDB.nextIds.violation or 0
     SoftcoreDB.nextIds.amendment = SoftcoreDB.nextIds.amendment or 0
     SoftcoreDB.ruleAmendments = SoftcoreDB.ruleAmendments or {}
+    SoftcoreDB.sync = SoftcoreDB.sync or {}
+    SoftcoreDB.sync.remoteSequences = SoftcoreDB.sync.remoteSequences or {}
+    SoftcoreDB.sync.localSequence = SoftcoreDB.sync.localSequence or 0
 
     EnsureRunDefaults(SoftcoreDB.run)
     if SoftcoreDB.run.active and not SoftcoreDB.run.runId then
@@ -315,10 +341,10 @@ end
 function SC:MarkParticipantLeft(playerKey)
     local participant = self:GetOrCreateParticipant(playerKey)
 
-    if participant.status ~= "FAILED" and participant.status ~= "RETIRED" and participant.status ~= "LEFT" then
-        participant.status = "LEFT"
+    if participant.status ~= "FAILED" and participant.status ~= "RETIRED" and participant.status ~= "OUT_OF_PARTY" then
+        participant.status = "OUT_OF_PARTY"
         participant.leftAt = time()
-        self:AddLog("PARTICIPANT_LEFT", participant.playerKey .. " left the party.", {
+        self:AddLog("PARTICIPANT_OUT_OF_PARTY", participant.playerKey .. " left the party.", {
             playerKey = participant.playerKey,
         })
     end
@@ -337,12 +363,12 @@ function SC:RefreshParticipantsFromRoster()
     for playerKey, participant in pairs(db.run.participants) do
         if participant.status ~= "FAILED" and participant.status ~= "RETIRED" then
             if partyKeys[playerKey] then
-                if participant.status == "LEFT" or participant.status == "UNSYNCED" then
+                if participant.status == "OUT_OF_PARTY" or participant.status == "UNSYNCED" then
                     participant.status = "ACTIVE"
                     participant.leftAt = nil
                     participant.joinedAt = participant.joinedAt or time()
                 end
-            elseif playerKey ~= GetPlayerKey(db.character) and (participant.status == "ACTIVE" or participant.status == "WARNING" or participant.status == "UNSYNCED") then
+            elseif playerKey ~= GetPlayerKey(db.character) and (participant.status == "ACTIVE" or participant.status == "WARNING" or participant.status == "UNSYNCED" or participant.status == "PENDING") then
                 self:MarkParticipantLeft(playerKey)
             end
         end
@@ -372,12 +398,15 @@ function SC:GetPartyStatus()
 
     local hasWarning = false
     local hasUnsynced = false
+    local hasConflict = false
 
     for playerKey, participant in pairs(db.run.participants) do
         if self:IsParticipantInCurrentParty(playerKey) then
             if participant.status == "FAILED" and db.run.ruleset.failedMemberBlocksParty then
                 db.run.partyStatus = "BLOCKED"
                 return db.run.partyStatus
+            elseif participant.status == "RUN_MISMATCH" then
+                hasConflict = true
             elseif participant.status == "WARNING" then
                 hasWarning = true
             elseif participant.status == "PENDING" or participant.status == "UNSYNCED" then
@@ -386,7 +415,15 @@ function SC:GetPartyStatus()
         end
     end
 
-    if hasWarning then
+    for _, conflict in pairs(db.run.conflicts) do
+        if conflict.active and self:IsParticipantInCurrentParty(conflict.playerKey) then
+            hasConflict = true
+        end
+    end
+
+    if hasConflict then
+        db.run.partyStatus = "CONFLICT"
+    elseif hasWarning then
         db.run.partyStatus = "WARNING"
     elseif hasUnsynced then
         db.run.partyStatus = "UNSYNCED"
@@ -416,6 +453,9 @@ function SC:ClearViolation(violationId, clearedBy, clearReason)
                     clearedBy = violation.clearedBy,
                     clearReason = violation.clearReason,
                 })
+                if self.Sync_SendProposal then
+                    self:Sync_SendProposal("VIOLATION_CLEAR", violation.id)
+                end
             end
 
             return violation
@@ -449,8 +489,10 @@ function SC:GetPlayerStatus()
         active = db.run.active,
         valid = db.run.valid,
         failed = participant and participant.status == "FAILED",
-        participantStatus = participant and participant.status or "INACTIVE",
+        participantStatus = participant and participant.status or "NOT_IN_RUN",
         partyStatus = self:GetPartyStatus(),
+        rulesetVersion = db.run.ruleset.version,
+        rulesetHash = self.GetRulesetHash and self:GetRulesetHash() or "",
         deaths = db.run.deathCount,
         warnings = db.run.warningCount,
         version = self.version,
@@ -470,9 +512,11 @@ function SC:StartRun()
     db.run.deathCount = 0
     db.run.warningCount = 0
     db.run.ruleset = CreateDefaultRuleset()
+    db.run.governance = CreateDefaultGovernance()
     db.run.participants = {}
     db.run.participantOrder = {}
     db.run.partyStatus = "VALID"
+    db.run.conflicts = {}
     db.eventLog = {}
     db.violations = {}
     local participant = self:GetOrCreateParticipant(GetPlayerKey(db.character))
@@ -507,9 +551,11 @@ function SC:ResetRun()
     db.run.deathCount = 0
     db.run.warningCount = 0
     db.run.ruleset = CreateDefaultRuleset()
+    db.run.governance = CreateDefaultGovernance()
     db.run.participants = {}
     db.run.participantOrder = {}
     db.run.partyStatus = "INACTIVE"
+    db.run.conflicts = {}
     db.eventLog = {}
     db.violations = {}
 
@@ -575,6 +621,30 @@ function SC:PrintRoster()
     end
 end
 
+function SC:PrintRun()
+    local db = EnsureDatabase()
+    Print("runId: " .. tostring(db.run.runId or "none"))
+    Print("active: " .. tostring(db.run.active) .. ", party: " .. self:GetPartyStatus())
+    Print("rulesetVersion: " .. tostring(db.run.ruleset.version) .. ", rulesetHash: " .. tostring(self.GetRulesetHash and self:GetRulesetHash() or "unknown"))
+    Print("governance: " .. tostring(db.run.governance.mode))
+end
+
+function SC:PrintConflicts()
+    local db = EnsureDatabase()
+    local found = false
+
+    for _, conflict in pairs(db.run.conflicts) do
+        if conflict.active then
+            found = true
+            Print(conflict.playerKey .. " - " .. conflict.type .. " - local " .. tostring(conflict.localValue) .. " / remote " .. tostring(conflict.remoteValue))
+        end
+    end
+
+    if not found then
+        Print("no active conflicts.")
+    end
+end
+
 function SC:PrintRules()
     local db = EnsureDatabase()
     local rules = db.run.ruleset
@@ -623,10 +693,14 @@ function SC:PrintHelp()
     Print("/sc reset - reset the local run")
     Print("/sc log - print recent event logs")
     Print("/sc roster - print run participants")
+    Print("/sc participants - print run participants")
     Print("/sc add Player-Realm - add a pending participant")
     Print("/sc retire - retire this character without failing")
     Print("/sc rules - print current ruleset")
     Print("/sc rule ruleName value - change a rule locally")
+    Print("/sc run - print run metadata")
+    Print("/sc conflicts - print sync conflicts")
+    Print("/sc resync - request full state from party")
 end
 
 function SC:HandleSlash(input)
@@ -642,8 +716,19 @@ function SC:HandleSlash(input)
         self:ResetRun()
     elseif command == "log" then
         self:PrintLog()
-    elseif command == "roster" then
+    elseif command == "roster" or command == "participants" then
         self:PrintRoster()
+    elseif command == "run" then
+        self:PrintRun()
+    elseif command == "conflicts" then
+        self:PrintConflicts()
+    elseif command == "resync" then
+        if self.Sync_RequestFullState then
+            self:Sync_RequestFullState()
+            Print("requested full state from party.")
+        else
+            Print("sync is not ready yet.")
+        end
     elseif command == "rules" then
         self:PrintRules()
     elseif command == "rule" then

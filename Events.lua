@@ -151,7 +151,6 @@ function SC:Events_Register()
             CheckMovementRules()
         elseif event == "GROUP_ROSTER_UPDATE" then
             SC:AddLog("GROUP_ROSTER", "Group roster changed.")
-            Broadcast("GROUP_ROSTER_UPDATE")
             if C_Timer and C_Timer.After then
                 C_Timer.After(2, function()
                     Broadcast("GROUP_ROSTER_UPDATE")
@@ -163,6 +162,7 @@ function SC:Events_Register()
             if SC.RefreshParticipantsFromRoster then
                 SC:RefreshParticipantsFromRoster()
             end
+            Broadcast("GROUP_ROSTER_UPDATE")
         elseif event == "PLAYER_ENTERING_WORLD" then
             Broadcast("PLAYER_ENTERING_WORLD")
         end

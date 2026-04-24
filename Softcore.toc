@@ -2,7 +2,7 @@
 ## Title: Softcore
 ## Notes: Group accountability tracker for hardcore-style retail runs.
 ## Author: Spencer
-## Version: 0.2.7
+## Version: 0.2.8
 ## SavedVariables: SoftcoreDB
 
 Core.lua
