@@ -109,9 +109,9 @@ local function AddMetadata(payload)
     local db = GetDB()
     local status = SC:GetPlayerStatus()
 
-    payload.runId = status.runId
-    payload.rulesetVersion = status.rulesetVersion
-    payload.rulesetHash = status.rulesetHash
+    payload.runId = payload.runId or status.runId
+    payload.rulesetVersion = payload.rulesetVersion or status.rulesetVersion
+    payload.rulesetHash = payload.rulesetHash or status.rulesetHash
     payload.addonVersion = SC.version
     payload.playerKey = status.playerKey
     payload.sequence = NextSequence()
@@ -235,7 +235,11 @@ local function GetDisplayStatus(status)
         return "UNSYNCED"
     end
 
-    if status.participantStatus == "OUT_OF_PARTY" or status.participantStatus == "RETIRED" or status.participantStatus == "DECLINED" or status.participantStatus == "NOT_IN_RUN" then
+    if status.participantStatus == "NOT_IN_RUN" then
+        return "NOT_IN_RUN"
+    end
+
+    if status.participantStatus == "OUT_OF_PARTY" or status.participantStatus == "RETIRED" or status.participantStatus == "DECLINED" then
         return "INACTIVE"
     end
 
@@ -320,6 +324,7 @@ function SC:Sync_BuildPayload(reason)
     return {
         type = "STATUS",
         reason = reason or "UPDATE",
+        runName = status.runName,
         name = status.name,
         realm = status.realm,
         class = status.class,
@@ -391,6 +396,33 @@ function SC:Sync_SendProposal(proposalType, proposalId)
     })
 end
 
+function SC:Sync_SendRunProposal(proposal)
+    SendPayload({
+        type = "PROPOSAL",
+        proposalId = proposal.proposalId,
+        runId = proposal.runId,
+        proposalRunId = proposal.runId,
+        runName = proposal.runName,
+        proposedAt = proposal.proposedAt,
+        proposalKind = proposal.proposalType or "RUN",
+        targetPlayerKey = proposal.targetPlayerKey,
+        ruleset = self:SerializeRuleset(proposal.ruleset),
+        rulesetHash = proposal.rulesetHash,
+        proposalRulesetHash = proposal.rulesetHash,
+    })
+end
+
+function SC:Sync_SendProposalResponse(messageType, proposal)
+    SendPayload({
+        type = messageType,
+        proposalId = proposal.proposalId,
+        runId = proposal.runId,
+        proposalRunId = proposal.runId,
+        runName = proposal.runName,
+        proposalRulesetHash = proposal.rulesetHash,
+    })
+end
+
 function SC:Sync_HandleMessage(message, sender)
     local payload = Decode(message)
 
@@ -420,7 +452,21 @@ function SC:Sync_HandleMessage(message, sender)
         return
     end
 
-    if payload.type == "PROPOSAL" or payload.type == "PROPOSAL_ACCEPT" or payload.type == "PROPOSAL_DECLINE" or payload.type == "AMENDMENT_PROPOSE" or payload.type == "AMENDMENT_ACCEPT" or payload.type == "AMENDMENT_DECLINE" or payload.type == "VIOLATION_CLEAR" then
+    if payload.type == "PROPOSAL" then
+        if self.ReceiveRunProposal then
+            self:ReceiveRunProposal(payload, key)
+        end
+        return
+    end
+
+    if payload.type == "PROPOSAL_ACCEPT" or payload.type == "PROPOSAL_DECLINE" then
+        if self.ReceiveProposalResponse then
+            self:ReceiveProposalResponse(payload, key)
+        end
+        return
+    end
+
+    if payload.type == "AMENDMENT_PROPOSE" or payload.type == "AMENDMENT_ACCEPT" or payload.type == "AMENDMENT_DECLINE" or payload.type == "VIOLATION_CLEAR" then
         self:AddLog("SYNC_" .. payload.type, "Received " .. payload.type .. " from " .. key, {
             playerKey = key,
             proposalId = payload.proposalId,
@@ -446,6 +492,9 @@ function SC:Sync_HandleMessage(message, sender)
     end
 
     if remoteRulesetHash and remoteRulesetHash ~= "" and localRulesetHash ~= "" and remoteRulesetHash ~= localRulesetHash then
+        if participantStatus ~= "RUN_MISMATCH" then
+            participantStatus = "UNSYNCED"
+        end
         RecordConflict(key, "RULESET_MISMATCH", localRulesetHash, remoteRulesetHash)
     else
         ClearConflict(key, "RULESET_MISMATCH")
@@ -483,21 +532,37 @@ function SC:Sync_HandleMessage(message, sender)
     }
 
     if self.db and self.db.run and self.db.run.active and self.GetOrCreateParticipant then
-        local participant = self:GetOrCreateParticipant(key)
-        participant.name = name
-        participant.realm = realm
-        participant.class = payload.class
-        participant.currentLevel = tonumber(payload.level) or participant.currentLevel
-        participant.joinedAt = participant.joinedAt or time()
+        local run = self.db.run
+        local ruleset = run.ruleset or {}
 
-        if participantStatus == "RUN_MISMATCH" then
-            participant.status = "RUN_MISMATCH"
-        elseif participantStatus == "FAILED" then
-            participant.status = "FAILED"
-            participant.failedAt = participant.failedAt or time()
-            participant.failReason = participant.failReason or "Synced failure"
-        elseif participant.status ~= "FAILED" and participant.status ~= "RETIRED" and participantStatus then
-            participant.status = participantStatus
+        if ruleset.groupingMode == "SOLO_SELF_FOUND" and not run.participants[key] then
+            run.outsiderGroupingNotices = run.outsiderGroupingNotices or {}
+            local now = time()
+            local last = run.outsiderGroupingNotices[key]
+            if self.ApplyRuleOutcome and (not last or now - last >= 60) then
+                run.outsiderGroupingNotices[key] = now
+                self:ApplyRuleOutcome("outsiderGrouping", {
+                    playerKey = self:GetPlayerKey(),
+                    detail = "Grouped with outside Softcore character during solo/self-found run: " .. key,
+                })
+            end
+        else
+            local participant = self:GetOrCreateParticipant(key)
+            participant.name = name
+            participant.realm = realm
+            participant.class = payload.class
+            participant.currentLevel = tonumber(payload.level) or participant.currentLevel
+            participant.joinedAt = participant.joinedAt or time()
+
+            if participantStatus == "RUN_MISMATCH" then
+                participant.status = "RUN_MISMATCH"
+            elseif participantStatus == "FAILED" then
+                participant.status = "FAILED"
+                participant.failedAt = participant.failedAt or time()
+                participant.failReason = participant.failReason or "Synced failure"
+            elseif participant.status ~= "FAILED" and participant.status ~= "RETIRED" and participantStatus then
+                participant.status = participantStatus
+            end
         end
     end
 

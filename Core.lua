@@ -7,7 +7,7 @@ Softcore = Softcore or {}
 local SC = Softcore
 
 SC.name = "Softcore"
-SC.version = "0.2.10"
+SC.version = "0.3.0"
 SC.maxLogEntries = 30
 
 local function Print(message)
@@ -62,8 +62,30 @@ local function GetPlayerKey(character)
     return BuildPlayerKey(character.name, character.realm)
 end
 
+local function ApplyGroupingModeRules(ruleset)
+    ruleset = ruleset or {}
+    ruleset.groupingMode = ruleset.groupingMode or "SYNCED_GROUP_ALLOWED"
+    ruleset.death = "CHARACTER_FAIL"
+    ruleset.deathFails = "CHARACTER_ONLY"
+
+    if ruleset.groupingMode == "SOLO_SELF_FOUND" then
+        ruleset.allowLateJoin = false
+        ruleset.allowReplacementCharacters = false
+        ruleset.failedMemberBlocksParty = true
+        ruleset.requireLeaderApprovalForJoin = false
+    else
+        ruleset.groupingMode = "SYNCED_GROUP_ALLOWED"
+        ruleset.allowLateJoin = true
+        ruleset.allowReplacementCharacters = true
+        ruleset.failedMemberBlocksParty = true
+        ruleset.requireLeaderApprovalForJoin = false
+    end
+
+    return ruleset
+end
+
 local function CreateDefaultRuleset()
-    return {
+    local ruleset = {
         id = "default",
         name = "Default Softcore Rules",
         version = 1,
@@ -71,10 +93,11 @@ local function CreateDefaultRuleset()
         deathIsFatal = true,
         death = "CHARACTER_FAIL",
         deathFails = "CHARACTER_ONLY",
+        groupingMode = "SYNCED_GROUP_ALLOWED",
         failedMemberBlocksParty = true,
         allowLateJoin = true,
         allowReplacementCharacters = true,
-        requireLeaderApprovalForJoin = true,
+        requireLeaderApprovalForJoin = false,
         auctionHouse = "WARNING",
         mailbox = "WARNING",
         trade = "WARNING",
@@ -96,6 +119,8 @@ local function CreateDefaultRuleset()
         craftingOrders = "LOG_ONLY",
         vendor = "ALLOWED",
     }
+
+    return ApplyGroupingModeRules(ruleset)
 end
 
 local function CreateDefaultGovernance()
@@ -131,11 +156,24 @@ local function GetCurrentPartyKeys()
     return keys
 end
 
+local function ShouldThrottleRunNotice(run, bucketName, playerKey, seconds)
+    run[bucketName] = run[bucketName] or {}
+    local now = time()
+    local last = run[bucketName][playerKey]
+    if last and now - last < (seconds or 60) then
+        return true
+    end
+
+    run[bucketName][playerKey] = now
+    return false
+end
+
 local function EnsureRunDefaults(run)
     if run.active == nil then run.active = false end
     if run.valid == nil then run.valid = true end
     if run.failed == nil then run.failed = false end
     run.runId = run.runId or nil
+    run.runName = run.runName or nil
     run.startTime = run.startTime or nil
     run.deathCount = run.deathCount or 0
     run.warningCount = run.warningCount or 0
@@ -153,6 +191,8 @@ local function EnsureRunDefaults(run)
             run.ruleset[key] = value
         end
     end
+
+    ApplyGroupingModeRules(run.ruleset)
 
     for key, value in pairs(CreateDefaultGovernance()) do
         if run.governance[key] == nil then
@@ -179,7 +219,12 @@ local function EnsureDatabase()
     SoftcoreDB.nextIds.log = SoftcoreDB.nextIds.log or 0
     SoftcoreDB.nextIds.violation = SoftcoreDB.nextIds.violation or 0
     SoftcoreDB.nextIds.amendment = SoftcoreDB.nextIds.amendment or 0
+    SoftcoreDB.nextIds.proposal = SoftcoreDB.nextIds.proposal or 0
     SoftcoreDB.ruleAmendments = SoftcoreDB.ruleAmendments or {}
+    SoftcoreDB.proposals = SoftcoreDB.proposals or {}
+    SoftcoreDB.pendingProposalId = SoftcoreDB.pendingProposalId or nil
+    SoftcoreDB.acceptedRunId = SoftcoreDB.acceptedRunId or nil
+    SoftcoreDB.acceptedRulesetHash = SoftcoreDB.acceptedRulesetHash or nil
     SoftcoreDB.sync = SoftcoreDB.sync or {}
     SoftcoreDB.sync.remoteSequences = SoftcoreDB.sync.remoteSequences or {}
     SoftcoreDB.sync.localSequence = SoftcoreDB.sync.localSequence or 0
@@ -222,6 +267,18 @@ local function CopyTable(source)
     return copy
 end
 
+function SC:CopyTable(source)
+    return CopyTable(source)
+end
+
+function SC:GetDefaultRuleset()
+    return CopyTable(CreateDefaultRuleset())
+end
+
+function SC:ApplyGroupingMode(ruleset)
+    return ApplyGroupingModeRules(ruleset)
+end
+
 local function ArchiveCurrentRun(db, reason)
     if not HasRunData(db.run, db.eventLog, db.violations) then
         return
@@ -231,6 +288,7 @@ local function ArchiveCurrentRun(db, reason)
         archivedAt = time(),
         reason = reason or "Archived",
         runId = db.run.runId,
+        runName = db.run.runName,
         run = CopyTable(db.run),
         eventLog = CopyTable(db.eventLog),
         violations = CopyTable(db.violations),
@@ -249,6 +307,10 @@ end
 
 function SC:CreateRunId()
     return CreateStableId("run")
+end
+
+function SC:CreateProposalId()
+    return CreateStableId("proposal")
 end
 
 function SC:AddLog(kind, message, extra)
@@ -408,6 +470,9 @@ end
 function SC:RefreshParticipantsFromRoster()
     local db = EnsureDatabase()
     local partyKeys = GetCurrentPartyKeys()
+    local localPlayerKey = GetPlayerKey(db.character)
+    local ruleset = db.run.ruleset or {}
+    local groupingMode = ruleset.groupingMode or "SYNCED_GROUP_ALLOWED"
 
     if not db.run.active then
         return
@@ -417,25 +482,48 @@ function SC:RefreshParticipantsFromRoster()
         if participant.status ~= "FAILED" and participant.status ~= "RETIRED" then
             if partyKeys[playerKey] then
                 if participant.status == "OUT_OF_PARTY" or participant.status == "UNSYNCED" then
-                    participant.status = "ACTIVE"
+                    if groupingMode == "SOLO_SELF_FOUND" and playerKey ~= localPlayerKey then
+                        participant.status = "NOT_IN_RUN"
+                    else
+                        participant.status = "ACTIVE"
+                    end
                     participant.leftAt = nil
                     participant.joinedAt = participant.joinedAt or time()
                 end
-            elseif playerKey ~= GetPlayerKey(db.character) and (participant.status == "ACTIVE" or participant.status == "WARNING" or participant.status == "UNSYNCED" or participant.status == "PENDING") then
+            elseif playerKey ~= localPlayerKey and (participant.status == "ACTIVE" or participant.status == "WARNING" or participant.status == "UNSYNCED" or participant.status == "PENDING") then
                 self:MarkParticipantLeft(playerKey)
             end
         end
     end
 
-    if db.run.ruleset.allowLateJoin then
-        for playerKey in pairs(partyKeys) do
-            if not db.run.participants[playerKey] then
-                local participant = self:GetOrCreateParticipant(playerKey)
-                participant.status = db.run.ruleset.requireLeaderApprovalForJoin and "PENDING" or "ACTIVE"
-                participant.joinedAt = participant.joinedAt or time()
-                self:AddLog("PARTICIPANT_DISCOVERED", "Party member discovered: " .. playerKey, {
-                    playerKey = playerKey,
-                })
+    for playerKey in pairs(partyKeys) do
+        if playerKey ~= localPlayerKey and not db.run.participants[playerKey] then
+            if groupingMode == "SOLO_SELF_FOUND" then
+                if not ShouldThrottleRunNotice(db.run, "outsiderGroupingNotices", playerKey, 60) and self.ApplyRuleOutcome then
+                    self:ApplyRuleOutcome("outsiderGrouping", {
+                        playerKey = localPlayerKey,
+                        detail = "Grouped with outside character during solo/self-found run: " .. playerKey,
+                    })
+                end
+            elseif ruleset.allowLateJoin then
+                local remoteStatus = self.groupStatuses and self.groupStatuses[playerKey]
+                local localHash = self.GetRulesetHash and self:GetRulesetHash() or ""
+                local matchingRun = remoteStatus and remoteStatus.runId == db.run.runId
+                local matchingRules = remoteStatus and remoteStatus.rulesetHash and remoteStatus.rulesetHash == localHash
+
+                if matchingRun and matchingRules and remoteStatus.participantStatus ~= "FAILED" and remoteStatus.participantStatus ~= "RUN_MISMATCH" then
+                    local participant = self:GetOrCreateParticipant(playerKey)
+                    participant.status = "ACTIVE"
+                    participant.joinedAt = participant.joinedAt or time()
+                    self:AddLog("PARTICIPANT_DISCOVERED", "Synced party member joined the run: " .. playerKey, {
+                        playerKey = playerKey,
+                    })
+                elseif not ShouldThrottleRunNotice(db.run, "unsyncedMemberNotices", playerKey, 60) and self.ApplyRuleOutcome then
+                    self:ApplyRuleOutcome("unsyncedMembers", {
+                        playerKey = localPlayerKey,
+                        detail = "Grouped with unsynced or mismatched Softcore character: " .. playerKey,
+                    })
+                end
             end
         end
     end
@@ -533,6 +621,7 @@ function SC:GetPlayerStatus()
 
     return {
         runId = db.run.runId,
+        runName = db.run.runName,
         playerKey = playerKey,
         name = db.character.name,
         realm = db.character.realm,
@@ -553,9 +642,10 @@ function SC:GetPlayerStatus()
     }
 end
 
-function SC:StartRun()
+function SC:StartRun(runOptions)
     local db = EnsureDatabase()
     local existingParticipant = db.run.participants[GetPlayerKey(db.character)]
+    runOptions = runOptions or {}
 
     if db.run.active then
         if existingParticipant and existingParticipant.status == "FAILED" then
@@ -578,14 +668,16 @@ function SC:StartRun()
     ArchiveCurrentRun(db, "Starting new run")
 
     db.character = GetPlayerSnapshot()
-    db.run.runId = self:CreateRunId()
+    db.run.runId = runOptions.runId or self:CreateRunId()
+    db.run.runName = runOptions.runName or "Softcore Run"
     db.run.active = true
     db.run.valid = true
     db.run.failed = false
     db.run.startTime = time()
     db.run.deathCount = 0
     db.run.warningCount = 0
-    db.run.ruleset = CreateDefaultRuleset()
+    db.run.ruleset = runOptions.ruleset and CopyTable(runOptions.ruleset) or CreateDefaultRuleset()
+    ApplyGroupingModeRules(db.run.ruleset)
     db.run.governance = CreateDefaultGovernance()
     db.run.participants = {}
     db.run.participantOrder = {}
@@ -628,6 +720,7 @@ function SC:ResetRun()
 
     db.character = GetPlayerSnapshot()
     db.run.runId = nil
+    db.run.runName = nil
     db.run.active = false
     db.run.valid = true
     db.run.failed = false
@@ -644,6 +737,9 @@ function SC:ResetRun()
     db.run.dungeonOrder = {}
     db.eventLog = {}
     db.violations = {}
+    db.pendingProposalId = nil
+    db.acceptedRunId = nil
+    db.acceptedRulesetHash = nil
 
     self:AddLog("RUN_RESET", "Local run reset.")
     Print("local run reset.")
@@ -711,6 +807,7 @@ end
 
 function SC:PrintRun()
     local db = EnsureDatabase()
+    Print("run: " .. tostring(db.run.runName or "none"))
     Print("runId: " .. tostring(db.run.runId or "none"))
     Print("active: " .. tostring(db.run.active) .. ", party: " .. self:GetPartyStatus())
     Print("rulesetVersion: " .. tostring(db.run.ruleset.version) .. ", rulesetHash: " .. tostring(self.GetRulesetHash and self:GetRulesetHash() or "unknown"))
@@ -738,6 +835,7 @@ function SC:PrintRules()
     local rules = db.run.ruleset
     local order = {
         "death",
+        "groupingMode",
         "failedMemberBlocksParty",
         "allowLateJoin",
         "allowReplacementCharacters",
@@ -823,6 +921,12 @@ function SC:PrintHelp()
     Print("/sc conflicts - print sync conflicts")
     Print("/sc resync - request full state from party")
     Print("/sc access - print storage and economy access rules")
+    Print("/sc new - open the Start New Run window")
+    Print("/sc proposal - show the pending proposal")
+    Print("/sc accept - accept the pending proposal")
+    Print("/sc decline - decline the pending proposal")
+    Print("/sc propose - propose a new run to your party")
+    Print("/sc propose-add Player-Realm - propose adding a participant")
 end
 
 function SC:HandleSlash(input)
@@ -832,6 +936,12 @@ function SC:HandleSlash(input)
 
     if command == "start" then
         self:StartRun()
+    elseif command == "new" then
+        if self.OpenStartRunWindow then
+            self:OpenStartRunWindow()
+        else
+            Print("start run UI is not loaded.")
+        end
     elseif command == "status" or command == "" then
         self:PrintStatus()
     elseif command == "reset" then
@@ -871,6 +981,36 @@ function SC:HandleSlash(input)
         self:PrintRules()
     elseif command == "access" then
         self:PrintAccessRules()
+    elseif command == "proposal" then
+        if self.ShowPendingProposal then
+            self:ShowPendingProposal()
+        else
+            Print("proposal UI is not loaded.")
+        end
+    elseif command == "accept" then
+        if self.AcceptPendingProposal then
+            self:AcceptPendingProposal()
+        else
+            Print("proposal handling is not loaded.")
+        end
+    elseif command == "decline" then
+        if self.DeclinePendingProposal then
+            self:DeclinePendingProposal()
+        else
+            Print("proposal handling is not loaded.")
+        end
+    elseif command == "propose" then
+        if self.ProposeRunFromSlash then
+            self:ProposeRunFromSlash(rest)
+        else
+            Print("proposal handling is not loaded.")
+        end
+    elseif command == "propose-add" then
+        if self.ProposeAddParticipant then
+            self:ProposeAddParticipant(rest)
+        else
+            Print("proposal handling is not loaded.")
+        end
     elseif command == "rule" then
         local ruleName, value = string.match(rest or "", "^(%S+)%s+(%S+)$")
         if ruleName and value then

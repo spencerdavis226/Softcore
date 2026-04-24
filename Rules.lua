@@ -12,6 +12,7 @@ local SUPPORTED_SEVERITIES = {
 
 local RULE_ORDER = {
     "death",
+    "groupingMode",
     "auctionHouse",
     "mailbox",
     "trade",
@@ -36,6 +37,7 @@ local RULE_ORDER = {
 
 local HASH_RULE_ORDER = {
     "death",
+    "groupingMode",
     "failedMemberBlocksParty",
     "allowLateJoin",
     "allowReplacementCharacters",
@@ -79,6 +81,13 @@ local ACCESS_RULES = {
 }
 
 local SEVERITY_ONLY_RULES = {
+    auctionHouse = true,
+    mailbox = true,
+    trade = true,
+    mounts = true,
+    flying = true,
+    outsiderGrouping = true,
+    unsyncedMembers = true,
     heirlooms = true,
     maxLevelGap = true,
     dungeonRepeat = true,
@@ -90,6 +99,11 @@ local GEAR_QUALITY_VALUES = {
     WHITE_GRAY_ONLY = true,
     COMMON_OR_UNCOMMON = true,
     NO_EPICS = true,
+}
+
+local GROUPING_MODE_VALUES = {
+    SYNCED_GROUP_ALLOWED = true,
+    SOLO_SELF_FOUND = true,
 }
 
 local function GetDB()
@@ -125,8 +139,16 @@ local function IsValidRuleValue(ruleName, value)
         return type(value) == "boolean"
     end
 
+    if ruleName == "death" then
+        return value == "CHARACTER_FAIL"
+    end
+
     if ruleName == "gearQuality" then
         return GEAR_QUALITY_VALUES[value] == true
+    end
+
+    if ruleName == "groupingMode" then
+        return GROUPING_MODE_VALUES[value] == true
     end
 
     if (ACCESS_RULES[ruleName] or SEVERITY_ONLY_RULES[ruleName]) and value == "CHARACTER_FAIL" then
@@ -365,6 +387,10 @@ function SC:ApplyRuleAmendment(amendmentId)
                         newValue = value,
                         oldValue = amendment.previousRules[ruleName],
                     })
+                end
+
+                if self.ApplyGroupingMode then
+                    self:ApplyGroupingMode(db.run.ruleset)
                 end
 
                 db.run.ruleset.version = (tonumber(db.run.ruleset.version) or 1) + 1

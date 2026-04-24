@@ -21,7 +21,7 @@ function SC:UI_Create()
     end
 
     local frame = CreateFrame("Frame", "SoftcoreStatusFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(260, 210)
+    frame:SetSize(280, 240)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
     frame:SetMovable(true)
     frame:EnableMouse(true)
@@ -42,11 +42,17 @@ function SC:UI_Create()
     frame.title:SetPoint("TOPLEFT", 10, -10)
     frame.title:SetText("Softcore")
 
+    frame.runName = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.runName:SetPoint("TOPLEFT", frame.title, "BOTTOMLEFT", 0, -8)
+
     frame.status = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.status:SetPoint("TOPLEFT", frame.title, "BOTTOMLEFT", 0, -10)
+    frame.status:SetPoint("TOPLEFT", frame.runName, "BOTTOMLEFT", 0, -6)
+
+    frame.localStatus = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.localStatus:SetPoint("TOPLEFT", frame.status, "BOTTOMLEFT", 0, -6)
 
     frame.level = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.level:SetPoint("TOPLEFT", frame.status, "BOTTOMLEFT", 0, -6)
+    frame.level:SetPoint("TOPLEFT", frame.localStatus, "BOTTOMLEFT", 0, -6)
 
     frame.deaths = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.deaths:SetPoint("TOPLEFT", frame.level, "BOTTOMLEFT", 0, -6)
@@ -54,15 +60,18 @@ function SC:UI_Create()
     frame.warnings = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.warnings:SetPoint("TOPLEFT", frame.deaths, "BOTTOMLEFT", 0, -6)
 
+    frame.proposal = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.proposal:SetPoint("TOPLEFT", frame.warnings, "BOTTOMLEFT", 0, -6)
+
     frame.groupTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    frame.groupTitle:SetPoint("TOPLEFT", frame.warnings, "BOTTOMLEFT", 0, -14)
+    frame.groupTitle:SetPoint("TOPLEFT", frame.proposal, "BOTTOMLEFT", 0, -14)
     frame.groupTitle:SetText("Group")
 
     frame.groupRows = {}
     for index = 1, 5 do
         local row = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         row:SetPoint("TOPLEFT", frame.groupTitle, "BOTTOMLEFT", 0, -4 - ((index - 1) * 18))
-        row:SetWidth(236)
+        row:SetWidth(256)
         row:SetJustifyH("LEFT")
         row:SetText("")
         frame.groupRows[index] = row
@@ -85,10 +94,19 @@ function SC:UI_Update()
         partyStatus = self:GetStatusText()
     end
 
+    local participant = db.run.participants and db.run.participants[self:GetPlayerKey()]
+    local runName = db.run.runName
+    if not runName or runName == "" then
+        runName = db.run.active and "Active" or "None"
+    end
+
+    SetLine(self.uiFrame.runName, "Run", runName)
     SetLine(self.uiFrame.status, "Party", partyStatus)
+    SetLine(self.uiFrame.localStatus, "You", participant and participant.status or "NOT_IN_RUN")
     SetLine(self.uiFrame.level, "Level", db.character.level or "?")
     SetLine(self.uiFrame.deaths, "Deaths", db.run.deathCount or 0)
     SetLine(self.uiFrame.warnings, "Warnings", db.run.warningCount or 0)
+    SetLine(self.uiFrame.proposal, "Proposal", db.pendingProposalId and "Pending" or "None")
 
     local rows = {}
     if self.Sync_GetGroupRows then

@@ -17,6 +17,13 @@
   "Lua.diagnostics.globals": [
     "SlashCmdList",
     "DEFAULT_CHAT_FRAME",
-    "LE_PARTY_CATEGORY_INSTANCE"
+    "LE_PARTY_CATEGORY_INSTANCE",
+    "StaticPopupDialogs",
+    "StaticPopup_Show",
+    "UIDropDownMenu_SetWidth",
+    "UIDropDownMenu_SetText",
+    "UIDropDownMenu_Initialize",
+    "UIDropDownMenu_AddButton",
+    "UIDropDownMenu_CreateInfo"
   ]
 }
