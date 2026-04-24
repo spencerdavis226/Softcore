@@ -5,10 +5,19 @@ local SC = Softcore
 local eventFrame
 
 local WARNING_EVENTS = {
-    TRADE_SHOW = "Trade window opened.",
-    MAIL_SHOW = "Mailbox opened.",
-    AUCTION_HOUSE_SHOW = "Auction house opened.",
+    TRADE_SHOW = { rule = "trade", detail = "Trade window opened." },
+    MAIL_SHOW = { rule = "mailbox", detail = "Mailbox opened." },
+    AUCTION_HOUSE_SHOW = { rule = "auctionHouse", detail = "Auction house opened." },
 }
+
+local movementState = {
+    mounted = false,
+    flying = false,
+    mountWarnedAt = 0,
+    flyingWarnedAt = 0,
+}
+
+local MOVEMENT_WARNING_THROTTLE = 30
 
 local function Broadcast(reason)
     if SC.Sync_BroadcastStatus then
@@ -27,9 +36,11 @@ local function HandlePlayerDead()
     local participant = SC:GetOrCreateParticipant(playerKey)
     if db.run.active and participant.status ~= "FAILED" then
         db.run.deathCount = db.run.deathCount + 1
-        SC:MarkParticipantFailed(playerKey, "Character died.")
         SC:AddLog("DEATH", "Character died. Run failed permanently.")
-        SC:AddViolation("PLAYER_DEAD", "Character died. Character failed permanently.", "FATAL", playerKey)
+        SC:ApplyRuleOutcome("death", {
+            playerKey = playerKey,
+            detail = "Character died. Character failed permanently.",
+        })
         DEFAULT_CHAT_FRAME:AddMessage("|cffff5555Softcore: character failed due to death.|r")
         Broadcast("PLAYER_DEAD")
     end
@@ -63,14 +74,49 @@ local function HandleWarning(event)
         return
     end
 
-    db.run.warningCount = db.run.warningCount + 1
-    local participant = SC:GetOrCreateParticipant(SC:GetPlayerKey())
-    if participant.status == "ACTIVE" then
-        participant.status = "WARNING"
-    end
-    SC:AddLog("WARNING", WARNING_EVENTS[event] or (event .. " occurred."))
-    SC:AddViolation(event, WARNING_EVENTS[event] or (event .. " occurred."), "WARNING", participant.playerKey)
+    local warning = WARNING_EVENTS[event]
+    SC:ApplyRuleOutcome(warning.rule, {
+        playerKey = SC:GetPlayerKey(),
+        detail = warning.detail,
+    })
     Broadcast(event)
+end
+
+local function ApplyMovementRule(ruleName, detail, throttleField)
+    local now = time()
+    if now - (movementState[throttleField] or 0) < MOVEMENT_WARNING_THROTTLE then
+        return
+    end
+
+    movementState[throttleField] = now
+    SC:ApplyRuleOutcome(ruleName, {
+        playerKey = SC:GetPlayerKey(),
+        detail = detail,
+    })
+    Broadcast(ruleName)
+end
+
+local function CheckMovementRules()
+    local db = SC.db or SoftcoreDB
+    if not db or not db.run or not db.run.active then
+        return
+    end
+
+    local mounted = IsMounted and IsMounted()
+    -- In-game verification note: IsFlying() should catch mounted flight and Druid flight form
+    -- in modern clients, but shapeshift edge cases may need live testing.
+    local flying = IsFlying and IsFlying()
+
+    if mounted and not movementState.mounted then
+        ApplyMovementRule("mounts", "Mounted while on a Softcore run.", "mountWarnedAt")
+    end
+
+    if flying and not movementState.flying then
+        ApplyMovementRule("flying", "Flying while on a Softcore run.", "flyingWarnedAt")
+    end
+
+    movementState.mounted = mounted and true or false
+    movementState.flying = flying and true or false
 end
 
 function SC:Events_Register()
@@ -87,6 +133,8 @@ function SC:Events_Register()
     eventFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
     eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
     eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    eventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
+    eventFrame:RegisterUnitEvent("UNIT_AURA", "player")
 
     eventFrame:SetScript("OnEvent", function(_, event, ...)
         if event == "PLAYER_DEAD" then
@@ -97,6 +145,10 @@ function SC:Events_Register()
             HandleZoneChanged()
         elseif WARNING_EVENTS[event] then
             HandleWarning(event)
+        elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" or event == "UNIT_AURA" then
+            -- In-game verification note: mount/flying state updates can arrive through either
+            -- display or aura events depending on mount type, shapeshift form, and client build.
+            CheckMovementRules()
         elseif event == "GROUP_ROSTER_UPDATE" then
             SC:AddLog("GROUP_ROSTER", "Group roster changed.")
             Broadcast("GROUP_ROSTER_UPDATE")

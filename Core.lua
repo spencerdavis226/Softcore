@@ -7,7 +7,7 @@ Softcore = Softcore or {}
 local SC = Softcore
 
 SC.name = "Softcore"
-SC.version = "0.2.6"
+SC.version = "0.2.7"
 SC.maxLogEntries = 30
 
 local function Print(message)
@@ -69,11 +69,22 @@ local function CreateDefaultRuleset()
         version = 1,
         warningsAreFatal = false,
         deathIsFatal = true,
+        death = "CHARACTER_FAIL",
         deathFails = "CHARACTER_ONLY",
         failedMemberBlocksParty = true,
         allowLateJoin = true,
         allowReplacementCharacters = true,
         requireLeaderApprovalForJoin = true,
+        auctionHouse = "WARNING",
+        mailbox = "WARNING",
+        trade = "WARNING",
+        mounts = "ALLOWED",
+        flying = "ALLOWED",
+        flightPaths = "ALLOWED",
+        outsiderGrouping = "WARNING",
+        unsyncedMembers = "WARNING",
+        maxLevelGap = "ALLOWED",
+        dungeonRepeat = "ALLOWED",
     }
 end
 
@@ -132,6 +143,8 @@ local function EnsureDatabase()
     SoftcoreDB.nextIds.run = SoftcoreDB.nextIds.run or 0
     SoftcoreDB.nextIds.log = SoftcoreDB.nextIds.log or 0
     SoftcoreDB.nextIds.violation = SoftcoreDB.nextIds.violation or 0
+    SoftcoreDB.nextIds.amendment = SoftcoreDB.nextIds.amendment or 0
+    SoftcoreDB.ruleAmendments = SoftcoreDB.ruleAmendments or {}
 
     EnsureRunDefaults(SoftcoreDB.run)
     if SoftcoreDB.run.active and not SoftcoreDB.run.runId then
@@ -562,6 +575,33 @@ function SC:PrintRoster()
     end
 end
 
+function SC:PrintRules()
+    local db = EnsureDatabase()
+    local rules = db.run.ruleset
+    local order = {
+        "death",
+        "failedMemberBlocksParty",
+        "allowLateJoin",
+        "allowReplacementCharacters",
+        "requireLeaderApprovalForJoin",
+        "auctionHouse",
+        "mailbox",
+        "trade",
+        "mounts",
+        "flying",
+        "flightPaths",
+        "outsiderGrouping",
+        "unsyncedMembers",
+        "maxLevelGap",
+        "dungeonRepeat",
+    }
+
+    Print("current rules:")
+    for _, ruleName in ipairs(order) do
+        Print(ruleName .. " = " .. tostring(rules[ruleName]))
+    end
+end
+
 function SC:PrintLog()
     local db = EnsureDatabase()
 
@@ -585,6 +625,8 @@ function SC:PrintHelp()
     Print("/sc roster - print run participants")
     Print("/sc add Player-Realm - add a pending participant")
     Print("/sc retire - retire this character without failing")
+    Print("/sc rules - print current ruleset")
+    Print("/sc rule ruleName value - change a rule locally")
 end
 
 function SC:HandleSlash(input)
@@ -602,6 +644,16 @@ function SC:HandleSlash(input)
         self:PrintLog()
     elseif command == "roster" then
         self:PrintRoster()
+    elseif command == "rules" then
+        self:PrintRules()
+    elseif command == "rule" then
+        local ruleName, value = string.match(rest or "", "^(%S+)%s+(%S+)$")
+        if ruleName and value then
+            local ok, message = self:SetRule(ruleName, string.upper(value))
+            Print(message)
+        else
+            Print("usage: /sc rule ruleName value")
+        end
     elseif command == "add" then
         if rest and rest ~= "" then
             local participant = self:AddParticipant(rest)

@@ -2,7 +2,7 @@
 
 Softcore is a lightweight Retail World of Warcraft addon for hardcore-style leveling accountability with friends.
 
-Version 0.2.6 tracks your local run and syncs basic status with group members who also have Softcore installed.
+Version 0.2.7 tracks your local run, applies structured rules, and syncs basic status with group members who also have Softcore installed.
 
 ## Setup
 
@@ -22,6 +22,8 @@ Version 0.2.6 tracks your local run and syncs basic status with group members wh
 - `/sc roster` - print tracked run participants.
 - `/sc add Player-Realm` - add a pending participant until the v0.3 join UI exists.
 - `/sc retire` - retire this character without marking it failed.
+- `/sc rules` - print the current ruleset.
+- `/sc rule mailbox ALLOWED` - change a rule locally and log a prospective amendment.
 
 ## What It Tracks
 
@@ -31,6 +33,7 @@ Version 0.2.6 tracks your local run and syncs basic status with group members wh
 - Death count and warning count.
 - Run participants and participant status.
 - Party status: `VALID`, `WARNING`, `BLOCKED`, `UNSYNCED`, or `INACTIVE`.
+- Structured ruleset values and prospective rule amendments.
 - Recent local event log.
 - Level changes and zone changes.
 - Warnings for trade, mail, and auction house windows.
