@@ -14,6 +14,14 @@ local function ShortName(name)
     return string.match(name, "^[^-]+") or name
 end
 
+local function DisplayStatus(status)
+    if status == "WARNING" then
+        return "VIOLATION"
+    end
+
+    return status
+end
+
 function SC:UI_Create()
     if self.uiFrame then
         self:UI_Update()
@@ -101,11 +109,11 @@ function SC:UI_Update()
     end
 
     SetLine(self.uiFrame.runName, "Run", runName)
-    SetLine(self.uiFrame.status, "Party", partyStatus)
-    SetLine(self.uiFrame.localStatus, "You", participant and participant.status or "NOT_IN_RUN")
+    SetLine(self.uiFrame.status, "Party", DisplayStatus(partyStatus))
+    SetLine(self.uiFrame.localStatus, "You", DisplayStatus(participant and participant.status or "NOT_IN_RUN"))
     SetLine(self.uiFrame.level, "Level", db.character.level or "?")
     SetLine(self.uiFrame.deaths, "Deaths", db.run.deathCount or 0)
-    SetLine(self.uiFrame.warnings, "Warnings", db.run.warningCount or 0)
+    SetLine(self.uiFrame.warnings, "Violations", db.run.warningCount or 0)
     SetLine(self.uiFrame.proposal, "Proposal", db.pendingProposalId and "Pending" or "None")
 
     local rows = {}
@@ -123,7 +131,7 @@ function SC:UI_Update()
                 displayStatus = self:Sync_GetDisplayStatus(status)
             end
 
-            row:SetText(ShortName(status.name) .. " L" .. tostring(status.level or "?") .. " " .. displayStatus .. " W" .. tostring(status.warnings or 0))
+            row:SetText(ShortName(status.name) .. " L" .. tostring(status.level or "?") .. " " .. DisplayStatus(displayStatus) .. " V" .. tostring(status.warnings or 0))
         else
             row:SetText("-")
         end

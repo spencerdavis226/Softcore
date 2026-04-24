@@ -99,6 +99,9 @@ local GEAR_QUALITY_VALUES = {
     WHITE_GRAY_ONLY = true,
     COMMON_OR_UNCOMMON = true,
     NO_EPICS = true,
+    GREEN_OR_LOWER = true,
+    BLUE_OR_LOWER = true,
+    EPIC_OR_LOWER = true,
 }
 
 local GROUPING_MODE_VALUES = {

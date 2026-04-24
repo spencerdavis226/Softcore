@@ -75,6 +75,18 @@ local function IsGearQualityInvalid(ruleValue, quality)
         return quality > 2
     end
 
+    if ruleValue == "GREEN_OR_LOWER" then
+        return quality > 2
+    end
+
+    if ruleValue == "BLUE_OR_LOWER" then
+        return quality > 3
+    end
+
+    if ruleValue == "EPIC_OR_LOWER" then
+        return quality > 4
+    end
+
     if ruleValue == "NO_EPICS" then
         return quality >= 4
     end
@@ -277,10 +289,7 @@ function SC:CheckInstanceIntegrity()
     end
 
     if HasUnsyncedPartyMembers() then
-        self:ApplyRuleOutcome("instanceWithUnsyncedPlayers", {
-            playerKey = self:GetPlayerKey(),
-            detail = "Entered instance with unsynced or unconfirmed party members: " .. instanceName,
-        })
+        self:AddLog("INSTANCE_BLOCKER", "Entered instance with unsynced or unconfirmed party members: " .. instanceName)
     end
 end
 

@@ -227,8 +227,8 @@ local function GetDisplayStatus(status)
         return "FAILED"
     end
 
-    if status.participantStatus == "WARNING" then
-        return "WARNING"
+    if status.participantStatus == "WARNING" or status.participantStatus == "VIOLATION" then
+        return "VIOLATION"
     end
 
     if status.participantStatus == "PENDING" or status.participantStatus == "UNSYNCED" then

@@ -7,7 +7,7 @@ Softcore = Softcore or {}
 local SC = Softcore
 
 SC.name = "Softcore"
-SC.version = "0.3.1"
+SC.version = "0.3.2"
 SC.maxLogEntries = 30
 
 local function Print(message)
@@ -105,7 +105,7 @@ local function CreateDefaultRuleset()
         flying = "ALLOWED",
         flightPaths = "ALLOWED",
         outsiderGrouping = "WARNING",
-        unsyncedMembers = "WARNING",
+        unsyncedMembers = "ALLOWED",
         maxLevelGap = "ALLOWED",
         maxLevelGapValue = 3,
         dungeonRepeat = "LOG_ONLY",
@@ -605,14 +605,6 @@ function SC:RefreshParticipantsFromRoster()
                     self:AddLog("PARTICIPANT_DISCOVERED", "Synced party member joined the run: " .. playerKey, {
                         playerKey = playerKey,
                     })
-                else
-                    local shouldApply, ruleName = self:ShouldApplyGroupViolationLocally("UNSYNCED")
-                    if shouldApply and not ShouldThrottleRunNotice(db.run, "unsyncedMemberNotices", playerKey, 60) and self.ApplyRuleOutcome then
-                        self:ApplyRuleOutcome(ruleName, {
-                            playerKey = localPlayerKey,
-                            detail = "Grouped with unsynced or mismatched Softcore character: " .. playerKey,
-                        })
-                    end
                 end
             end
         end
@@ -654,14 +646,15 @@ function SC:GetDerivedPartyStatus()
                 hasConflict = true
             elseif participant.status == "WARNING" then
                 hasWarning = true
-            elseif participant.status == "PENDING" or participant.status == "UNSYNCED" then
-                hasUnsynced = true
+            elseif participant.status == "PENDING" or participant.status == "UNSYNCED" or participant.status == "NOT_IN_RUN" then
+                db.run.partyStatus = "BLOCKED"
+                return db.run.partyStatus
             end
         end
     end
 
     -- Remote peer statuses are advisory. They can make the party display BLOCKED,
-    -- WARNING, UNSYNCED, or CONFLICT, but they never mutate local run validity.
+    -- VIOLATION, UNSYNCED, or CONFLICT, but they never mutate local run validity.
     if self.Sync_GetGroupRows then
         for _, peer in ipairs(self:Sync_GetGroupRows()) do
             local compatible, reason = self:IsRemoteStateCompatible(peer)
@@ -669,7 +662,8 @@ function SC:GetDerivedPartyStatus()
                 if reason == "RUN_MISMATCH" or reason == "RULESET_MISMATCH" or reason == "ADDON_VERSION_MISMATCH" then
                     hasConflict = true
                 else
-                    hasUnsynced = true
+                    db.run.partyStatus = "BLOCKED"
+                    return db.run.partyStatus
                 end
             elseif peer.participantStatus == "FAILED" or peer.failed then
                 if db.run.ruleset.failedMemberBlocksParty then
@@ -679,7 +673,8 @@ function SC:GetDerivedPartyStatus()
             elseif peer.participantStatus == "WARNING" then
                 hasWarning = true
             elseif peer.participantStatus == "PENDING" or peer.participantStatus == "UNSYNCED" or peer.participantStatus == "NOT_IN_RUN" then
-                hasUnsynced = true
+                db.run.partyStatus = "BLOCKED"
+                return db.run.partyStatus
             end
         end
     end
@@ -693,7 +688,7 @@ function SC:GetDerivedPartyStatus()
     if hasConflict then
         db.run.partyStatus = "CONFLICT"
     elseif hasWarning then
-        db.run.partyStatus = "WARNING"
+        db.run.partyStatus = "VIOLATION"
     elseif hasUnsynced then
         db.run.partyStatus = "UNSYNCED"
     else
@@ -883,7 +878,7 @@ function SC:PrintStatus()
     local participant = run.participants[GetPlayerKey(character)]
     Print("participant: " .. tostring(participant and participant.status or "INACTIVE"))
     Print("valid: " .. tostring(run.valid) .. ", failed: " .. tostring(run.failed))
-    Print("deaths: " .. tostring(run.deathCount) .. ", warnings: " .. tostring(run.warningCount))
+    Print("deaths: " .. tostring(run.deathCount) .. ", violations: " .. tostring(run.warningCount))
 end
 
 function SC:PrintRoster()

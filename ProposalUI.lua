@@ -32,17 +32,27 @@ local RULE_KEYS = {
 
 local function FriendlyGroupingMode(value)
     if value == "SOLO_SELF_FOUND" then
-        return "Solo / self-found only"
+        return "Solo"
     end
 
-    return "Group allowed with synced Softcore players"
+    return "Group"
 end
 
-local function FriendlySeverity(value)
-    if value == "ALLOWED" then return "Allowed" end
-    if value == "LOG_ONLY" then return "Log only" end
-    if value == "WARNING" then return "Warning" end
-    if value == "FATAL" then return "Fatal" end
+local function FriendlyAllowed(value)
+    if value == "ALLOWED" or value == "LOG_ONLY" then
+        return "Allowed"
+    end
+
+    return "Disallowed"
+end
+
+local function FriendlyGear(value)
+    if value == "ALLOWED" then return "No restriction" end
+    if value == "WHITE_GRAY_ONLY" then return "White/gray only" end
+    if value == "GREEN_OR_LOWER" or value == "COMMON_OR_UNCOMMON" then return "Green or lower" end
+    if value == "BLUE_OR_LOWER" then return "Blue or lower" end
+    if value == "EPIC_OR_LOWER" then return "Epic or lower" end
+    if value == "NO_EPICS" then return "Blue or lower" end
     return tostring(value)
 end
 
@@ -134,12 +144,11 @@ end
 local function ProposalSummary(proposal)
     return "Death: Permanent per character"
         .. "\nGrouping: " .. FriendlyGroupingMode(proposal.ruleset.groupingMode)
-        .. "\nUnsynced group member: " .. FriendlySeverity(proposal.ruleset.unsyncedMembers)
-        .. "\nAH: " .. FriendlySeverity(proposal.ruleset.auctionHouse)
-        .. "  Mail: " .. FriendlySeverity(proposal.ruleset.mailbox)
-        .. "  Trade: " .. FriendlySeverity(proposal.ruleset.trade)
-        .. "\nGear: " .. tostring(proposal.ruleset.gearQuality)
-        .. "  Heirlooms: " .. FriendlySeverity(proposal.ruleset.heirlooms)
+        .. "\nAH: " .. FriendlyAllowed(proposal.ruleset.auctionHouse)
+        .. "  Mail: " .. FriendlyAllowed(proposal.ruleset.mailbox)
+        .. "  Trade: " .. FriendlyAllowed(proposal.ruleset.trade)
+        .. "\nGear: " .. FriendlyGear(proposal.ruleset.gearQuality)
+        .. "  Heirlooms: " .. FriendlyAllowed(proposal.ruleset.heirlooms)
 end
 
 function SC:StoreProposal(proposal)
