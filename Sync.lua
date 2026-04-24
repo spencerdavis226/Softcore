@@ -243,8 +243,8 @@ local function GetDisplayStatus(status)
         return "INACTIVE"
     end
 
-    if status.participantStatus == "RUN_MISMATCH" then
-        return "RUN_MISMATCH"
+    if status.participantStatus == "RUN_MISMATCH" or status.participantStatus == "RULESET_MISMATCH" or status.participantStatus == "ADDON_VERSION_MISMATCH" then
+        return status.participantStatus
     end
 
     if status.active and status.participantStatus ~= "INACTIVE" then
@@ -493,7 +493,7 @@ function SC:Sync_HandleMessage(message, sender)
 
     if remoteRulesetHash and remoteRulesetHash ~= "" and localRulesetHash ~= "" and remoteRulesetHash ~= localRulesetHash then
         if participantStatus ~= "RUN_MISMATCH" then
-            participantStatus = "UNSYNCED"
+            participantStatus = "RULESET_MISMATCH"
         end
         RecordConflict(key, "RULESET_MISMATCH", localRulesetHash, remoteRulesetHash)
     else
@@ -501,6 +501,9 @@ function SC:Sync_HandleMessage(message, sender)
     end
 
     if payload.addonVersion and payload.addonVersion ~= SC.version then
+        if participantStatus ~= "RUN_MISMATCH" and participantStatus ~= "RULESET_MISMATCH" then
+            participantStatus = "ADDON_VERSION_MISMATCH"
+        end
         RecordConflict(key, "ADDON_VERSION_MISMATCH", SC.version, payload.addonVersion)
     else
         ClearConflict(key, "ADDON_VERSION_MISMATCH")
@@ -531,22 +534,14 @@ function SC:Sync_HandleMessage(message, sender)
         unsynced = false,
     }
 
+    -- Remote sync is advisory/display-only. A peer payload may update that peer's
+    -- display record, but it must never fail, reset, or otherwise invalidate the
+    -- local character's individual run state.
     if self.db and self.db.run and self.db.run.active and self.GetOrCreateParticipant then
         local run = self.db.run
         local ruleset = run.ruleset or {}
 
-        if ruleset.groupingMode == "SOLO_SELF_FOUND" and not run.participants[key] then
-            run.outsiderGroupingNotices = run.outsiderGroupingNotices or {}
-            local now = time()
-            local last = run.outsiderGroupingNotices[key]
-            if self.ApplyRuleOutcome and (not last or now - last >= 60) then
-                run.outsiderGroupingNotices[key] = now
-                self:ApplyRuleOutcome("outsiderGrouping", {
-                    playerKey = self:GetPlayerKey(),
-                    detail = "Grouped with outside Softcore character during solo/self-found run: " .. key,
-                })
-            end
-        else
+        if not (ruleset.groupingMode == "SOLO_SELF_FOUND" and not run.participants[key]) then
             local participant = self:GetOrCreateParticipant(key)
             participant.name = name
             participant.realm = realm
@@ -554,8 +549,8 @@ function SC:Sync_HandleMessage(message, sender)
             participant.currentLevel = tonumber(payload.level) or participant.currentLevel
             participant.joinedAt = participant.joinedAt or time()
 
-            if participantStatus == "RUN_MISMATCH" then
-                participant.status = "RUN_MISMATCH"
+            if participantStatus == "RUN_MISMATCH" or participantStatus == "RULESET_MISMATCH" or participantStatus == "ADDON_VERSION_MISMATCH" then
+                participant.status = participantStatus
             elseif participantStatus == "FAILED" then
                 participant.status = "FAILED"
                 participant.failedAt = participant.failedAt or time()

@@ -2,7 +2,7 @@
 
 Softcore is a lightweight Retail World of Warcraft addon for hardcore-style leveling accountability with friends.
 
-Version 0.3.0 tracks your local run, applies structured rules, syncs resilient status, and includes a simple group run proposal flow.
+Version 0.3.1 tracks your local run, applies structured rules, syncs resilient status, and includes a simple group run proposal flow.
 
 ## Setup
 
@@ -68,6 +68,8 @@ Status sync is sent only to the current group channel:
 - `INSTANCE_CHAT`
 
 The group section of the UI shows nearby group members as `VALID`, `FAILED`, `INACTIVE`, or `UNSYNCED`. `UNSYNCED` means Softcore has not received a recent status update from that character.
+
+A party member's failure does not fail your character. Softcore shows group warnings/conflicts, but each character's run validity is individual.
 
 ## Group Proposals
 

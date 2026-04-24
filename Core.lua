@@ -7,7 +7,7 @@ Softcore = Softcore or {}
 local SC = Softcore
 
 SC.name = "Softcore"
-SC.version = "0.3.0"
+SC.version = "0.3.1"
 SC.maxLogEntries = 30
 
 local function Print(message)
@@ -438,6 +438,92 @@ function SC:IsParticipantInCurrentParty(playerKey)
     return GetCurrentPartyKeys()[playerKey] == true
 end
 
+-- Individual-state boundary:
+-- The local character's participant row is authoritative only for this client.
+-- Remote sync rows are advisory/display-only and feed derived party status.
+function SC:GetLocalPlayerStatus()
+    local db = EnsureDatabase()
+    self:RefreshCharacter()
+
+    local playerKey = GetPlayerKey(db.character)
+    local participant = db.run.participants[playerKey]
+
+    if db.run.active then
+        participant = self:GetOrCreateParticipant(playerKey)
+        participant.currentLevel = db.character.level
+        participant.class = db.character.class
+    end
+
+    return {
+        runId = db.run.runId,
+        runName = db.run.runName,
+        playerKey = playerKey,
+        name = db.character.name,
+        realm = db.character.realm,
+        class = db.character.class,
+        level = db.character.level,
+        zone = db.character.zone,
+        active = db.run.active,
+        valid = db.run.valid,
+        failed = participant and participant.status == "FAILED",
+        participantStatus = participant and participant.status or "NOT_IN_RUN",
+        rulesetVersion = db.run.ruleset.version,
+        rulesetHash = self.GetRulesetHash and self:GetRulesetHash() or "",
+        deaths = db.run.deathCount,
+        warnings = db.run.warningCount,
+        version = self.version,
+        timestamp = time(),
+    }
+end
+
+function SC:GetRemotePeerStatus(playerKey)
+    if not playerKey or not self.groupStatuses then
+        return nil
+    end
+
+    return self.groupStatuses[playerKey]
+end
+
+function SC:IsRemoteStateCompatible(peer)
+    local db = EnsureDatabase()
+
+    if not peer or peer.unsynced then
+        return false, "UNSYNCED"
+    end
+
+    if db.run.runId and peer.runId and db.run.runId ~= peer.runId then
+        return false, "RUN_MISMATCH"
+    end
+
+    local localHash = self.GetRulesetHash and self:GetRulesetHash() or ""
+    if localHash ~= "" and peer.rulesetHash and peer.rulesetHash ~= "" and localHash ~= peer.rulesetHash then
+        return false, "RULESET_MISMATCH"
+    end
+
+    if peer.addonVersion and peer.addonVersion ~= self.version then
+        return false, "ADDON_VERSION_MISMATCH"
+    end
+
+    return true, nil
+end
+
+function SC:ShouldApplyGroupViolationLocally(reason)
+    local db = EnsureDatabase()
+    local ruleset = db.run.ruleset or {}
+    local ruleName = reason == "SOLO_SELF_FOUND" and "outsiderGrouping" or "unsyncedMembers"
+    local outcome = ruleset[ruleName]
+
+    if reason == "SOLO_SELF_FOUND" then
+        return outcome ~= nil and outcome ~= "ALLOWED", ruleName
+    end
+
+    if reason == "UNSYNCED" or reason == "RULESET_MISMATCH" or reason == "RUN_MISMATCH" or reason == "ADDON_VERSION_MISMATCH" then
+        return outcome ~= nil and outcome ~= "ALLOWED", ruleName
+    end
+
+    return false, ruleName
+end
+
 function SC:MarkParticipantFailed(playerKey, reason)
     local participant = self:GetOrCreateParticipant(playerKey)
 
@@ -499,8 +585,9 @@ function SC:RefreshParticipantsFromRoster()
     for playerKey in pairs(partyKeys) do
         if playerKey ~= localPlayerKey and not db.run.participants[playerKey] then
             if groupingMode == "SOLO_SELF_FOUND" then
-                if not ShouldThrottleRunNotice(db.run, "outsiderGroupingNotices", playerKey, 60) and self.ApplyRuleOutcome then
-                    self:ApplyRuleOutcome("outsiderGrouping", {
+                local shouldApply, ruleName = self:ShouldApplyGroupViolationLocally("SOLO_SELF_FOUND")
+                if shouldApply and not ShouldThrottleRunNotice(db.run, "outsiderGroupingNotices", playerKey, 60) and self.ApplyRuleOutcome then
+                    self:ApplyRuleOutcome(ruleName, {
                         playerKey = localPlayerKey,
                         detail = "Grouped with outside character during solo/self-found run: " .. playerKey,
                     })
@@ -518,11 +605,14 @@ function SC:RefreshParticipantsFromRoster()
                     self:AddLog("PARTICIPANT_DISCOVERED", "Synced party member joined the run: " .. playerKey, {
                         playerKey = playerKey,
                     })
-                elseif not ShouldThrottleRunNotice(db.run, "unsyncedMemberNotices", playerKey, 60) and self.ApplyRuleOutcome then
-                    self:ApplyRuleOutcome("unsyncedMembers", {
-                        playerKey = localPlayerKey,
-                        detail = "Grouped with unsynced or mismatched Softcore character: " .. playerKey,
-                    })
+                else
+                    local shouldApply, ruleName = self:ShouldApplyGroupViolationLocally("UNSYNCED")
+                    if shouldApply and not ShouldThrottleRunNotice(db.run, "unsyncedMemberNotices", playerKey, 60) and self.ApplyRuleOutcome then
+                        self:ApplyRuleOutcome(ruleName, {
+                            playerKey = localPlayerKey,
+                            detail = "Grouped with unsynced or mismatched Softcore character: " .. playerKey,
+                        })
+                    end
                 end
             end
         end
@@ -530,6 +620,10 @@ function SC:RefreshParticipantsFromRoster()
 end
 
 function SC:GetPartyStatus()
+    return self:GetDerivedPartyStatus()
+end
+
+function SC:GetDerivedPartyStatus()
     local db = EnsureDatabase()
 
     if not db.run.active then
@@ -540,17 +634,51 @@ function SC:GetPartyStatus()
     local hasWarning = false
     local hasUnsynced = false
     local hasConflict = false
+    local localStatus = self:GetLocalPlayerStatus()
+
+    if localStatus.participantStatus == "FAILED" and db.run.ruleset.failedMemberBlocksParty then
+        db.run.partyStatus = "BLOCKED"
+        return db.run.partyStatus
+    elseif localStatus.participantStatus == "WARNING" then
+        hasWarning = true
+    elseif localStatus.participantStatus == "PENDING" or localStatus.participantStatus == "UNSYNCED" then
+        hasUnsynced = true
+    end
 
     for playerKey, participant in pairs(db.run.participants) do
-        if self:IsParticipantInCurrentParty(playerKey) then
+        if playerKey ~= localStatus.playerKey and self:IsParticipantInCurrentParty(playerKey) then
             if participant.status == "FAILED" and db.run.ruleset.failedMemberBlocksParty then
                 db.run.partyStatus = "BLOCKED"
                 return db.run.partyStatus
-            elseif participant.status == "RUN_MISMATCH" then
+            elseif participant.status == "RUN_MISMATCH" or participant.status == "RULESET_MISMATCH" or participant.status == "ADDON_VERSION_MISMATCH" then
                 hasConflict = true
             elseif participant.status == "WARNING" then
                 hasWarning = true
             elseif participant.status == "PENDING" or participant.status == "UNSYNCED" then
+                hasUnsynced = true
+            end
+        end
+    end
+
+    -- Remote peer statuses are advisory. They can make the party display BLOCKED,
+    -- WARNING, UNSYNCED, or CONFLICT, but they never mutate local run validity.
+    if self.Sync_GetGroupRows then
+        for _, peer in ipairs(self:Sync_GetGroupRows()) do
+            local compatible, reason = self:IsRemoteStateCompatible(peer)
+            if not compatible then
+                if reason == "RUN_MISMATCH" or reason == "RULESET_MISMATCH" or reason == "ADDON_VERSION_MISMATCH" then
+                    hasConflict = true
+                else
+                    hasUnsynced = true
+                end
+            elseif peer.participantStatus == "FAILED" or peer.failed then
+                if db.run.ruleset.failedMemberBlocksParty then
+                    db.run.partyStatus = "BLOCKED"
+                    return db.run.partyStatus
+                end
+            elseif peer.participantStatus == "WARNING" then
+                hasWarning = true
+            elseif peer.participantStatus == "PENDING" or peer.participantStatus == "UNSYNCED" or peer.participantStatus == "NOT_IN_RUN" then
                 hasUnsynced = true
             end
         end
@@ -607,39 +735,9 @@ function SC:ClearViolation(violationId, clearedBy, clearReason)
 end
 
 function SC:GetPlayerStatus()
-    local db = EnsureDatabase()
-
-    self:RefreshCharacter()
-    local playerKey = GetPlayerKey(db.character)
-    local participant = db.run.participants[playerKey]
-
-    if db.run.active then
-        participant = self:GetOrCreateParticipant(playerKey)
-        participant.currentLevel = db.character.level
-        participant.class = db.character.class
-    end
-
-    return {
-        runId = db.run.runId,
-        runName = db.run.runName,
-        playerKey = playerKey,
-        name = db.character.name,
-        realm = db.character.realm,
-        class = db.character.class,
-        level = db.character.level,
-        zone = db.character.zone,
-        active = db.run.active,
-        valid = db.run.valid,
-        failed = participant and participant.status == "FAILED",
-        participantStatus = participant and participant.status or "NOT_IN_RUN",
-        partyStatus = self:GetPartyStatus(),
-        rulesetVersion = db.run.ruleset.version,
-        rulesetHash = self.GetRulesetHash and self:GetRulesetHash() or "",
-        deaths = db.run.deathCount,
-        warnings = db.run.warningCount,
-        version = self.version,
-        timestamp = time(),
-    }
+    local status = self:GetLocalPlayerStatus()
+    status.partyStatus = self:GetDerivedPartyStatus()
+    return status
 end
 
 function SC:StartRun(runOptions)
