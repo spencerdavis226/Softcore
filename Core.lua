@@ -7,7 +7,7 @@ Softcore = Softcore or {}
 local SC = Softcore
 
 SC.name = "Softcore"
-SC.version = "0.2.9"
+SC.version = "0.2.10"
 SC.maxLogEntries = 30
 
 local function Print(message)
@@ -84,7 +84,11 @@ local function CreateDefaultRuleset()
         outsiderGrouping = "WARNING",
         unsyncedMembers = "WARNING",
         maxLevelGap = "ALLOWED",
-        dungeonRepeat = "ALLOWED",
+        maxLevelGapValue = 3,
+        dungeonRepeat = "LOG_ONLY",
+        gearQuality = "ALLOWED",
+        heirlooms = "WARNING",
+        instanceWithUnsyncedPlayers = "WARNING",
         bank = "WARNING",
         warbandBank = "WARNING",
         guildBank = "WARNING",
@@ -141,6 +145,8 @@ local function EnsureRunDefaults(run)
     run.partyStatus = run.partyStatus or "INACTIVE"
     run.governance = run.governance or CreateDefaultGovernance()
     run.conflicts = run.conflicts or {}
+    run.dungeons = run.dungeons or {}
+    run.dungeonOrder = run.dungeonOrder or {}
 
     for key, value in pairs(CreateDefaultRuleset()) do
         if run.ruleset[key] == nil then
@@ -177,6 +183,7 @@ local function EnsureDatabase()
     SoftcoreDB.sync = SoftcoreDB.sync or {}
     SoftcoreDB.sync.remoteSequences = SoftcoreDB.sync.remoteSequences or {}
     SoftcoreDB.sync.localSequence = SoftcoreDB.sync.localSequence or 0
+    SoftcoreDB.runHistory = SoftcoreDB.runHistory or {}
 
     EnsureRunDefaults(SoftcoreDB.run)
     if SoftcoreDB.run.active and not SoftcoreDB.run.runId then
@@ -193,6 +200,41 @@ local function CreateStableId(kind)
 
     db.nextIds[kind] = (db.nextIds[kind] or 0) + 1
     return "SC-" .. string.upper(kind) .. "-" .. tostring(time()) .. "-" .. tostring(db.nextIds[kind])
+end
+
+local function HasRunData(run, eventLog, violations)
+    if not run then
+        return false
+    end
+
+    return run.runId ~= nil or #(eventLog or {}) > 0 or #(violations or {}) > 0
+end
+
+local function CopyTable(source)
+    if type(source) ~= "table" then
+        return source
+    end
+
+    local copy = {}
+    for key, value in pairs(source) do
+        copy[key] = CopyTable(value)
+    end
+    return copy
+end
+
+local function ArchiveCurrentRun(db, reason)
+    if not HasRunData(db.run, db.eventLog, db.violations) then
+        return
+    end
+
+    table.insert(db.runHistory, {
+        archivedAt = time(),
+        reason = reason or "Archived",
+        runId = db.run.runId,
+        run = CopyTable(db.run),
+        eventLog = CopyTable(db.eventLog),
+        violations = CopyTable(db.violations),
+    })
 end
 
 function SC:RefreshCharacter()
@@ -311,6 +353,11 @@ function SC:GetOrCreateParticipant(playerKey)
 end
 
 function SC:AddParticipant(playerKey)
+    local db = EnsureDatabase()
+    if db.run.participants[playerKey] then
+        return db.run.participants[playerKey], false
+    end
+
     local participant = self:GetOrCreateParticipant(playerKey)
 
     if participant.status ~= "FAILED" and participant.status ~= "RETIRED" then
@@ -322,7 +369,7 @@ function SC:AddParticipant(playerKey)
         })
     end
 
-    return participant
+    return participant, true
 end
 
 function SC:IsParticipantInCurrentParty(playerKey)
@@ -508,6 +555,27 @@ end
 
 function SC:StartRun()
     local db = EnsureDatabase()
+    local existingParticipant = db.run.participants[GetPlayerKey(db.character)]
+
+    if db.run.active then
+        if existingParticipant and existingParticipant.status == "FAILED" then
+            Print("this character failed the active run and must not continue.")
+            self:PrintStatus()
+            return false
+        end
+
+        if existingParticipant and existingParticipant.status == "RETIRED" then
+            Print("this character is retired from the active run and was not reactivated.")
+            self:PrintStatus()
+            return false
+        end
+
+        Print("run is already active.")
+        self:PrintStatus()
+        return false
+    end
+
+    ArchiveCurrentRun(db, "Starting new run")
 
     db.character = GetPlayerSnapshot()
     db.run.runId = self:CreateRunId()
@@ -523,6 +591,8 @@ function SC:StartRun()
     db.run.participantOrder = {}
     db.run.partyStatus = "VALID"
     db.run.conflicts = {}
+    db.run.dungeons = {}
+    db.run.dungeonOrder = {}
     db.eventLog = {}
     db.violations = {}
     local participant = self:GetOrCreateParticipant(GetPlayerKey(db.character))
@@ -543,10 +613,18 @@ function SC:StartRun()
     if self.UI_Update then
         self:UI_Update()
     end
+
+    return true
 end
 
 function SC:ResetRun()
     local db = EnsureDatabase()
+    if not HasRunData(db.run, db.eventLog, db.violations) then
+        Print("no run data to reset.")
+        return false
+    end
+
+    ArchiveCurrentRun(db, "Reset confirmed")
 
     db.character = GetPlayerSnapshot()
     db.run.runId = nil
@@ -562,6 +640,8 @@ function SC:ResetRun()
     db.run.participantOrder = {}
     db.run.partyStatus = "INACTIVE"
     db.run.conflicts = {}
+    db.run.dungeons = {}
+    db.run.dungeonOrder = {}
     db.eventLog = {}
     db.violations = {}
 
@@ -575,6 +655,8 @@ function SC:ResetRun()
     if self.UI_Update then
         self:UI_Update()
     end
+
+    return true
 end
 
 function SC:GetStatusText()
@@ -669,7 +751,11 @@ function SC:PrintRules()
         "outsiderGrouping",
         "unsyncedMembers",
         "maxLevelGap",
+        "maxLevelGapValue",
         "dungeonRepeat",
+        "gearQuality",
+        "heirlooms",
+        "instanceWithUnsyncedPlayers",
         "bank",
         "warbandBank",
         "guildBank",
@@ -723,8 +809,10 @@ end
 function SC:PrintHelp()
     Print("/sc start - start a local run")
     Print("/sc status - print current run status")
-    Print("/sc reset - reset the local run")
+    Print("/sc reset confirm - reset the local run")
     Print("/sc log - print recent event logs")
+    Print("/sc gear - print gear rules and invalid equipped items")
+    Print("/sc dungeons - print dungeon entries for this run")
     Print("/sc roster - print run participants")
     Print("/sc participants - print run participants")
     Print("/sc add Player-Realm - add a pending participant")
@@ -747,9 +835,25 @@ function SC:HandleSlash(input)
     elseif command == "status" or command == "" then
         self:PrintStatus()
     elseif command == "reset" then
-        self:ResetRun()
+        if string.lower(rest or "") == "confirm" then
+            self:ResetRun()
+        else
+            Print("reset requires confirmation. Type /sc reset confirm to wipe the local active run state.")
+        end
     elseif command == "log" then
         self:PrintLog()
+    elseif command == "gear" then
+        if self.PrintGearStatus then
+            self:PrintGearStatus()
+        else
+            Print("gear checks are not loaded.")
+        end
+    elseif command == "dungeons" then
+        if self.PrintDungeons then
+            self:PrintDungeons()
+        else
+            Print("dungeon tracking is not loaded.")
+        end
     elseif command == "roster" or command == "participants" then
         self:PrintRoster()
     elseif command == "run" then
@@ -777,9 +881,13 @@ function SC:HandleSlash(input)
         end
     elseif command == "add" then
         if rest and rest ~= "" then
-            local participant = self:AddParticipant(rest)
-            Print("added participant: " .. participant.playerKey .. " (" .. participant.status .. ")")
-            if self.Sync_BroadcastStatus then
+            local participant, added = self:AddParticipant(rest)
+            if added then
+                Print("added participant: " .. participant.playerKey .. " (" .. participant.status .. ")")
+            else
+                Print(participant.playerKey .. " is already a participant (" .. participant.status .. ").")
+            end
+            if added and self.Sync_BroadcastStatus then
                 self:Sync_BroadcastStatus("PARTICIPANT_ADDED")
             end
         else
@@ -787,9 +895,16 @@ function SC:HandleSlash(input)
         end
     elseif command == "retire" then
         local db = EnsureDatabase()
+        if not db.run.active then
+            Print("no active run to retire from.")
+            return
+        end
+
         local participant = self:GetOrCreateParticipant(GetPlayerKey(db.character))
         if participant.status == "FAILED" then
             Print("failed characters cannot be retired.")
+        elseif participant.status == "RETIRED" then
+            Print(participant.playerKey .. " is already retired.")
         else
             participant.status = "RETIRED"
             participant.leftAt = time()

@@ -2,7 +2,7 @@
 
 Softcore is a lightweight Retail World of Warcraft addon for hardcore-style leveling accountability with friends.
 
-Version 0.2.9 tracks your local run, applies structured rules, and syncs resilient status with group members who also have Softcore installed.
+Version 0.2.10 tracks your local run, applies structured rules, and syncs resilient status with group members who also have Softcore installed.
 
 ## Setup
 
@@ -17,8 +17,10 @@ Version 0.2.9 tracks your local run, applies structured rules, and syncs resilie
 - `/softcore` or `/sc` - show current status.
 - `/sc start` - start a new local run.
 - `/sc status` - print current run status.
-- `/sc reset` - reset the local run.
+- `/sc reset confirm` - reset the local run.
 - `/sc log` - print recent local event logs.
+- `/sc gear` - print gear rules and invalid equipped items.
+- `/sc dungeons` - print dungeon entries for the current run.
 - `/sc roster` - print tracked run participants.
 - `/sc add Player-Realm` - add a pending participant until the v0.3 join UI exists.
 - `/sc retire` - retire this character without marking it failed.
@@ -40,6 +42,8 @@ Version 0.2.9 tracks your local run, applies structured rules, and syncs resilie
 - Party status: `VALID`, `WARNING`, `BLOCKED`, `UNSYNCED`, `CONFLICT`, or `INACTIVE`.
 - Structured ruleset values and prospective rule amendments.
 - Storage/economy access openings for bank, Warband bank, guild bank, void storage, crafting orders, and vendors.
+- Equipped gear quality and heirloom checks.
+- Party level-gap checks and dungeon repeat tracking.
 - Leaderless governance for active-party-majority style runs.
 - Sync metadata for run, ruleset, addon version, sender sequence, and conflict detection.
 - Recent local event log.

@@ -188,6 +188,8 @@ function SC:Events_Register()
     eventFrame:RegisterEvent("PLAYER_DEAD")
     eventFrame:RegisterEvent("PLAYER_LEVEL_UP")
     eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+    eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+    eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
     eventFrame:RegisterEvent("TRADE_SHOW")
     eventFrame:RegisterEvent("MAIL_SHOW")
     eventFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
@@ -209,8 +211,22 @@ function SC:Events_Register()
             HandlePlayerDead()
         elseif event == "PLAYER_LEVEL_UP" then
             HandleLevelUp(...)
+            if SC.CheckMaxLevelGap then
+                SC:CheckMaxLevelGap(true)
+            end
         elseif event == "ZONE_CHANGED_NEW_AREA" then
             HandleZoneChanged()
+            if SC.CheckInstanceIntegrity then
+                SC:CheckInstanceIntegrity()
+            end
+        elseif event == "PLAYER_EQUIPMENT_CHANGED" then
+            if SC.ScanEquippedGear then
+                SC:ScanEquippedGear(true)
+            end
+        elseif event == "BAG_UPDATE_DELAYED" then
+            if SC.ScanEquippedGear then
+                SC:ScanEquippedGear(false)
+            end
         elseif WARNING_EVENTS[event] then
             HandleWarning(event)
         elseif ACCESS_EVENTS[event] then
@@ -234,8 +250,20 @@ function SC:Events_Register()
             if SC.RefreshParticipantsFromRoster then
                 SC:RefreshParticipantsFromRoster()
             end
+            if SC.CheckMaxLevelGap then
+                SC:CheckMaxLevelGap(true)
+            end
             Broadcast("GROUP_ROSTER_UPDATE")
         elseif event == "PLAYER_ENTERING_WORLD" then
+            if SC.ScanEquippedGear then
+                SC:ScanEquippedGear(true)
+            end
+            if SC.CheckInstanceIntegrity then
+                SC:CheckInstanceIntegrity()
+            end
+            if SC.CheckMaxLevelGap then
+                SC:CheckMaxLevelGap(true)
+            end
             Broadcast("PLAYER_ENTERING_WORLD")
         end
 

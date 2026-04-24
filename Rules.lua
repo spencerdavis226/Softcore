@@ -21,7 +21,11 @@ local RULE_ORDER = {
     "outsiderGrouping",
     "unsyncedMembers",
     "maxLevelGap",
+    "maxLevelGapValue",
     "dungeonRepeat",
+    "gearQuality",
+    "heirlooms",
+    "instanceWithUnsyncedPlayers",
     "bank",
     "warbandBank",
     "guildBank",
@@ -45,7 +49,11 @@ local HASH_RULE_ORDER = {
     "outsiderGrouping",
     "unsyncedMembers",
     "maxLevelGap",
+    "maxLevelGapValue",
     "dungeonRepeat",
+    "gearQuality",
+    "heirlooms",
+    "instanceWithUnsyncedPlayers",
     "bank",
     "warbandBank",
     "guildBank",
@@ -68,6 +76,20 @@ local ACCESS_RULES = {
     voidStorage = true,
     craftingOrders = true,
     vendor = true,
+}
+
+local SEVERITY_ONLY_RULES = {
+    heirlooms = true,
+    maxLevelGap = true,
+    dungeonRepeat = true,
+    instanceWithUnsyncedPlayers = true,
+}
+
+local GEAR_QUALITY_VALUES = {
+    ALLOWED = true,
+    WHITE_GRAY_ONLY = true,
+    COMMON_OR_UNCOMMON = true,
+    NO_EPICS = true,
 }
 
 local function GetDB()
@@ -95,11 +117,19 @@ local function CopyRules(rules)
 end
 
 local function IsValidRuleValue(ruleName, value)
+    if ruleName == "maxLevelGapValue" then
+        return tonumber(value) ~= nil
+    end
+
     if BOOLEAN_RULES[ruleName] then
         return type(value) == "boolean"
     end
 
-    if ACCESS_RULES[ruleName] and value == "CHARACTER_FAIL" then
+    if ruleName == "gearQuality" then
+        return GEAR_QUALITY_VALUES[value] == true
+    end
+
+    if (ACCESS_RULES[ruleName] or SEVERITY_ONLY_RULES[ruleName]) and value == "CHARACTER_FAIL" then
         return false
     end
 
@@ -107,6 +137,10 @@ local function IsValidRuleValue(ruleName, value)
 end
 
 local function NormalizeRuleValue(ruleName, value)
+    if ruleName == "maxLevelGapValue" then
+        return tonumber(value)
+    end
+
     if BOOLEAN_RULES[ruleName] then
         if value == true or value == "true" or value == "TRUE" then
             return true
@@ -149,6 +183,10 @@ function SC:SetRule(ruleName, value)
 
     if not IsValidRuleValue(ruleName, normalized) then
         return false, "invalid value for " .. tostring(ruleName) .. ": " .. tostring(value)
+    end
+
+    if self:GetRule(ruleName) == normalized then
+        return true, "rule unchanged: " .. ruleName .. " is already " .. tostring(normalized)
     end
 
     local amendment = self:ProposeRuleAmendment({
