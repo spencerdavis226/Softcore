@@ -10,11 +10,10 @@ local GROUPING_OPTIONS = {
 }
 
 local GEAR_OPTIONS = {
-    { text = "No restriction", value = "ALLOWED" },
+    { text = "Any gear", value = "ALLOWED" },
     { text = "White/gray only", value = "WHITE_GRAY_ONLY" },
     { text = "Green or lower", value = "GREEN_OR_LOWER" },
     { text = "Blue or lower", value = "BLUE_OR_LOWER" },
-    { text = "Epic or lower", value = "EPIC_OR_LOWER" },
 }
 
 local ECONOMY_RULES = {
@@ -128,38 +127,50 @@ local function ApplyPreset(frame, preset)
     end
 end
 
-local function GetRunName(frame)
-    local runName = strtrim(frame.nameBox:GetText() or "")
-    if runName == "" then
-        runName = "Softcore Run"
-        frame.nameBox:SetText(runName)
-    end
-
-    return runName
-end
-
-local function UpdateActiveRunState(frame)
+local function UpdatePrimaryButton(frame)
     local db = SC.db or SoftcoreDB
     local active = db and db.run and db.run.active
 
     if active then
-        frame.warning:SetText("A run is already active. This window will not overwrite it. Use /sc reset confirm first.")
-        frame.proposeButton:Disable()
-        frame.soloButton:Disable()
+        frame.warning:SetText("A run is already active. Use /sc reset confirm first.")
+        frame.primaryButton:Disable()
+        return
+    end
+
+    frame.warning:SetText("")
+
+    local pendingId = db and db.pendingProposalId
+    local pendingProposal = pendingId and db.proposals and db.proposals[pendingId]
+    if pendingProposal and (pendingProposal.status == "PENDING" or pendingProposal.status == "ACCEPTED") then
+        frame.primaryButton:SetText("Proposal Pending")
+        frame.primaryButton:Disable()
+        return
+    end
+
+    frame.primaryButton:Enable()
+
+    if IsInGroup() then
+        frame.primaryButton:SetText("Propose Run")
+        local hasUnsynced = false
+        local groupRows = SC.Sync_GetGroupRows and SC:Sync_GetGroupRows() or {}
+        for _, peer in ipairs(groupRows) do
+            if peer.unsynced then
+                hasUnsynced = true
+                break
+            end
+        end
+        if hasUnsynced then
+            frame.warning:SetText("Some group members are not running Softcore. They must sync or leave before the run can start.")
+        end
     else
-        frame.warning:SetText("")
-        frame.proposeButton:Enable()
-        frame.soloButton:Enable()
+        frame.primaryButton:SetText("Start Run")
     end
 end
 
-function SC:OpenStartRunWindow(prefillName)
+function SC:OpenStartRunWindow()
     if self.startRunFrame then
         self.startRunFrame:Show()
-        if prefillName and self.startRunFrame.nameBox then
-            self.startRunFrame.nameBox:SetText(prefillName)
-        end
-        UpdateActiveRunState(self.startRunFrame)
+        UpdatePrimaryButton(self.startRunFrame)
         return
     end
 
@@ -202,16 +213,10 @@ function SC:OpenStartRunWindow(prefillName)
     frame.warning:SetText("")
 
     CreateSection(frame, "Run Setup", 18, -58)
-    CreateLabel(frame, "Run name", "TOPLEFT", frame, "TOPLEFT", 18, -86)
-    frame.nameBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
-    frame.nameBox:SetSize(260, 24)
-    frame.nameBox:SetPoint("TOPLEFT", frame, "TOPLEFT", 88, -80)
-    frame.nameBox:SetAutoFocus(false)
-    frame.nameBox:SetText(prefillName or "Softcore Run")
 
     local casual = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     casual:SetSize(86, 22)
-    casual:SetPoint("TOPLEFT", frame, "TOPLEFT", 380, -80)
+    casual:SetPoint("TOPLEFT", frame, "TOPLEFT", 18, -80)
     casual:SetText("Casual")
     casual:SetScript("OnClick", function() ApplyPreset(frame, "CASUAL") end)
 
@@ -252,7 +257,7 @@ function SC:OpenStartRunWindow(prefillName)
     end
 
     CreateSection(frame, "Gear / Item Rules", 395, -240)
-    CreateLabel(frame, "Gear restriction", "TOPLEFT", frame, "TOPLEFT", 395, -268)
+    CreateLabel(frame, "Gear limit", "TOPLEFT", frame, "TOPLEFT", 395, -268)
     frame.gearDropdown = CreateDropdown(frame, "SoftcoreRuleDropdownGearQuality", GEAR_OPTIONS, frame.selectedRules.gearQuality, function(value)
         frame.selectedRules.gearQuality = value
     end, 145)
@@ -303,17 +308,18 @@ function SC:OpenStartRunWindow(prefillName)
 
         self.maxGapCheck:SetChecked(self.selectedRules.maxLevelGap ~= "ALLOWED")
         self.maxGapBox:SetText(tostring(self.selectedRules.maxLevelGapValue or 3))
+
+        UpdatePrimaryButton(self)
     end
 
-    frame.proposeButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    frame.proposeButton:SetSize(110, 24)
-    frame.proposeButton:SetPoint("BOTTOMLEFT", 18, 18)
-    frame.proposeButton:SetText("Propose Run")
-    frame.proposeButton:SetScript("OnClick", function()
-        UpdateActiveRunState(frame)
-        if (SC.db or SoftcoreDB).run.active then
-            return
-        end
+    frame.primaryButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    frame.primaryButton:SetSize(120, 24)
+    frame.primaryButton:SetPoint("BOTTOMLEFT", 18, 18)
+    frame.primaryButton:SetText("Start Run")
+    frame.primaryButton:SetScript("OnClick", function()
+        UpdatePrimaryButton(frame)
+        local db = SC.db or SoftcoreDB
+        if db.run.active then return end
 
         if SC.ApplyGroupingMode then
             SC:ApplyGroupingMode(frame.selectedRules)
@@ -321,43 +327,30 @@ function SC:OpenStartRunWindow(prefillName)
         frame.selectedRules.instanceWithUnsyncedPlayers = "ALLOWED"
         frame.selectedRules.unsyncedMembers = "ALLOWED"
 
-        local proposal = SC:CreateRunProposal(GetRunName(frame), frame.selectedRules, "RUN")
-        if proposal then
-            Print("proposed run: " .. proposal.runName)
+        local runName = "Softcore Run"
+
+        if IsInGroup() then
+            local proposal = SC:CreateRunProposal(runName, frame.selectedRules, "RUN")
+            if proposal then
+                Print("proposed run: " .. proposal.runName)
+                UpdatePrimaryButton(frame)
+            end
+        else
+            SC:StartRun({
+                runName = runName,
+                ruleset = frame.selectedRules,
+            })
             frame:Hide()
         end
     end)
 
-    frame.soloButton = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    frame.soloButton:SetSize(110, 24)
-    frame.soloButton:SetPoint("LEFT", frame.proposeButton, "RIGHT", 8, 0)
-    frame.soloButton:SetText("Start Solo Run")
-    frame.soloButton:SetScript("OnClick", function()
-        UpdateActiveRunState(frame)
-        if (SC.db or SoftcoreDB).run.active then
-            return
-        end
-
-        if SC.ApplyGroupingMode then
-            SC:ApplyGroupingMode(frame.selectedRules)
-        end
-        frame.selectedRules.instanceWithUnsyncedPlayers = "ALLOWED"
-        frame.selectedRules.unsyncedMembers = "ALLOWED"
-
-        SC:StartRun({
-            runName = GetRunName(frame),
-            ruleset = frame.selectedRules,
-        })
-        frame:Hide()
-    end)
-
     local cancel = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     cancel:SetSize(80, 24)
-    cancel:SetPoint("LEFT", frame.soloButton, "RIGHT", 8, 0)
+    cancel:SetPoint("LEFT", frame.primaryButton, "RIGHT", 8, 0)
     cancel:SetText("Cancel")
     cancel:SetScript("OnClick", function() frame:Hide() end)
 
     self.startRunFrame = frame
     frame:RefreshControls()
-    UpdateActiveRunState(frame)
+    UpdatePrimaryButton(frame)
 end

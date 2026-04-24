@@ -423,6 +423,22 @@ function SC:Sync_SendProposalResponse(messageType, proposal)
     })
 end
 
+function SC:Sync_SendRunProposalConfirmed(proposal)
+    SendPayload({
+        type = "PROPOSAL_CONFIRMED",
+        proposalId = proposal.proposalId,
+        runId = proposal.runId,
+        runName = proposal.runName,
+    })
+end
+
+function SC:Sync_SendProposalCancelled(proposal)
+    SendPayload({
+        type = "PROPOSAL_CANCELLED",
+        proposalId = proposal.proposalId,
+    })
+end
+
 function SC:Sync_HandleMessage(message, sender)
     local payload = Decode(message)
 
@@ -462,6 +478,20 @@ function SC:Sync_HandleMessage(message, sender)
     if payload.type == "PROPOSAL_ACCEPT" or payload.type == "PROPOSAL_DECLINE" then
         if self.ReceiveProposalResponse then
             self:ReceiveProposalResponse(payload, key)
+        end
+        return
+    end
+
+    if payload.type == "PROPOSAL_CONFIRMED" then
+        if self.ReceiveRunConfirmed then
+            self:ReceiveRunConfirmed(payload, key)
+        end
+        return
+    end
+
+    if payload.type == "PROPOSAL_CANCELLED" then
+        if self.ReceiveProposalCancelled then
+            self:ReceiveProposalCancelled(payload, key)
         end
         return
     end

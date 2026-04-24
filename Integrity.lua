@@ -214,12 +214,13 @@ function SC:CheckMaxLevelGap(force)
 
     local gap = highest - lowest
     local allowedGap = tonumber(self:GetRule("maxLevelGapValue")) or 3
+    local db = GetDB()
 
     if gap > allowedGap then
-        self:ApplyRuleOutcome("maxLevelGap", {
-            playerKey = self:GetPlayerKey(),
-            detail = "Party level gap is " .. tostring(gap) .. " (allowed " .. tostring(allowedGap) .. ").",
-        })
+        db.run.levelGapBlocked = true
+        self:AddLog("LEVEL_GAP_EXCEEDED", "Party level gap is " .. tostring(gap) .. " (allowed " .. tostring(allowedGap) .. ").")
+    else
+        db.run.levelGapBlocked = false
     end
 end
 

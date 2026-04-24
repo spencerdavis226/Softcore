@@ -172,6 +172,7 @@ local function EnsureRunDefaults(run)
     if run.active == nil then run.active = false end
     if run.valid == nil then run.valid = true end
     if run.failed == nil then run.failed = false end
+    if run.levelGapBlocked == nil then run.levelGapBlocked = false end
     run.runId = run.runId or nil
     run.runName = run.runName or nil
     run.startTime = run.startTime or nil
@@ -623,6 +624,11 @@ function SC:GetDerivedPartyStatus()
         return db.run.partyStatus
     end
 
+    if db.run.levelGapBlocked then
+        db.run.partyStatus = "BLOCKED"
+        return db.run.partyStatus
+    end
+
     local hasWarning = false
     local hasUnsynced = false
     local hasConflict = false
@@ -778,6 +784,7 @@ function SC:StartRun(runOptions)
     db.run.conflicts = {}
     db.run.dungeons = {}
     db.run.dungeonOrder = {}
+    db.run.levelGapBlocked = false
     db.eventLog = {}
     db.violations = {}
     local participant = self:GetOrCreateParticipant(GetPlayerKey(db.character))
@@ -828,6 +835,7 @@ function SC:ResetRun()
     db.run.conflicts = {}
     db.run.dungeons = {}
     db.run.dungeonOrder = {}
+    db.run.levelGapBlocked = false
     db.eventLog = {}
     db.violations = {}
     db.pendingProposalId = nil
@@ -1107,7 +1115,7 @@ function SC:HandleSlash(input)
     elseif command == "rule" then
         local ruleName, value = string.match(rest or "", "^(%S+)%s+(%S+)$")
         if ruleName and value then
-            local ok, message = self:SetRule(ruleName, string.upper(value))
+            local _, message = self:SetRule(ruleName, string.upper(value))
             Print(message)
         else
             Print("usage: /sc rule ruleName value")

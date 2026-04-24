@@ -47,7 +47,7 @@ local function FriendlyAllowed(value)
 end
 
 local function FriendlyGear(value)
-    if value == "ALLOWED" then return "No restriction" end
+    if value == "ALLOWED" then return "Any gear" end
     if value == "WHITE_GRAY_ONLY" then return "White/gray only" end
     if value == "GREEN_OR_LOWER" or value == "COMMON_OR_UNCOMMON" then return "Green or lower" end
     if value == "BLUE_OR_LOWER" then return "Blue or lower" end
@@ -82,6 +82,36 @@ local function Unescape(value)
     value = string.gsub(value, "%%u", SEPARATOR)
     value = string.gsub(value, "%%%%", "%%")
     return value
+end
+
+-- Returns a table of all current party member keys including the local player.
+local function GetCurrentPartyKeys()
+    local keys = {}
+    local name, realm = UnitFullName("player")
+    if not realm or realm == "" then
+        realm = GetRealmName()
+    end
+    keys[(name or "Unknown") .. "-" .. (realm or "Unknown")] = true
+
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            local n, r = UnitFullName("raid" .. i)
+            if n then
+                if not r or r == "" then r = GetRealmName() end
+                keys[n .. "-" .. r] = true
+            end
+        end
+    elseif IsInGroup() then
+        for i = 1, GetNumSubgroupMembers() do
+            local n, r = UnitFullName("party" .. i)
+            if n then
+                if not r or r == "" then r = GetRealmName() end
+                keys[n .. "-" .. r] = true
+            end
+        end
+    end
+
+    return keys
 end
 
 function SC:SerializeRuleset(ruleset)
@@ -181,6 +211,22 @@ function SC:CanProposeRun()
     return participant and (participant.status == "ACTIVE" or participant.status == "WARNING")
 end
 
+-- Returns true if all members recorded in proposal.partyAtProposalTime have accepted.
+function SC:CheckAllProposalMembersAccepted(proposal)
+    local party = proposal.partyAtProposalTime
+    if not party or not next(party) then
+        return true
+    end
+
+    for key in pairs(party) do
+        if not proposal.acceptedBy[key] then
+            return false
+        end
+    end
+
+    return true
+end
+
 function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, runId)
     if not self:CanProposeRun() then
         Print("only the party leader or an active participant can propose a run.")
@@ -206,6 +252,7 @@ function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, r
         status = "PENDING",
         proposalType = proposalType or "RUN",
         targetPlayerKey = targetPlayerKey,
+        partyAtProposalTime = GetCurrentPartyKeys(),
     }
 
     proposal.acceptedBy[proposal.proposedBy] = true
@@ -299,16 +346,21 @@ function SC:AcceptPendingProposal()
         participant.status = "ACTIVE"
         participant.joinedAt = participant.joinedAt or time()
     else
-        if not db.run.active then
-            self:StartRun({
-                runId = proposal.runId,
-                runName = proposal.runName,
-                ruleset = proposal.ruleset,
-            })
-        else
-            local participant = self:GetOrCreateParticipant(playerKey)
-            participant.status = "ACTIVE"
+        -- When in a group, wait for PROPOSAL_CONFIRMED from the proposer.
+        -- When not in a group (edge case), start immediately.
+        if not IsInGroup() then
+            if not db.run.active then
+                self:StartRun({
+                    runId = proposal.runId,
+                    runName = proposal.runName,
+                    ruleset = proposal.ruleset,
+                })
+            else
+                local participant = self:GetOrCreateParticipant(playerKey)
+                participant.status = "ACTIVE"
+            end
         end
+        -- else: run will start when ReceiveRunConfirmed fires
     end
 
     self:AddLog("PROPOSAL_ACCEPTED", "Accepted proposal: " .. proposal.runName, {
@@ -320,7 +372,7 @@ function SC:AcceptPendingProposal()
         self:Sync_SendProposalResponse("PROPOSAL_ACCEPT", proposal)
     end
 
-    Print("accepted proposal: " .. proposal.runName)
+    Print("accepted proposal: " .. proposal.runName .. ". Waiting for all members to accept.")
 end
 
 function SC:DeclinePendingProposal()
@@ -335,6 +387,8 @@ function SC:DeclinePendingProposal()
 
     proposal.declinedBy[playerKey] = true
     proposal.status = "DECLINED"
+    db.pendingProposalId = nil
+
     self:AddLog("PROPOSAL_DECLINED", "Declined proposal: " .. proposal.runName, {
         proposalId = proposal.proposalId,
         runId = proposal.runId,
@@ -365,12 +419,109 @@ function SC:ReceiveProposalResponse(payload, playerKey)
             proposalId = proposal.proposalId,
             playerKey = playerKey,
         })
+
+        -- Only the proposer drives the "all accepted" check and starts the run.
+        if proposal.proposedBy == self:GetPlayerKey() and proposal.proposalType == "RUN" and proposal.status ~= "CONFIRMED" then
+            if self:CheckAllProposalMembersAccepted(proposal) then
+                proposal.status = "CONFIRMED"
+                db.pendingProposalId = nil
+
+                if not db.run.active then
+                    self:StartRun({
+                        runId = proposal.runId,
+                        runName = proposal.runName,
+                        ruleset = proposal.ruleset,
+                    })
+                end
+
+                if self.Sync_SendRunProposalConfirmed then
+                    self:Sync_SendRunProposalConfirmed(proposal)
+                end
+
+                Print("all members accepted. Run started.")
+            end
+        end
+
     elseif payload.type == "PROPOSAL_DECLINE" then
         proposal.declinedBy[playerKey] = true
         self:AddLog("PROPOSAL_DECLINE_SYNC", playerKey .. " declined proposal " .. proposal.runName, {
             proposalId = proposal.proposalId,
             playerKey = playerKey,
         })
+
+        -- Proposer cancels the proposal when any member declines.
+        if proposal.proposedBy == self:GetPlayerKey() and proposal.proposalType == "RUN" and proposal.status == "PENDING" then
+            proposal.status = "DECLINED"
+            db.pendingProposalId = nil
+
+            Print(playerKey .. " declined. Proposal cancelled.")
+
+            if self.Sync_SendProposalCancelled then
+                self:Sync_SendProposalCancelled(proposal)
+            end
+
+            if self.UI_Update then
+                self:UI_Update()
+            end
+        end
+    end
+end
+
+-- Called when a non-proposer receives PROPOSAL_CONFIRMED from the proposer.
+function SC:ReceiveRunConfirmed(payload, confirmerKey)
+    local db = GetDB()
+    local proposal = db.proposals[payload.proposalId]
+    if not proposal then return end
+
+    local playerKey = self:GetPlayerKey()
+
+    -- Only act if we already accepted this proposal and are not the proposer.
+    if not proposal.acceptedBy[playerKey] then return end
+    if proposal.proposedBy == playerKey then return end
+
+    proposal.status = "CONFIRMED"
+    if db.pendingProposalId == proposal.proposalId then
+        db.pendingProposalId = nil
+    end
+
+    if not db.run.active then
+        self:StartRun({
+            runId = proposal.runId,
+            runName = proposal.runName,
+            ruleset = proposal.ruleset,
+        })
+    end
+
+    self:AddLog("PROPOSAL_CONFIRMED", "Run confirmed by " .. confirmerKey .. ": " .. proposal.runName, {
+        proposalId = proposal.proposalId,
+    })
+
+    Print("run started: all members accepted.")
+
+    if self.UI_Update then
+        self:UI_Update()
+    end
+end
+
+-- Called when a player receives PROPOSAL_CANCELLED from the proposer.
+function SC:ReceiveProposalCancelled(payload, cancellerKey)
+    local db = GetDB()
+    local proposal = db.proposals[payload.proposalId]
+    if not proposal then return end
+
+    proposal.status = "CANCELLED"
+    if db.pendingProposalId == proposal.proposalId then
+        db.pendingProposalId = nil
+    end
+
+    self:AddLog("PROPOSAL_CANCELLED", "Proposal cancelled by " .. cancellerKey .. ": " .. tostring(proposal.runName), {
+        proposalId = proposal.proposalId,
+    })
+
+    Print("proposal cancelled: " .. tostring(proposal.runName) .. ".")
+
+    if self.UI_Update then
+        self:UI_Update()
     end
 end
 
@@ -412,13 +563,12 @@ function SC:ShowProposalPopup(proposal)
     StaticPopup_Show("SOFTCORE_RUN_PROPOSAL", proposal.runName, "From: " .. tostring(proposal.proposedBy) .. "\n\n" .. ProposalSummary(proposal))
 end
 
-function SC:ProposeRunFromSlash(rest)
-    local runName = rest and rest ~= "" and rest or "Softcore Run"
+function SC:ProposeRunFromSlash()
     if self.OpenStartRunWindow then
-        self:OpenStartRunWindow(runName)
+        self:OpenStartRunWindow()
     else
-        self:CreateRunProposal(runName, self:GetDefaultRuleset(), "RUN")
-        Print("proposed run: " .. runName)
+        self:CreateRunProposal("Softcore Run", self:GetDefaultRuleset(), "RUN")
+        Print("proposed run.")
     end
 end
 
