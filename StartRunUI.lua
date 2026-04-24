@@ -5,8 +5,8 @@ local SC = Softcore
 local DISALLOWED_OUTCOME = "WARNING"
 
 local GROUPING_OPTIONS = {
-    { text = "Group", value = "SYNCED_GROUP_ALLOWED" },
-    { text = "Solo", value = "SOLO_SELF_FOUND" },
+    { text = "Grouping Allowed", value = "SYNCED_GROUP_ALLOWED" },
+    { text = "Solo Only", value = "SOLO_SELF_FOUND" },
 }
 
 local GEAR_OPTIONS = {
@@ -17,17 +17,17 @@ local GEAR_OPTIONS = {
 }
 
 local ECONOMY_RULES = {
-    { label = "Disallow Auction House", key = "auctionHouse" },
-    { label = "Disallow Mailbox", key = "mailbox" },
-    { label = "Disallow Trade", key = "trade" },
-    { label = "Disallow Bank", key = "bank" },
-    { label = "Disallow Warband Bank", key = "warbandBank" },
-    { label = "Disallow Guild Bank", key = "guildBank" },
+    { label = "Allow Auction House", key = "auctionHouse" },
+    { label = "Allow Mailbox", key = "mailbox" },
+    { label = "Allow Trade", key = "trade" },
+    { label = "Allow Bank", key = "bank" },
+    { label = "Allow Warband Bank", key = "warbandBank" },
+    { label = "Allow Guild Bank", key = "guildBank" },
 }
 
 local MOVEMENT_RULES = {
-    { label = "Disallow mounts", key = "mounts" },
-    { label = "Disallow flying", key = "flying" },
+    { label = "Allow mounts", key = "mounts" },
+    { label = "Allow flying (mounts & Druid flight form)", key = "flying" },
 }
 
 local function Print(message)
@@ -82,7 +82,7 @@ local function SetDisallowedRule(rules, key, checked)
     rules[key] = checked and DISALLOWED_OUTCOME or "ALLOWED"
 end
 
-local function CreateDisallowCheckbox(parent, spec, x, y)
+local function CreateAllowCheckbox(parent, spec, x, y)
     local checkbox = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     checkbox:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     checkbox.label = checkbox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -90,9 +90,9 @@ local function CreateDisallowCheckbox(parent, spec, x, y)
     checkbox.label:SetWidth(260)
     checkbox.label:SetJustifyH("LEFT")
     checkbox.label:SetText(spec.label)
-    checkbox:SetChecked(IsDisallowed(parent.selectedRules[spec.key]))
+    checkbox:SetChecked(not IsDisallowed(parent.selectedRules[spec.key]))
     checkbox:SetScript("OnClick", function(self)
-        SetDisallowedRule(parent.selectedRules, spec.key, self:GetChecked())
+        SetDisallowedRule(parent.selectedRules, spec.key, not self:GetChecked())
     end)
     parent.checkboxes[spec.key] = checkbox
     return checkbox
@@ -236,23 +236,25 @@ function SC:OpenStartRunWindow()
         if SC.ApplyGroupingMode then
             SC:ApplyGroupingMode(frame.selectedRules)
         end
-    end, 90)
+        frame.groupHelp:SetShown(value ~= "SOLO_SELF_FOUND")
+    end, 140)
     frame.groupingDropdown:SetPoint("TOPLEFT", frame, "TOPLEFT", 132, -182)
-    local groupHelp = CreateLabel(frame, "Group: party members must be synced with matching Softcore rules.", "TOPLEFT", frame, "TOPLEFT", 18, -226, "GameFontHighlightSmall")
-    groupHelp:SetWidth(330)
-    groupHelp:SetJustifyH("LEFT")
+    frame.groupHelp = CreateLabel(frame, "Party members must be synced with matching Softcore rules.", "TOPLEFT", frame, "TOPLEFT", 18, -226, "GameFontHighlightSmall")
+    frame.groupHelp:SetWidth(330)
+    frame.groupHelp:SetJustifyH("LEFT")
+    frame.groupHelp:SetShown(frame.selectedRules.groupingMode ~= "SOLO_SELF_FOUND")
 
     CreateSection(frame, "Economy / Storage Rules", 18, -270)
     local y = -298
     for _, spec in ipairs(ECONOMY_RULES) do
-        CreateDisallowCheckbox(frame, spec, 18, y)
+        CreateAllowCheckbox(frame, spec, 18, y)
         y = y - 32
     end
 
     CreateSection(frame, "Movement Rules", 395, -126)
     y = -154
     for _, spec in ipairs(MOVEMENT_RULES) do
-        CreateDisallowCheckbox(frame, spec, 395, y)
+        CreateAllowCheckbox(frame, spec, 395, y)
         y = y - 32
     end
 
@@ -262,7 +264,7 @@ function SC:OpenStartRunWindow()
         frame.selectedRules.gearQuality = value
     end, 145)
     frame.gearDropdown:SetPoint("TOPLEFT", frame, "TOPLEFT", 520, -260)
-    CreateDisallowCheckbox(frame, { label = "Disallow heirlooms", key = "heirlooms" }, 395, -310)
+    CreateAllowCheckbox(frame, { label = "Allow heirlooms", key = "heirlooms" }, 395, -310)
 
     CreateSection(frame, "Group / Dungeon Rules", 395, -382)
     frame.maxGapCheck = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
@@ -290,7 +292,7 @@ function SC:OpenStartRunWindow()
         end
     end)
 
-    CreateDisallowCheckbox(frame, { label = "Disallow repeated dungeons", key = "dungeonRepeat" }, 395, -486)
+    CreateAllowCheckbox(frame, { label = "Allow repeated dungeons", key = "dungeonRepeat" }, 395, -486)
 
     function frame:RefreshControls()
         if SC.ApplyGroupingMode then
@@ -301,9 +303,10 @@ function SC:OpenStartRunWindow()
 
         UIDropDownMenu_SetText(self.groupingDropdown, GetOptionText(GROUPING_OPTIONS, self.selectedRules.groupingMode))
         UIDropDownMenu_SetText(self.gearDropdown, GetOptionText(GEAR_OPTIONS, self.selectedRules.gearQuality))
+        self.groupHelp:SetShown(self.selectedRules.groupingMode ~= "SOLO_SELF_FOUND")
 
         for key, checkbox in pairs(self.checkboxes) do
-            checkbox:SetChecked(IsDisallowed(self.selectedRules[key]))
+            checkbox:SetChecked(not IsDisallowed(self.selectedRules[key]))
         end
 
         self.maxGapCheck:SetChecked(self.selectedRules.maxLevelGap ~= "ALLOWED")
