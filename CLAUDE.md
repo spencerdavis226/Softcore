@@ -1,243 +1,317 @@
-# Softcore Addon Project Context
+# Softcore Addon: Loose Project Context and Roadmap
 
 Softcore is a Retail World of Warcraft Lua addon for hardcore-style leveling with friends.
 
-## Core Principle
+The goal is not server-side enforcement. The goal is a lightweight accountability addon that helps players track deaths, rule breaks, group compatibility, logs, and run status.
 
-Softcore is individual-first.
+## Core Product Principle
 
-A party member’s failure, death, violation, mismatch, or unsynced state must never fail or mutate the local player’s individual run.
+Softcore should be individual-first.
 
-Individual character state is authoritative only for the local character.
+A party member’s death, failure, violation, unsynced state, or ruleset mismatch should not directly fail or mutate the local player’s character state.
 
-Remote player state is advisory/display-only.
+Local character validity should be affected only by local events, such as:
 
-Party status is derived and non-authoritative.
+- the local character dying
+- the local character triggering a disallowed action
+- the local character equipping disallowed gear
+- the local user explicitly accepting, retiring, resetting, or changing something
 
-## Current Architecture
+Remote player state should mainly be used for display, compatibility checks, group status, and logs.
 
-The addon tracks:
+Party/group status should be derived from local and remote state. It should not be treated as authoritative over an individual character’s validity.
 
-- local run state
-- local character status
-- deaths
-- violations
-- rules
-- participant/peer sync
-- party compatibility status
-- proposal/accept/decline flow
-- storage/economy restrictions
-- gear/item restrictions
-- safe command behavior
+## General Design Direction
 
-Current slash commands include:
+Keep the addon simple and readable.
 
-- /sc
-- /softcore
-- /sc status
-- /sc start
-- /sc new
-- /sc reset
-- /sc reset confirm
-- /sc rules
-- /sc rule
-- /sc log
-- /sc gear
-- /sc dungeons
-- /sc participants
-- /sc run
-- /sc conflicts
-- /sc accept
-- /sc decline
-- /sc proposal
+Prefer clear user-facing concepts:
 
-## Safety Rules
+- `Failed`: a character died or permanently failed
+- `Violation`: a rule was broken
+- `Cleared`: a violation was reviewed and forgiven, but not deleted
+- `Blocked`: group progress is blocked by a compatibility issue
+- `Conflict`: rules/run mismatch
+- `Unsynced`: a party member is not syncing valid Softcore data
+- `Valid`: character is alive and has no active issues
 
-Do not add:
+Avoid exposing overly technical internal states in the UI unless needed.
 
-- combat automation
-- rotation suggestions
-- boss mechanic logic
-- protected action buttons
-- external dependencies
-- npm/build tooling
-- obfuscated code
+## Rule Philosophy
 
-Use Lua 5.1-compatible code.
+Death should be permanent for the character.
 
-Keep changes modular and incremental.
-
-Do not rewrite the whole addon unless explicitly asked.
-
-## Design Rules
-
-Death is always permanent for the local character.
-
-Non-death rule breaks create violations, not character failure.
+Non-death rule breaks should generally create violations, not fail the character outright.
 
 Examples of violations:
 
 - opening a disallowed mailbox
 - opening a disallowed bank
-- opening a disallowed auction house
-- opening a disallowed trade window
+- opening the auction house when disallowed
+- opening a trade window when disallowed
+- using disallowed mounts or flying
 - equipping disallowed gear
-- using disallowed mounts/flying
 
-Compatibility blockers are not violations and should not affect local character validity.
-
-Examples of blockers:
+Examples of group blockers or conflicts:
 
 - unsynced party member
 - ruleset mismatch
 - run mismatch
 - failed character still grouped
-- max level gap exceeded
+- max level gap exceeded, if enabled
 
-## Grouping Model
+Blockers/conflicts should generally affect party status, not individual character validity.
+
+## Grouping Direction
 
 Grouping should be simple.
 
-Grouping Mode options:
+A good baseline is:
 
-- Group
-- Solo
+- Group mode: party members should be synced and using compatible Softcore rules.
+- Solo/self-found mode: grouping is not intended and should be treated accordingly.
 
-Internal mapping:
+In group mode:
 
-- Group -> SYNCED_GROUP_ALLOWED
-- Solo -> SOLO_SELF_FOUND
+- players should be able to join and leave as long as they are synced and compatible
+- unsynced players should block or conflict with group progress until they sync or leave
+- a failed character should not continue with the group
+- a failed remote character should not fail anyone else
 
-In Group mode:
+The addon should avoid tedious approval flows unless they are needed for a clear reason.
 
-- party members must be running Softcore
-- party members must have matching rules
-- unsynced members block group progress
-- failed characters block group progress while grouped
-- party members can join/leave freely if synced and compatible
-- no manual approval is needed for normal joining
+## Start Run Direction
 
-In Solo mode:
+The Start Run UI should stay simple.
 
-- grouping is disallowed
-- grouping should create the appropriate violation/blocker depending current rules
+Prefer:
 
-## Start Run UI Direction
+- clear rule sections
+- concise wording
+- minimal required inputs
+- one obvious primary action
+- no unnecessary run-name or setup friction unless needed
+- safe behavior when a run is already active
 
-The Start New Run UI should be simple.
+Starting while solo can start immediately.
 
-Remove:
+Starting while grouped may need a proposal/acceptance flow so everyone uses compatible settings.
 
-- run name field
-- separate Start Solo Run and Propose Run buttons
-- severity dropdowns like Log only / Warning / Fatal
-- Unsynced group member dropdown
-- Death fails character checkbox
-- Failed character blocks party checkbox
-- Allow late joiner checkbox
-- Allow replacement character checkbox
-- Require approval checkbox
+The UI should avoid long dropdown labels that run into columns or overlap.
 
-Use:
+## Rules UI Direction
 
-- static text: "Death is permanent for each character."
-- Grouping dropdown: Group / Solo
-- checkboxes for disallowed actions
-- one primary button
+Favor simple controls.
 
-Primary button behavior:
+Where possible, use:
 
-- if solo: button says "Start Run" and starts immediately
-- if grouped: button says "Propose Run" and sends proposal
-- if proposal pending: button says "Proposal Pending"
+- checkboxes for allowed/disallowed rules
+- short dropdown labels
+- simple helper text
+- clear descriptions only where needed
 
-If grouped, the run should not activate until all current group members accept.
+Avoid showing internal severity language like `LOG_ONLY`, `WARNING`, or `FATAL` in the main Start Run UI unless there is a strong reason.
 
-## Current Requested Change
+A disallowed non-death action should normally create a violation that can later be reviewed.
 
-Implement v0.3.2 simplification:
+## Gear Direction
 
-1. Shorten grouping dropdown to:
-   - Group
-   - Solo
+Gear rules should be understandable.
 
-2. Add helper text:
-   "Group: party members must be synced with matching Softcore rules."
+Prefer a short gear limit dropdown such as:
 
-3. Remove Log only, Warning, and Fatal from the Start Run GUI.
+- Any gear
+- White/gray only
+- Green or lower
+- Blue or lower
 
-4. Use Allowed/Disallowed style internally for GUI-selected rules.
+Heirlooms should stay separate from normal gear quality if the code supports that cleanly.
 
-5. Economy/storage rules should be checkboxes:
-   - Disallow Auction House
-   - Disallow Mailbox
-   - Disallow Trade
-   - Disallow Bank
-   - Disallow Warband Bank
-   - Disallow Guild Bank
+Gear validation should focus on equipped gear only. Do not try to prove item origin.
 
-6. Movement rules should be checkboxes:
-   - Disallow mounts
-   - Disallow flying
+## Logging and Forgiveness Direction
 
-7. Gear rules should be:
-   Label: Gear limit
-   Options:
-   - Any gear -> ALLOWED
-   - White/gray only -> WHITE_GRAY_ONLY
-   - Green or lower -> GREEN_OR_LOWER
-   - Blue or lower -> BLUE_OR_LOWER
+The addon should preserve an audit trail.
 
-8. Remove "Epic or lower".
+Do not delete important history.
 
-9. Keep heirlooms separate:
-   - Disallow heirlooms
+For violations:
 
-10. Group/Dungeon:
+- mark cleared violations as cleared
+- store who cleared them
+- store when they were cleared
+- store the reason
+- add a log entry when something is cleared
 
-- Enforce max level gap checkbox
-- Max gap numeric field
-- Disallow repeated dungeons checkbox
+Death should not be clearable.
 
-11. Remove violation behavior dropdown under max level gap.
+Compatibility blockers and conflicts are generally not clearable violations. They should resolve when the condition resolves.
 
-12. Remove separate Start Solo Run and Propose Run buttons.
-    Use one dynamic primary button:
+## Sync Direction
 
-- Start Run when solo
-- Propose Run when grouped
-- Proposal Pending when a proposal is pending
+Sync should be conservative.
 
-13. Remove the run name field.
-    Generate a default run name internally if needed.
+Incoming remote sync should not directly overwrite local run validity, local deaths, local violations, local rules, or local run history unless the local user explicitly accepts a proposal/merge/change.
 
-14. Unsynced group members are always party blockers in Group mode.
-    They do not fail or mutate the local player's character state.
+Incoming sync can update:
 
-15. Update README.md for the simplified rules.
+- remote player status
+- peer data
+- party status
+- proposal status
+- compatibility warnings
+- shared display state
 
-## Testing Commands
+Handle edge cases gracefully:
 
-After changes, test in WoW:
+- player reloads UI
+- player disconnects
+- player joins/leaves group
+- player has different rules
+- player has different run ID
+- player has no addon or no recent sync
+- stale messages arrive late
 
-/reload
-/sc new
-/sc reset confirm
-/sc new
-/sc status
-/sc run
-/sc rules
-/sc gear
-/sc dungeons
+## Architecture Direction
 
-Expected:
+Keep files modular.
+
+Prefer small, targeted changes.
+
+Before changing a feature, inspect the current implementation and preserve existing behavior unless the requested change explicitly replaces it.
+
+Avoid broad rewrites.
+
+Avoid adding external dependencies.
+
+Use Lua 5.1-compatible code.
+
+Do not add:
+
+- combat automation
+- rotation suggestions
+- boss mechanic solving
+- protected action button behavior
+- external helper executables
+- npm/build tooling
+- obfuscated code
+
+## Loose Roadmap
+
+### Near-term: Log / Violations UI
+
+Build or improve a GUI for:
+
+- viewing events
+- viewing active violations
+- viewing cleared violations
+- clearing accidental violations with a required reason
+- preserving audit history
+
+### Next: Status Dashboard
+
+Build a clearer dashboard for:
+
+- local character status
+- party status
+- group members
+- synced/unsynced state
+- active violations
+- failed characters
+- conflicts/blockers
+
+The dashboard should clearly separate:
+
+- individual character validity
+- party compatibility
+- violations
+- blockers/conflicts
+
+### Later: Merge / Compatibility Flow
+
+Support cases where players start separately but later want to group.
+
+If rules are compatible but run IDs differ, the addon should not silently merge them.
+
+A future flow may allow players to explicitly align or merge into a shared group run while preserving prior history.
+
+### Later: Rule Amendments
+
+Support changing rules mid-run through a visible amendment flow.
+
+Rule changes should be logged.
+
+Rule changes should generally apply going forward, not retroactively erase past violations.
+
+### Later: Export / Session Summary
+
+Add a copy/paste report for Discord or group review.
+
+Possible contents:
+
+- run ID or session identifier
+- rules summary
+- players
+- current statuses
+- active violations
+- cleared violations
+- deaths
+- rule changes
+- recent log entries
+
+### Later: Polish
+
+Only after core behavior is stable:
+
+- minimap button
+- lock/unlock frame
+- compact/expanded views
+- better styling
+- better colors
+- sound toggles
+- slash command help
+- README cleanup
+- changelog
+
+## Testing Expectations
+
+After each feature or bug fix, test in WoW.
+
+Useful commands may include:
+
+- `/reload`
+- `/sc status`
+- `/sc new`
+- `/sc rules`
+- `/sc log`
+- `/sc violations`
+- `/sc run`
+- `/sc participants`
+- `/sc conflicts`
+- `/sc gear`
+- `/sc dungeons`
+
+Check for:
 
 - no BugSack errors
-- Start New Run UI has no overlapping controls
-- Grouping dropdown says Group / Solo
-- no Log only / Warning / Fatal options in the Start Run GUI
-- no run name field
-- one primary button
-- gear options are Any gear, White/gray only, Green or lower, Blue or lower
-- Max level gap has checkbox + number only
-- no violation behavior dropdown
+- no UI overlap
+- no nil errors when no run exists
+- no accidental overwrites of active runs
+- local character state not affected by remote events
+- commands handling inactive states safely
+- persistence after `/reload`
+
+## Commit Discipline
+
+After each working feature or bug fix, summarize changed files and commit.
+
+Use concise commit messages like:
+
+- `Fix start run UI layout`
+- `Simplify rule options`
+- `Add log window`
+- `Add violation clearing`
+- `Fix sync edge cases`
+- `Add party dashboard`
+- `Fix gear validation`
+- `Fix proposal flow`

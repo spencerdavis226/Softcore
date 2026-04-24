@@ -2,7 +2,7 @@
 
 Softcore is a lightweight Retail World of Warcraft addon for hardcore-style leveling accountability with friends.
 
-Version 0.3.2 tracks your local run, applies structured rules, syncs resilient status, and includes a simple group run proposal flow.
+Version 0.4.0 tracks your local run, applies structured rules, syncs resilient status, includes a simple group run proposal flow, and provides a log/violation review GUI.
 
 ## Setup
 
@@ -19,7 +19,8 @@ Version 0.3.2 tracks your local run, applies structured rules, syncs resilient s
 - `/sc new` - open the Start New Run window.
 - `/sc status` - print current run status.
 - `/sc reset confirm` - reset the local run.
-- `/sc log` - print recent local event logs.
+- `/sc log` - open the Log GUI (Events tab). Use `/sc log chat` to print to chat instead.
+- `/sc violations` - open the Log GUI on the Violations tab.
 - `/sc gear` - print gear rules and invalid equipped items.
 - `/sc dungeons` - print dungeon entries for the current run.
 - `/sc roster` - print tracked run participants.
@@ -90,7 +91,20 @@ The primary button at the bottom of the window is dynamic:
 
 A proposed run does not start for any player until all current party members accept. If any member declines, the proposal is cancelled for everyone. All party members must be running Softcore and synced before the run can begin. Use `/sc accept` or `/sc decline` as slash-command fallbacks.
 
-Disallowed actions create violations. Event violations, like opening a disallowed mailbox, can later be reviewed by the log/forgiveness GUI when that is built. State violations, like invalid equipped gear, remain active until the condition is fixed. Compatibility blockers — unsynced party members, rule mismatches, or a level gap above the allowed maximum — block party progress but do not fail any character.
+Disallowed actions create violations. Event violations, like opening a disallowed mailbox, can be reviewed and cleared in the Log GUI (`/sc violations`). State violations, like invalid equipped gear, remain active until the condition is fixed and then cleared with a reason. Compatibility blockers — unsynced party members, rule mismatches, or a level gap above the allowed maximum — block party progress but do not fail any character and are not violations.
+
+## Violations and the Log GUI
+
+Use `/sc log` to open the Log GUI. The **Events** tab shows a scrollable history of recorded events. The **Violations** tab shows a paginated list of all violations with their current status.
+
+Violations are never deleted. Cleared violations remain in the audit log marked `CLEARED` with the reason and who cleared them.
+
+Rules for clearing violations:
+
+- Death violations are **never** clearable.
+- Fatal or character-fail severity violations are **never** clearable.
+- Compatibility blocker types (unsynced members, level gap, outsider grouping) are **never** clearable.
+- All other violations — including gear violations — can be cleared by entering a reason in the Log GUI.
 
 Gear limit tiers are:
 

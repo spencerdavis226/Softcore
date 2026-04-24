@@ -735,6 +735,44 @@ function SC:ClearViolation(violationId, clearedBy, clearReason)
     return nil
 end
 
+-- Violation types that represent party compatibility blockers, not clearable run events.
+local BLOCKER_VIOLATION_TYPES = {
+    unsyncedMembers = true,
+    maxLevelGap = true,
+    instanceWithUnsyncedPlayers = true,
+    outsiderGrouping = true,
+}
+
+function SC:IsViolationClearable(violation)
+    if not violation or violation.status == "CLEARED" then return false end
+    if violation.type == "death" then return false end
+    if violation.severity == "FATAL" or violation.severity == "CHARACTER_FAIL" then return false end
+    if BLOCKER_VIOLATION_TYPES[violation.type] then return false end
+    return true
+end
+
+function SC:GetActiveViolations()
+    local db = self.db or SoftcoreDB
+    local result = {}
+    for _, v in ipairs((db and db.violations) or {}) do
+        if v.status ~= "CLEARED" then
+            table.insert(result, v)
+        end
+    end
+    return result
+end
+
+function SC:GetClearedViolations()
+    local db = self.db or SoftcoreDB
+    local result = {}
+    for _, v in ipairs((db and db.violations) or {}) do
+        if v.status == "CLEARED" then
+            table.insert(result, v)
+        end
+    end
+    return result
+end
+
 function SC:GetPlayerStatus()
     local status = self:GetLocalPlayerStatus()
     status.partyStatus = self:GetDerivedPartyStatus()
@@ -1009,7 +1047,9 @@ function SC:PrintHelp()
     Print("/sc start - start a local run")
     Print("/sc status - print current run status")
     Print("/sc reset confirm - reset the local run")
-    Print("/sc log - print recent event logs")
+    Print("/sc log - open the Log GUI (Events tab)")
+    Print("/sc log chat - print recent events to chat")
+    Print("/sc violations - open the Log GUI (Violations tab)")
     Print("/sc gear - print gear rules and invalid equipped items")
     Print("/sc dungeons - print dungeon entries for this run")
     Print("/sc roster - print run participants")
@@ -1052,7 +1092,20 @@ function SC:HandleSlash(input)
             Print("reset requires confirmation. Type /sc reset confirm to wipe the local active run state.")
         end
     elseif command == "log" then
-        self:PrintLog()
+        local sub = string.lower(strtrim(rest or ""))
+        if sub == "chat" or sub == "print" then
+            self:PrintLog()
+        elseif self.OpenLogWindow then
+            self:OpenLogWindow("EVENTS")
+        else
+            self:PrintLog()
+        end
+    elseif command == "violations" then
+        if self.OpenLogWindow then
+            self:OpenLogWindow("VIOLATIONS")
+        else
+            Print("log UI is not loaded.")
+        end
     elseif command == "gear" then
         if self.PrintGearStatus then
             self:PrintGearStatus()
