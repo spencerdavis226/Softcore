@@ -10,6 +10,14 @@ local WARNING_EVENTS = {
     AUCTION_HOUSE_SHOW = { rule = "auctionHouse", detail = "Auction house opened." },
 }
 
+local ACCESS_EVENTS = {
+    BANKFRAME_OPENED = { rule = "bank", detail = "Player bank opened." },
+    GUILDBANKFRAME_OPENED = { rule = "guildBank", detail = "Guild bank opened." },
+    VOID_STORAGE_OPEN = { rule = "voidStorage", detail = "Void storage opened." },
+    CRAFTINGORDERS_SHOW_CUSTOMER = { rule = "craftingOrders", detail = "Crafting orders opened." },
+    MERCHANT_SHOW = { rule = "vendor", detail = "Vendor opened." },
+}
+
 local movementState = {
     mounted = false,
     flying = false,
@@ -18,6 +26,8 @@ local movementState = {
 }
 
 local MOVEMENT_WARNING_THROTTLE = 30
+local ACCESS_WARNING_THROTTLE = 30
+local accessWarnedAt = {}
 
 local function Broadcast(reason)
     if SC.Sync_BroadcastStatus then
@@ -82,6 +92,56 @@ local function HandleWarning(event)
     Broadcast(event)
 end
 
+local function ApplyAccessRule(ruleName, detail)
+    local db = SC.db or SoftcoreDB
+    if not db or not db.run or not db.run.active or db.run.failed then
+        return
+    end
+
+    local now = time()
+    if now - (accessWarnedAt[ruleName] or 0) < ACCESS_WARNING_THROTTLE then
+        return
+    end
+
+    accessWarnedAt[ruleName] = now
+    SC:ApplyRuleOutcome(ruleName, {
+        playerKey = SC:GetPlayerKey(),
+        detail = detail,
+    })
+    Broadcast(ruleName)
+end
+
+local function HandleAccessEvent(event)
+    local access = ACCESS_EVENTS[event]
+    if access then
+        ApplyAccessRule(access.rule, access.detail)
+    end
+end
+
+local function IsWarbandBankAccessEvent(event, ...)
+    local bankType = ...
+
+    -- In-game verification note: Warband bank access is account-bank based in The War Within.
+    -- ACCOUNT_BANK_PANEL_OPENED appears in community API references, while BANK_TABS_CHANGED
+    -- and PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED are account-bank adjacent. Keep all detection
+    -- isolated here and verify the exact open-path events with /etrace on Retail.
+    if event == "ACCOUNT_BANK_PANEL_OPENED" or event == "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED" then
+        return true
+    end
+
+    if Enum and Enum.BankType and bankType == Enum.BankType.Account then
+        return true
+    end
+
+    return false
+end
+
+local function SafeRegisterEvent(frame, event)
+    -- Some storage APIs are expansion/client-version sensitive. pcall keeps older clients
+    -- from failing addon load while still allowing /etrace verification on Retail.
+    pcall(frame.RegisterEvent, frame, event)
+end
+
 local function ApplyMovementRule(ruleName, detail, throttleField)
     local now = time()
     if now - (movementState[throttleField] or 0) < MOVEMENT_WARNING_THROTTLE then
@@ -131,6 +191,14 @@ function SC:Events_Register()
     eventFrame:RegisterEvent("TRADE_SHOW")
     eventFrame:RegisterEvent("MAIL_SHOW")
     eventFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
+    eventFrame:RegisterEvent("BANKFRAME_OPENED")
+    eventFrame:RegisterEvent("GUILDBANKFRAME_OPENED")
+    eventFrame:RegisterEvent("MERCHANT_SHOW")
+    SafeRegisterEvent(eventFrame, "VOID_STORAGE_OPEN")
+    SafeRegisterEvent(eventFrame, "CRAFTINGORDERS_SHOW_CUSTOMER")
+    SafeRegisterEvent(eventFrame, "ACCOUNT_BANK_PANEL_OPENED")
+    SafeRegisterEvent(eventFrame, "BANK_TABS_CHANGED")
+    SafeRegisterEvent(eventFrame, "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED")
     eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
     eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     eventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
@@ -145,6 +213,10 @@ function SC:Events_Register()
             HandleZoneChanged()
         elseif WARNING_EVENTS[event] then
             HandleWarning(event)
+        elseif ACCESS_EVENTS[event] then
+            HandleAccessEvent(event)
+        elseif IsWarbandBankAccessEvent(event, ...) then
+            ApplyAccessRule("warbandBank", "Warband bank opened or accessed.")
         elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" or event == "UNIT_AURA" then
             -- In-game verification note: mount/flying state updates can arrive through either
             -- display or aura events depending on mount type, shapeshift form, and client build.

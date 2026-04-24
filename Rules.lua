@@ -22,6 +22,12 @@ local RULE_ORDER = {
     "unsyncedMembers",
     "maxLevelGap",
     "dungeonRepeat",
+    "bank",
+    "warbandBank",
+    "guildBank",
+    "voidStorage",
+    "craftingOrders",
+    "vendor",
 }
 
 local HASH_RULE_ORDER = {
@@ -40,6 +46,12 @@ local HASH_RULE_ORDER = {
     "unsyncedMembers",
     "maxLevelGap",
     "dungeonRepeat",
+    "bank",
+    "warbandBank",
+    "guildBank",
+    "voidStorage",
+    "craftingOrders",
+    "vendor",
 }
 
 local BOOLEAN_RULES = {
@@ -47,6 +59,15 @@ local BOOLEAN_RULES = {
     allowLateJoin = true,
     allowReplacementCharacters = true,
     requireLeaderApprovalForJoin = true,
+}
+
+local ACCESS_RULES = {
+    bank = true,
+    warbandBank = true,
+    guildBank = true,
+    voidStorage = true,
+    craftingOrders = true,
+    vendor = true,
 }
 
 local function GetDB()
@@ -76,6 +97,10 @@ end
 local function IsValidRuleValue(ruleName, value)
     if BOOLEAN_RULES[ruleName] then
         return type(value) == "boolean"
+    end
+
+    if ACCESS_RULES[ruleName] and value == "CHARACTER_FAIL" then
+        return false
     end
 
     return SUPPORTED_SEVERITIES[value] == true

@@ -7,7 +7,7 @@ Softcore = Softcore or {}
 local SC = Softcore
 
 SC.name = "Softcore"
-SC.version = "0.2.8"
+SC.version = "0.2.9"
 SC.maxLogEntries = 30
 
 local function Print(message)
@@ -85,6 +85,12 @@ local function CreateDefaultRuleset()
         unsyncedMembers = "WARNING",
         maxLevelGap = "ALLOWED",
         dungeonRepeat = "ALLOWED",
+        bank = "WARNING",
+        warbandBank = "WARNING",
+        guildBank = "WARNING",
+        voidStorage = "LOG_ONLY",
+        craftingOrders = "LOG_ONLY",
+        vendor = "ALLOWED",
     }
 end
 
@@ -664,9 +670,36 @@ function SC:PrintRules()
         "unsyncedMembers",
         "maxLevelGap",
         "dungeonRepeat",
+        "bank",
+        "warbandBank",
+        "guildBank",
+        "voidStorage",
+        "craftingOrders",
+        "vendor",
     }
 
     Print("current rules:")
+    for _, ruleName in ipairs(order) do
+        Print(ruleName .. " = " .. tostring(rules[ruleName]))
+    end
+end
+
+function SC:PrintAccessRules()
+    local db = EnsureDatabase()
+    local rules = db.run.ruleset
+    local order = {
+        "bank",
+        "warbandBank",
+        "guildBank",
+        "voidStorage",
+        "craftingOrders",
+        "vendor",
+        "auctionHouse",
+        "mailbox",
+        "trade",
+    }
+
+    Print("access rules:")
     for _, ruleName in ipairs(order) do
         Print(ruleName .. " = " .. tostring(rules[ruleName]))
     end
@@ -701,6 +734,7 @@ function SC:PrintHelp()
     Print("/sc run - print run metadata")
     Print("/sc conflicts - print sync conflicts")
     Print("/sc resync - request full state from party")
+    Print("/sc access - print storage and economy access rules")
 end
 
 function SC:HandleSlash(input)
@@ -731,6 +765,8 @@ function SC:HandleSlash(input)
         end
     elseif command == "rules" then
         self:PrintRules()
+    elseif command == "access" then
+        self:PrintAccessRules()
     elseif command == "rule" then
         local ruleName, value = string.match(rest or "", "^(%S+)%s+(%S+)$")
         if ruleName and value then
