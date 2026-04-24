@@ -28,7 +28,8 @@ local function HandlePlayerDead()
         db.run.active = false
         db.run.valid = false
         db.run.failed = true
-        SC:LogEvent("DEATH", "Character died. Run failed permanently.")
+        SC:AddLog("DEATH", "Character died. Run failed permanently.")
+        SC:AddViolation("PLAYER_DEAD", "Character died. Run failed permanently.", "FATAL")
         DEFAULT_CHAT_FRAME:AddMessage("|cffff5555Softcore: run failed due to death.|r")
         Broadcast("PLAYER_DEAD")
     end
@@ -41,7 +42,7 @@ local function HandleLevelUp(level)
     end
 
     db.character.level = level or UnitLevel("player") or db.character.level
-    SC:LogEvent("LEVEL_UP", "Reached level " .. tostring(db.character.level) .. ".")
+    SC:AddLog("LEVEL_UP", "Reached level " .. tostring(db.character.level) .. ".")
     Broadcast("PLAYER_LEVEL_UP")
 end
 
@@ -52,7 +53,7 @@ local function HandleZoneChanged()
     end
 
     db.character.zone = GetRealZoneText() or db.character.zone or "Unknown"
-    SC:LogEvent("ZONE_CHANGED", "Entered " .. tostring(db.character.zone) .. ".")
+    SC:AddLog("ZONE_CHANGED", "Entered " .. tostring(db.character.zone) .. ".")
 end
 
 local function HandleWarning(event)
@@ -62,7 +63,8 @@ local function HandleWarning(event)
     end
 
     db.run.warningCount = db.run.warningCount + 1
-    SC:LogEvent("WARNING", WARNING_EVENTS[event] or (event .. " occurred."))
+    SC:AddLog("WARNING", WARNING_EVENTS[event] or (event .. " occurred."))
+    SC:AddViolation(event, WARNING_EVENTS[event] or (event .. " occurred."), "WARNING")
     Broadcast(event)
 end
 
@@ -91,7 +93,7 @@ function SC:Events_Register()
         elseif WARNING_EVENTS[event] then
             HandleWarning(event)
         elseif event == "GROUP_ROSTER_UPDATE" then
-            SC:LogEvent("GROUP_ROSTER", "Group roster changed.")
+            SC:AddLog("GROUP_ROSTER", "Group roster changed.")
             Broadcast("GROUP_ROSTER_UPDATE")
             if C_Timer and C_Timer.After then
                 C_Timer.After(2, function()

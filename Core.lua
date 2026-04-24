@@ -7,7 +7,7 @@ Softcore = Softcore or {}
 local SC = Softcore
 
 SC.name = "Softcore"
-SC.version = "0.2.0"
+SC.version = "0.2.5"
 SC.maxLogEntries = 30
 
 local function Print(message)
@@ -40,23 +40,59 @@ local function GetPlayerSnapshot()
     }
 end
 
+local function GetPlayerKey(character)
+    character = character or GetPlayerSnapshot()
+    return (character.name or "Unknown") .. "-" .. (character.realm or "Unknown")
+end
+
+local function CreateDefaultRuleset()
+    return {
+        id = "default",
+        name = "Default Softcore Rules",
+        version = 1,
+        warningsAreFatal = false,
+        deathIsFatal = true,
+    }
+end
+
+local function EnsureRunDefaults(run)
+    if run.active == nil then run.active = false end
+    if run.valid == nil then run.valid = true end
+    if run.failed == nil then run.failed = false end
+    run.runId = run.runId or nil
+    run.startTime = run.startTime or nil
+    run.deathCount = run.deathCount or 0
+    run.warningCount = run.warningCount or 0
+    run.ruleset = run.ruleset or CreateDefaultRuleset()
+end
+
 local function EnsureDatabase()
     SoftcoreDB = SoftcoreDB or {}
 
     SoftcoreDB.character = SoftcoreDB.character or GetPlayerSnapshot()
     SoftcoreDB.run = SoftcoreDB.run or {}
     SoftcoreDB.eventLog = SoftcoreDB.eventLog or {}
+    SoftcoreDB.violations = SoftcoreDB.violations or {}
+    SoftcoreDB.nextIds = SoftcoreDB.nextIds or {}
+    SoftcoreDB.nextIds.run = SoftcoreDB.nextIds.run or 0
+    SoftcoreDB.nextIds.log = SoftcoreDB.nextIds.log or 0
+    SoftcoreDB.nextIds.violation = SoftcoreDB.nextIds.violation or 0
 
-    local run = SoftcoreDB.run
-    if run.active == nil then run.active = false end
-    if run.valid == nil then run.valid = true end
-    if run.failed == nil then run.failed = false end
-    run.startTime = run.startTime or nil
-    run.deathCount = run.deathCount or 0
-    run.warningCount = run.warningCount or 0
+    EnsureRunDefaults(SoftcoreDB.run)
+    if SoftcoreDB.run.active and not SoftcoreDB.run.runId then
+        SoftcoreDB.nextIds.run = SoftcoreDB.nextIds.run + 1
+        SoftcoreDB.run.runId = "SC-RUN-" .. tostring(time()) .. "-" .. tostring(SoftcoreDB.nextIds.run)
+    end
 
     SC.db = SoftcoreDB
     return SoftcoreDB
+end
+
+local function CreateStableId(kind)
+    local db = EnsureDatabase()
+
+    db.nextIds[kind] = (db.nextIds[kind] or 0) + 1
+    return "SC-" .. string.upper(kind) .. "-" .. tostring(time()) .. "-" .. tostring(db.nextIds[kind])
 end
 
 function SC:RefreshCharacter()
@@ -65,16 +101,31 @@ function SC:RefreshCharacter()
     return db.character
 end
 
-function SC:LogEvent(kind, message)
-    local db = EnsureDatabase()
+function SC:CreateRunId()
+    return CreateStableId("run")
+end
 
-    table.insert(db.eventLog, {
+function SC:AddLog(kind, message, extra)
+    local db = EnsureDatabase()
+    local logEntryId = CreateStableId("log")
+    local entry = {
+        id = logEntryId,
+        logEntryId = logEntryId,
+        runId = db.run.runId,
         time = time(),
         kind = kind,
         message = message,
-    })
+    }
 
-    -- Keep the saved log useful but small for this first local MVP.
+    if extra then
+        for key, value in pairs(extra) do
+            entry[key] = value
+        end
+    end
+
+    table.insert(db.eventLog, entry)
+
+    -- Keep the visible saved log useful but small for this early addon phase.
     while #db.eventLog > self.maxLogEntries do
         table.remove(db.eventLog, 1)
     end
@@ -82,21 +133,119 @@ function SC:LogEvent(kind, message)
     if self.UI_Update then
         self:UI_Update()
     end
+
+    return entry
+end
+
+function SC:LogEvent(kind, message)
+    return self:AddLog(kind, message)
+end
+
+function SC:AddViolation(violationType, detail, severity, playerKey)
+    local db = EnsureDatabase()
+    local now = time()
+    local violationId = CreateStableId("violation")
+    local violation = {
+        id = violationId,
+        violationId = violationId,
+        runId = db.run.runId,
+        playerKey = playerKey or GetPlayerKey(db.character),
+        type = violationType,
+        detail = detail,
+        severity = severity or "WARNING",
+        status = "ACTIVE",
+        createdAt = now,
+        clearedAt = nil,
+        clearedBy = nil,
+        clearReason = nil,
+    }
+
+    table.insert(db.violations, violation)
+    self:AddLog("VIOLATION_ADDED", detail, {
+        violationId = violation.id,
+        violationType = violation.type,
+        severity = violation.severity,
+    })
+
+    return violation
+end
+
+function SC:ClearViolation(violationId, clearedBy, clearReason)
+    local db = EnsureDatabase()
+
+    for _, violation in ipairs(db.violations) do
+        if violation.id == violationId then
+            if violation.status ~= "CLEARED" then
+                violation.status = "CLEARED"
+                violation.clearedAt = time()
+                violation.clearedBy = clearedBy or GetPlayerKey(db.character)
+                violation.clearReason = clearReason or "Cleared"
+                self:AddLog("VIOLATION_CLEARED", "Violation cleared: " .. tostring(violation.type), {
+                    violationId = violation.id,
+                    clearedBy = violation.clearedBy,
+                    clearReason = violation.clearReason,
+                })
+            end
+
+            return violation
+        end
+    end
+
+    return nil
+end
+
+function SC:GetPlayerStatus()
+    local db = EnsureDatabase()
+
+    self:RefreshCharacter()
+
+    return {
+        runId = db.run.runId,
+        playerKey = GetPlayerKey(db.character),
+        name = db.character.name,
+        realm = db.character.realm,
+        class = db.character.class,
+        level = db.character.level,
+        zone = db.character.zone,
+        active = db.run.active,
+        valid = db.run.valid,
+        failed = db.run.failed,
+        deaths = db.run.deathCount,
+        warnings = db.run.warningCount,
+        version = self.version,
+        timestamp = time(),
+    }
+end
+
+function SC:GetPartyStatus()
+    local statuses = {}
+    statuses[GetPlayerKey((self.db or SoftcoreDB or {}).character)] = self:GetPlayerStatus()
+
+    if self.groupStatuses then
+        for key, status in pairs(self.groupStatuses) do
+            statuses[key] = status
+        end
+    end
+
+    return statuses
 end
 
 function SC:StartRun()
     local db = EnsureDatabase()
 
     db.character = GetPlayerSnapshot()
+    db.run.runId = self:CreateRunId()
     db.run.active = true
     db.run.valid = true
     db.run.failed = false
     db.run.startTime = time()
     db.run.deathCount = 0
     db.run.warningCount = 0
+    db.run.ruleset = CreateDefaultRuleset()
     db.eventLog = {}
+    db.violations = {}
 
-    self:LogEvent("RUN_START", "Run started for " .. db.character.name .. "-" .. db.character.realm .. ".")
+    self:AddLog("RUN_START", "Run started for " .. db.character.name .. "-" .. db.character.realm .. ".")
     Print("run started.")
 
     if self.Sync_BroadcastStatus then
@@ -112,15 +261,18 @@ function SC:ResetRun()
     local db = EnsureDatabase()
 
     db.character = GetPlayerSnapshot()
+    db.run.runId = nil
     db.run.active = false
     db.run.valid = true
     db.run.failed = false
     db.run.startTime = nil
     db.run.deathCount = 0
     db.run.warningCount = 0
+    db.run.ruleset = CreateDefaultRuleset()
     db.eventLog = {}
+    db.violations = {}
 
-    self:LogEvent("RUN_RESET", "Local run reset.")
+    self:AddLog("RUN_RESET", "Local run reset.")
     Print("local run reset.")
 
     if self.Sync_BroadcastStatus then

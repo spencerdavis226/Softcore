@@ -2,7 +2,7 @@
 
 Softcore is a lightweight Retail World of Warcraft addon for hardcore-style leveling accountability with friends.
 
-Version 0.2 tracks your local run and syncs basic status with group members who also have Softcore installed.
+Version 0.2.5 tracks your local run and syncs basic status with group members who also have Softcore installed.
 
 ## Setup
 

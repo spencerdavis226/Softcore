@@ -213,28 +213,29 @@ function SC:Sync_GetGroupRows()
 end
 
 function SC:Sync_BuildPayload(reason)
-    local db = self.db or SoftcoreDB
-    if not db or not db.character or not db.run then
+    if not (self.db or SoftcoreDB) then
         return nil
     end
 
-    self:RefreshCharacter()
+    local status = self:GetPlayerStatus()
 
     return {
         type = "STATUS",
         reason = reason or "UPDATE",
-        name = db.character.name,
-        realm = db.character.realm,
-        class = db.character.class,
-        level = db.character.level,
-        zone = db.character.zone,
-        active = db.run.active and 1 or 0,
-        valid = db.run.valid and 1 or 0,
-        failed = db.run.failed and 1 or 0,
-        deaths = db.run.deathCount or 0,
-        warnings = db.run.warningCount or 0,
-        version = self.version,
-        timestamp = time(),
+        runId = status.runId,
+        playerKey = status.playerKey,
+        name = status.name,
+        realm = status.realm,
+        class = status.class,
+        level = status.level,
+        zone = status.zone,
+        active = status.active and 1 or 0,
+        valid = status.valid and 1 or 0,
+        failed = status.failed and 1 or 0,
+        deaths = status.deaths or 0,
+        warnings = status.warnings or 0,
+        version = status.version,
+        timestamp = status.timestamp,
     }
 end
 
@@ -273,6 +274,8 @@ function SC:Sync_HandleMessage(message, sender)
     self.groupStatuses[key] = {
         name = name,
         realm = realm,
+        runId = payload.runId,
+        playerKey = payload.playerKey or key,
         class = payload.class,
         level = tonumber(payload.level) or payload.level or "?",
         zone = payload.zone,
