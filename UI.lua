@@ -6,6 +6,14 @@ local function SetLine(fontString, label, value)
     fontString:SetText(label .. ": " .. tostring(value))
 end
 
+local function ShortName(name)
+    if not name then
+        return "Unknown"
+    end
+
+    return string.match(name, "^[^-]+") or name
+end
+
 function SC:UI_Create()
     if self.uiFrame then
         self:UI_Update()
@@ -13,7 +21,7 @@ function SC:UI_Create()
     end
 
     local frame = CreateFrame("Frame", "SoftcoreStatusFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(160, 112)
+    frame:SetSize(260, 210)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
     frame:SetMovable(true)
     frame:EnableMouse(true)
@@ -46,6 +54,20 @@ function SC:UI_Create()
     frame.warnings = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.warnings:SetPoint("TOPLEFT", frame.deaths, "BOTTOMLEFT", 0, -6)
 
+    frame.groupTitle = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    frame.groupTitle:SetPoint("TOPLEFT", frame.warnings, "BOTTOMLEFT", 0, -14)
+    frame.groupTitle:SetText("Group")
+
+    frame.groupRows = {}
+    for index = 1, 5 do
+        local row = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row:SetPoint("TOPLEFT", frame.groupTitle, "BOTTOMLEFT", 0, -4 - ((index - 1) * 18))
+        row:SetWidth(236)
+        row:SetJustifyH("LEFT")
+        row:SetText("")
+        frame.groupRows[index] = row
+    end
+
     self.uiFrame = frame
     self:UI_Update()
 end
@@ -60,4 +82,25 @@ function SC:UI_Update()
     SetLine(self.uiFrame.level, "Level", db.character.level or "?")
     SetLine(self.uiFrame.deaths, "Deaths", db.run.deathCount or 0)
     SetLine(self.uiFrame.warnings, "Warnings", db.run.warningCount or 0)
+
+    local rows = {}
+    if self.Sync_GetGroupRows then
+        rows = self:Sync_GetGroupRows()
+    end
+
+    for index = 1, #self.uiFrame.groupRows do
+        local row = self.uiFrame.groupRows[index]
+        local status = rows[index]
+
+        if status then
+            local displayStatus = "UNSYNCED"
+            if self.Sync_GetDisplayStatus then
+                displayStatus = self:Sync_GetDisplayStatus(status)
+            end
+
+            row:SetText(ShortName(status.name) .. " L" .. tostring(status.level or "?") .. " " .. displayStatus .. " W" .. tostring(status.warnings or 0))
+        else
+            row:SetText("-")
+        end
+    end
 end

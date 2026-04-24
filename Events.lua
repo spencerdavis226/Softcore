@@ -10,6 +10,12 @@ local WARNING_EVENTS = {
     AUCTION_HOUSE_SHOW = "Auction house opened.",
 }
 
+local function Broadcast(reason)
+    if SC.Sync_BroadcastStatus then
+        SC:Sync_BroadcastStatus(reason)
+    end
+end
+
 local function HandlePlayerDead()
     local db = SC.db or SoftcoreDB
     if not db or not db.run then
@@ -24,6 +30,7 @@ local function HandlePlayerDead()
         db.run.failed = true
         SC:LogEvent("DEATH", "Character died. Run failed permanently.")
         DEFAULT_CHAT_FRAME:AddMessage("|cffff5555Softcore: run failed due to death.|r")
+        Broadcast("PLAYER_DEAD")
     end
 end
 
@@ -35,6 +42,7 @@ local function HandleLevelUp(level)
 
     db.character.level = level or UnitLevel("player") or db.character.level
     SC:LogEvent("LEVEL_UP", "Reached level " .. tostring(db.character.level) .. ".")
+    Broadcast("PLAYER_LEVEL_UP")
 end
 
 local function HandleZoneChanged()
@@ -55,6 +63,7 @@ local function HandleWarning(event)
 
     db.run.warningCount = db.run.warningCount + 1
     SC:LogEvent("WARNING", WARNING_EVENTS[event] or (event .. " occurred."))
+    Broadcast(event)
 end
 
 function SC:Events_Register()
@@ -69,6 +78,8 @@ function SC:Events_Register()
     eventFrame:RegisterEvent("TRADE_SHOW")
     eventFrame:RegisterEvent("MAIL_SHOW")
     eventFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
+    eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
+    eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 
     eventFrame:SetScript("OnEvent", function(_, event, ...)
         if event == "PLAYER_DEAD" then
@@ -79,6 +90,19 @@ function SC:Events_Register()
             HandleZoneChanged()
         elseif WARNING_EVENTS[event] then
             HandleWarning(event)
+        elseif event == "GROUP_ROSTER_UPDATE" then
+            SC:LogEvent("GROUP_ROSTER", "Group roster changed.")
+            Broadcast("GROUP_ROSTER_UPDATE")
+            if C_Timer and C_Timer.After then
+                C_Timer.After(2, function()
+                    Broadcast("GROUP_ROSTER_UPDATE")
+                end)
+            end
+            if SC.Sync_MarkRoster then
+                SC:Sync_MarkRoster()
+            end
+        elseif event == "PLAYER_ENTERING_WORLD" then
+            Broadcast("PLAYER_ENTERING_WORLD")
         end
 
         if SC.UI_Update then

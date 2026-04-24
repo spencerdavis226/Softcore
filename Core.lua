@@ -7,7 +7,7 @@ Softcore = Softcore or {}
 local SC = Softcore
 
 SC.name = "Softcore"
-SC.version = "0.1.0"
+SC.version = "0.2.0"
 SC.maxLogEntries = 30
 
 local function Print(message)
@@ -99,6 +99,10 @@ function SC:StartRun()
     self:LogEvent("RUN_START", "Run started for " .. db.character.name .. "-" .. db.character.realm .. ".")
     Print("run started.")
 
+    if self.Sync_BroadcastStatus then
+        self:Sync_BroadcastStatus("RUN_START")
+    end
+
     if self.UI_Update then
         self:UI_Update()
     end
@@ -118,6 +122,10 @@ function SC:ResetRun()
 
     self:LogEvent("RUN_RESET", "Local run reset.")
     Print("local run reset.")
+
+    if self.Sync_BroadcastStatus then
+        self:Sync_BroadcastStatus("RUN_RESET")
+    end
 
     if self.UI_Update then
         self:UI_Update()
