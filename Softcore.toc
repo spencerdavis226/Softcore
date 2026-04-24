@@ -1,13 +1,12 @@
 ## Interface: 120005
-## Title: Group Hardcore Tracker
+## Title: Softcore
 ## Notes: Group accountability tracker for hardcore-style retail runs.
 ## Author: Spencer
 ## Version: 0.1.0
-## SavedVariables: GroupHardcoreTrackerDB
+## SavedVariables: SoftcoreDB
 
 Core.lua
 Rules.lua
 Events.lua
 UI.lua
 Sync.lua
-Export.lua
