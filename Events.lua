@@ -22,15 +22,15 @@ local function HandlePlayerDead()
         return
     end
 
-    -- The first death during an active run permanently fails that run.
-    if db.run.active and not db.run.failed then
+    -- The first death during an active run permanently fails this character only.
+    local playerKey = SC:GetPlayerKey()
+    local participant = SC:GetOrCreateParticipant(playerKey)
+    if db.run.active and participant.status ~= "FAILED" then
         db.run.deathCount = db.run.deathCount + 1
-        db.run.active = false
-        db.run.valid = false
-        db.run.failed = true
+        SC:MarkParticipantFailed(playerKey, "Character died.")
         SC:AddLog("DEATH", "Character died. Run failed permanently.")
-        SC:AddViolation("PLAYER_DEAD", "Character died. Run failed permanently.", "FATAL")
-        DEFAULT_CHAT_FRAME:AddMessage("|cffff5555Softcore: run failed due to death.|r")
+        SC:AddViolation("PLAYER_DEAD", "Character died. Character failed permanently.", "FATAL", playerKey)
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff5555Softcore: character failed due to death.|r")
         Broadcast("PLAYER_DEAD")
     end
 end
@@ -42,6 +42,7 @@ local function HandleLevelUp(level)
     end
 
     db.character.level = level or UnitLevel("player") or db.character.level
+    SC:GetOrCreateParticipant(SC:GetPlayerKey()).currentLevel = db.character.level
     SC:AddLog("LEVEL_UP", "Reached level " .. tostring(db.character.level) .. ".")
     Broadcast("PLAYER_LEVEL_UP")
 end
@@ -63,8 +64,12 @@ local function HandleWarning(event)
     end
 
     db.run.warningCount = db.run.warningCount + 1
+    local participant = SC:GetOrCreateParticipant(SC:GetPlayerKey())
+    if participant.status == "ACTIVE" then
+        participant.status = "WARNING"
+    end
     SC:AddLog("WARNING", WARNING_EVENTS[event] or (event .. " occurred."))
-    SC:AddViolation(event, WARNING_EVENTS[event] or (event .. " occurred."), "WARNING")
+    SC:AddViolation(event, WARNING_EVENTS[event] or (event .. " occurred."), "WARNING", participant.playerKey)
     Broadcast(event)
 end
 
@@ -102,6 +107,9 @@ function SC:Events_Register()
             end
             if SC.Sync_MarkRoster then
                 SC:Sync_MarkRoster()
+            end
+            if SC.RefreshParticipantsFromRoster then
+                SC:RefreshParticipantsFromRoster()
             end
         elseif event == "PLAYER_ENTERING_WORLD" then
             Broadcast("PLAYER_ENTERING_WORLD")

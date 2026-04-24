@@ -141,11 +141,23 @@ local function GetDisplayStatus(status)
         return "UNSYNCED"
     end
 
-    if status.failed or not status.valid then
+    if status.participantStatus == "FAILED" or status.failed or not status.valid then
         return "FAILED"
     end
 
-    if status.active then
+    if status.participantStatus == "WARNING" then
+        return "WARNING"
+    end
+
+    if status.participantStatus == "PENDING" or status.participantStatus == "UNSYNCED" then
+        return "UNSYNCED"
+    end
+
+    if status.participantStatus == "LEFT" or status.participantStatus == "RETIRED" or status.participantStatus == "DECLINED" then
+        return "INACTIVE"
+    end
+
+    if status.active and status.participantStatus ~= "INACTIVE" then
         return "VALID"
     end
 
@@ -234,6 +246,8 @@ function SC:Sync_BuildPayload(reason)
         failed = status.failed and 1 or 0,
         deaths = status.deaths or 0,
         warnings = status.warnings or 0,
+        participantStatus = status.participantStatus,
+        partyStatus = status.partyStatus,
         version = status.version,
         timestamp = status.timestamp,
     }
@@ -284,11 +298,30 @@ function SC:Sync_HandleMessage(message, sender)
         failed = payload.failed == "1",
         deaths = tonumber(payload.deaths) or 0,
         warnings = tonumber(payload.warnings) or 0,
+        participantStatus = payload.participantStatus,
+        partyStatus = payload.partyStatus,
         version = payload.version,
         timestamp = tonumber(payload.timestamp) or 0,
         lastSeen = time(),
         unsynced = false,
     }
+
+    if self.db and self.db.run and self.db.run.active and self.GetOrCreateParticipant then
+        local participant = self:GetOrCreateParticipant(key)
+        participant.name = name
+        participant.realm = realm
+        participant.class = payload.class
+        participant.currentLevel = tonumber(payload.level) or participant.currentLevel
+        participant.joinedAt = participant.joinedAt or time()
+
+        if payload.participantStatus == "FAILED" then
+            participant.status = "FAILED"
+            participant.failedAt = participant.failedAt or time()
+            participant.failReason = participant.failReason or "Synced failure"
+        elseif participant.status ~= "FAILED" and participant.status ~= "RETIRED" and payload.participantStatus then
+            participant.status = payload.participantStatus
+        end
+    end
 
     if self.UI_Update then
         self:UI_Update()

@@ -78,7 +78,14 @@ function SC:UI_Update()
         return
     end
 
-    SetLine(self.uiFrame.status, "Status", self:GetStatusText())
+    local partyStatus = "INACTIVE"
+    if self.GetPartyStatus then
+        partyStatus = self:GetPartyStatus()
+    else
+        partyStatus = self:GetStatusText()
+    end
+
+    SetLine(self.uiFrame.status, "Party", partyStatus)
     SetLine(self.uiFrame.level, "Level", db.character.level or "?")
     SetLine(self.uiFrame.deaths, "Deaths", db.run.deathCount or 0)
     SetLine(self.uiFrame.warnings, "Warnings", db.run.warningCount or 0)

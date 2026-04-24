@@ -7,7 +7,7 @@ Softcore = Softcore or {}
 local SC = Softcore
 
 SC.name = "Softcore"
-SC.version = "0.2.5"
+SC.version = "0.2.6"
 SC.maxLogEntries = 30
 
 local function Print(message)
@@ -40,9 +40,26 @@ local function GetPlayerSnapshot()
     }
 end
 
+local function BuildPlayerKey(name, realm)
+    if not realm or realm == "" then
+        realm = GetRealmName()
+    end
+
+    return (name or "Unknown") .. "-" .. (realm or "Unknown")
+end
+
+local function SplitPlayerKey(playerKey)
+    local name, realm = string.match(playerKey or "", "^([^-]+)%-(.+)$")
+    if name then
+        return name, realm
+    end
+
+    return playerKey or "Unknown", GetRealmName()
+end
+
 local function GetPlayerKey(character)
     character = character or GetPlayerSnapshot()
-    return (character.name or "Unknown") .. "-" .. (character.realm or "Unknown")
+    return BuildPlayerKey(character.name, character.realm)
 end
 
 local function CreateDefaultRuleset()
@@ -52,7 +69,36 @@ local function CreateDefaultRuleset()
         version = 1,
         warningsAreFatal = false,
         deathIsFatal = true,
+        deathFails = "CHARACTER_ONLY",
+        failedMemberBlocksParty = true,
+        allowLateJoin = true,
+        allowReplacementCharacters = true,
+        requireLeaderApprovalForJoin = true,
     }
+end
+
+local function GetCurrentPartyKeys()
+    local keys = {}
+
+    keys[GetPlayerKey()] = true
+
+    if IsInRaid() then
+        for index = 1, GetNumGroupMembers() do
+            local name, realm = UnitFullName("raid" .. index)
+            if name then
+                keys[BuildPlayerKey(name, realm)] = true
+            end
+        end
+    elseif IsInGroup() then
+        for index = 1, GetNumSubgroupMembers() do
+            local name, realm = UnitFullName("party" .. index)
+            if name then
+                keys[BuildPlayerKey(name, realm)] = true
+            end
+        end
+    end
+
+    return keys
 end
 
 local function EnsureRunDefaults(run)
@@ -64,6 +110,15 @@ local function EnsureRunDefaults(run)
     run.deathCount = run.deathCount or 0
     run.warningCount = run.warningCount or 0
     run.ruleset = run.ruleset or CreateDefaultRuleset()
+    run.participants = run.participants or {}
+    run.participantOrder = run.participantOrder or {}
+    run.partyStatus = run.partyStatus or "INACTIVE"
+
+    for key, value in pairs(CreateDefaultRuleset()) do
+        if run.ruleset[key] == nil then
+            run.ruleset[key] = value
+        end
+    end
 end
 
 local function EnsureDatabase()
@@ -99,6 +154,10 @@ function SC:RefreshCharacter()
     local db = EnsureDatabase()
     db.character = GetPlayerSnapshot()
     return db.character
+end
+
+function SC:GetPlayerKey()
+    return GetPlayerKey(GetPlayerSnapshot())
 end
 
 function SC:CreateRunId()
@@ -170,6 +229,165 @@ function SC:AddViolation(violationType, detail, severity, playerKey)
     return violation
 end
 
+function SC:GetOrCreateParticipant(playerKey)
+    local db = EnsureDatabase()
+    local key = playerKey or GetPlayerKey(db.character)
+    local participant = db.run.participants[key]
+
+    if not participant then
+        local name, realm = SplitPlayerKey(key)
+        participant = {
+            playerKey = key,
+            name = name,
+            realm = realm,
+            class = nil,
+            levelAtJoin = 0,
+            currentLevel = 0,
+            status = "PENDING",
+            joinedAt = nil,
+            leftAt = nil,
+            failedAt = nil,
+            failReason = nil,
+        }
+
+        if key == GetPlayerKey(db.character) then
+            participant.name = db.character.name
+            participant.realm = db.character.realm
+            participant.class = db.character.class
+            participant.levelAtJoin = db.character.level
+            participant.currentLevel = db.character.level
+        end
+
+        db.run.participants[key] = participant
+        table.insert(db.run.participantOrder, key)
+    end
+
+    return participant
+end
+
+function SC:AddParticipant(playerKey)
+    local participant = self:GetOrCreateParticipant(playerKey)
+
+    if participant.status ~= "FAILED" and participant.status ~= "RETIRED" then
+        participant.status = "PENDING"
+        participant.joinedAt = participant.joinedAt or time()
+        participant.leftAt = nil
+        self:AddLog("PARTICIPANT_ADDED", "Participant added: " .. participant.playerKey, {
+            playerKey = participant.playerKey,
+        })
+    end
+
+    return participant
+end
+
+function SC:IsParticipantInCurrentParty(playerKey)
+    return GetCurrentPartyKeys()[playerKey] == true
+end
+
+function SC:MarkParticipantFailed(playerKey, reason)
+    local participant = self:GetOrCreateParticipant(playerKey)
+
+    if participant.status ~= "FAILED" then
+        participant.status = "FAILED"
+        participant.failedAt = time()
+        participant.failReason = reason or "Failed"
+        self:AddLog("PARTICIPANT_FAILED", participant.playerKey .. " failed: " .. participant.failReason, {
+            playerKey = participant.playerKey,
+        })
+    end
+
+    return participant
+end
+
+function SC:MarkParticipantLeft(playerKey)
+    local participant = self:GetOrCreateParticipant(playerKey)
+
+    if participant.status ~= "FAILED" and participant.status ~= "RETIRED" and participant.status ~= "LEFT" then
+        participant.status = "LEFT"
+        participant.leftAt = time()
+        self:AddLog("PARTICIPANT_LEFT", participant.playerKey .. " left the party.", {
+            playerKey = participant.playerKey,
+        })
+    end
+
+    return participant
+end
+
+function SC:RefreshParticipantsFromRoster()
+    local db = EnsureDatabase()
+    local partyKeys = GetCurrentPartyKeys()
+
+    if not db.run.active then
+        return
+    end
+
+    for playerKey, participant in pairs(db.run.participants) do
+        if participant.status ~= "FAILED" and participant.status ~= "RETIRED" then
+            if partyKeys[playerKey] then
+                if participant.status == "LEFT" or participant.status == "UNSYNCED" then
+                    participant.status = "ACTIVE"
+                    participant.leftAt = nil
+                    participant.joinedAt = participant.joinedAt or time()
+                end
+            elseif playerKey ~= GetPlayerKey(db.character) and (participant.status == "ACTIVE" or participant.status == "WARNING" or participant.status == "UNSYNCED") then
+                self:MarkParticipantLeft(playerKey)
+            end
+        end
+    end
+
+    if db.run.ruleset.allowLateJoin then
+        for playerKey in pairs(partyKeys) do
+            if not db.run.participants[playerKey] then
+                local participant = self:GetOrCreateParticipant(playerKey)
+                participant.status = db.run.ruleset.requireLeaderApprovalForJoin and "PENDING" or "ACTIVE"
+                participant.joinedAt = participant.joinedAt or time()
+                self:AddLog("PARTICIPANT_DISCOVERED", "Party member discovered: " .. playerKey, {
+                    playerKey = playerKey,
+                })
+            end
+        end
+    end
+end
+
+function SC:GetPartyStatus()
+    local db = EnsureDatabase()
+
+    if not db.run.active then
+        db.run.partyStatus = "INACTIVE"
+        return db.run.partyStatus
+    end
+
+    local hasWarning = false
+    local hasUnsynced = false
+
+    for playerKey, participant in pairs(db.run.participants) do
+        if self:IsParticipantInCurrentParty(playerKey) then
+            if participant.status == "FAILED" and db.run.ruleset.failedMemberBlocksParty then
+                db.run.partyStatus = "BLOCKED"
+                return db.run.partyStatus
+            elseif participant.status == "WARNING" then
+                hasWarning = true
+            elseif participant.status == "PENDING" or participant.status == "UNSYNCED" then
+                hasUnsynced = true
+            end
+        end
+    end
+
+    if hasWarning then
+        db.run.partyStatus = "WARNING"
+    elseif hasUnsynced then
+        db.run.partyStatus = "UNSYNCED"
+    else
+        db.run.partyStatus = "VALID"
+    end
+
+    return db.run.partyStatus
+end
+
+function SC:CanPartyContinue()
+    return self:GetPartyStatus() ~= "BLOCKED"
+end
+
 function SC:ClearViolation(violationId, clearedBy, clearReason)
     local db = EnsureDatabase()
 
@@ -198,10 +416,18 @@ function SC:GetPlayerStatus()
     local db = EnsureDatabase()
 
     self:RefreshCharacter()
+    local playerKey = GetPlayerKey(db.character)
+    local participant = db.run.participants[playerKey]
+
+    if db.run.active then
+        participant = self:GetOrCreateParticipant(playerKey)
+        participant.currentLevel = db.character.level
+        participant.class = db.character.class
+    end
 
     return {
         runId = db.run.runId,
-        playerKey = GetPlayerKey(db.character),
+        playerKey = playerKey,
         name = db.character.name,
         realm = db.character.realm,
         class = db.character.class,
@@ -209,25 +435,14 @@ function SC:GetPlayerStatus()
         zone = db.character.zone,
         active = db.run.active,
         valid = db.run.valid,
-        failed = db.run.failed,
+        failed = participant and participant.status == "FAILED",
+        participantStatus = participant and participant.status or "INACTIVE",
+        partyStatus = self:GetPartyStatus(),
         deaths = db.run.deathCount,
         warnings = db.run.warningCount,
         version = self.version,
         timestamp = time(),
     }
-end
-
-function SC:GetPartyStatus()
-    local statuses = {}
-    statuses[GetPlayerKey((self.db or SoftcoreDB or {}).character)] = self:GetPlayerStatus()
-
-    if self.groupStatuses then
-        for key, status in pairs(self.groupStatuses) do
-            statuses[key] = status
-        end
-    end
-
-    return statuses
 end
 
 function SC:StartRun()
@@ -242,10 +457,20 @@ function SC:StartRun()
     db.run.deathCount = 0
     db.run.warningCount = 0
     db.run.ruleset = CreateDefaultRuleset()
+    db.run.participants = {}
+    db.run.participantOrder = {}
+    db.run.partyStatus = "VALID"
     db.eventLog = {}
     db.violations = {}
+    local participant = self:GetOrCreateParticipant(GetPlayerKey(db.character))
+    participant.status = "ACTIVE"
+    participant.joinedAt = db.run.startTime
+    participant.levelAtJoin = db.character.level
+    participant.currentLevel = db.character.level
+    participant.class = db.character.class
 
     self:AddLog("RUN_START", "Run started for " .. db.character.name .. "-" .. db.character.realm .. ".")
+    self:RefreshParticipantsFromRoster()
     Print("run started.")
 
     if self.Sync_BroadcastStatus then
@@ -269,6 +494,9 @@ function SC:ResetRun()
     db.run.deathCount = 0
     db.run.warningCount = 0
     db.run.ruleset = CreateDefaultRuleset()
+    db.run.participants = {}
+    db.run.participantOrder = {}
+    db.run.partyStatus = "INACTIVE"
     db.eventLog = {}
     db.violations = {}
 
@@ -288,7 +516,9 @@ function SC:GetStatusText()
     local db = EnsureDatabase()
     local run = db.run
 
-    if run.failed then
+    local participant = db.run.participants[GetPlayerKey(db.character)]
+
+    if participant and participant.status == "FAILED" then
         return "Failed"
     end
 
@@ -308,8 +538,28 @@ function SC:PrintStatus()
     Print("character: " .. character.name .. "-" .. character.realm .. " " .. character.class .. " level " .. tostring(character.level))
     Print("zone: " .. tostring(character.zone))
     Print("started: " .. FormatTime(run.startTime))
+    Print("party: " .. self:GetPartyStatus())
+    local participant = run.participants[GetPlayerKey(character)]
+    Print("participant: " .. tostring(participant and participant.status or "INACTIVE"))
     Print("valid: " .. tostring(run.valid) .. ", failed: " .. tostring(run.failed))
     Print("deaths: " .. tostring(run.deathCount) .. ", warnings: " .. tostring(run.warningCount))
+end
+
+function SC:PrintRoster()
+    local db = EnsureDatabase()
+
+    if #db.run.participantOrder == 0 then
+        Print("roster is empty.")
+        return
+    end
+
+    Print("run roster:")
+    for _, playerKey in ipairs(db.run.participantOrder) do
+        local participant = db.run.participants[playerKey]
+        if participant then
+            Print(participant.playerKey .. " - " .. participant.status .. " - level " .. tostring(participant.currentLevel or "?"))
+        end
+    end
 end
 
 function SC:PrintLog()
@@ -332,10 +582,15 @@ function SC:PrintHelp()
     Print("/sc status - print current run status")
     Print("/sc reset - reset the local run")
     Print("/sc log - print recent event logs")
+    Print("/sc roster - print run participants")
+    Print("/sc add Player-Realm - add a pending participant")
+    Print("/sc retire - retire this character without failing")
 end
 
 function SC:HandleSlash(input)
-    local command = string.lower(strtrim(input or ""))
+    local text = strtrim(input or "")
+    local command, rest = string.match(text, "^(%S*)%s*(.-)$")
+    command = string.lower(command or "")
 
     if command == "start" then
         self:StartRun()
@@ -345,6 +600,34 @@ function SC:HandleSlash(input)
         self:ResetRun()
     elseif command == "log" then
         self:PrintLog()
+    elseif command == "roster" then
+        self:PrintRoster()
+    elseif command == "add" then
+        if rest and rest ~= "" then
+            local participant = self:AddParticipant(rest)
+            Print("added participant: " .. participant.playerKey .. " (" .. participant.status .. ")")
+            if self.Sync_BroadcastStatus then
+                self:Sync_BroadcastStatus("PARTICIPANT_ADDED")
+            end
+        else
+            Print("usage: /sc add Player-Realm")
+        end
+    elseif command == "retire" then
+        local db = EnsureDatabase()
+        local participant = self:GetOrCreateParticipant(GetPlayerKey(db.character))
+        if participant.status == "FAILED" then
+            Print("failed characters cannot be retired.")
+        else
+            participant.status = "RETIRED"
+            participant.leftAt = time()
+            self:AddLog("PARTICIPANT_RETIRED", participant.playerKey .. " retired from the run.", {
+                playerKey = participant.playerKey,
+            })
+            Print("retired " .. participant.playerKey .. ".")
+            if self.Sync_BroadcastStatus then
+                self:Sync_BroadcastStatus("PARTICIPANT_RETIRED")
+            end
+        end
     else
         self:PrintHelp()
     end
