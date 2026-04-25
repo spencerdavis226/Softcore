@@ -180,8 +180,11 @@ Incoming sync can update:
 - proposal status
 - compatibility warnings
 - shared display state
+- lightweight remote violation snapshots for display, such as active count and latest active violation
 
 Party-visible logs and violations should eventually make the responsible character clear. Anyone-in-party clearing and shared log behavior should be designed conservatively so local history is not silently overwritten.
+
+Remote violation snapshots should remain display/advisory data. They can affect derived party status, such as showing `VIOLATION`, but they should not be inserted into the local `violations` table or change local character validity without an explicit future flow.
 
 Handle edge cases gracefully:
 

@@ -231,6 +231,10 @@ local function GetDisplayStatus(status)
         return "VIOLATION"
     end
 
+    if (tonumber(status.activeViolations) or 0) > 0 then
+        return "VIOLATION"
+    end
+
     if status.participantStatus == "PENDING" or status.participantStatus == "UNSYNCED" then
         return "UNSYNCED"
     end
@@ -252,6 +256,31 @@ local function GetDisplayStatus(status)
     end
 
     return "INACTIVE"
+end
+
+local function AddViolationSnapshot(payload)
+    if not SC.GetActiveViolationSnapshot then
+        return payload
+    end
+
+    local snapshot = SC:GetActiveViolationSnapshot(LocalPlayerKey())
+    local latest = snapshot and snapshot.latest
+
+    payload.activeViolations = snapshot and snapshot.count or 0
+
+    if latest then
+        payload.latestViolationId = latest.id
+        payload.latestViolationType = latest.type
+        payload.latestViolationDetail = latest.detail
+        payload.latestViolationAt = latest.createdAt
+    else
+        payload.latestViolationId = ""
+        payload.latestViolationType = ""
+        payload.latestViolationDetail = ""
+        payload.latestViolationAt = ""
+    end
+
+    return payload
 end
 
 function SC:Sync_GetDisplayStatus(status)
@@ -321,7 +350,7 @@ function SC:Sync_BuildPayload(reason)
 
     local status = self:GetPlayerStatus()
 
-    return {
+    return AddViolationSnapshot({
         type = "STATUS",
         reason = reason or "UPDATE",
         runName = status.runName,
@@ -341,7 +370,7 @@ function SC:Sync_BuildPayload(reason)
         rulesetVersion = status.rulesetVersion,
         rulesetHash = status.rulesetHash,
         timestamp = status.timestamp,
-    }
+    })
 end
 
 function SC:Sync_BroadcastStatus(reason)
@@ -370,7 +399,7 @@ function SC:Sync_SendFullState()
     local db = GetDB()
     local status = self:GetPlayerStatus()
 
-    SendPayload({
+    SendPayload(AddViolationSnapshot({
         type = "FULL_STATE_RESPONSE",
         name = status.name,
         realm = status.realm,
@@ -386,7 +415,7 @@ function SC:Sync_SendFullState()
         participantCount = #(db.run.participantOrder or {}),
         rulesetVersion = status.rulesetVersion,
         rulesetHash = status.rulesetHash,
-    })
+    }))
 end
 
 function SC:Sync_SendProposal(proposalType, proposalId)
@@ -552,6 +581,14 @@ function SC:Sync_HandleMessage(message, sender)
         failed = payload.failed == "1",
         deaths = tonumber(payload.deaths) or 0,
         warnings = tonumber(payload.warnings) or 0,
+        activeViolations = tonumber(payload.activeViolations) or 0,
+        latestViolation = {
+            id = payload.latestViolationId,
+            type = payload.latestViolationType,
+            detail = payload.latestViolationDetail,
+            createdAt = tonumber(payload.latestViolationAt) or nil,
+            playerKey = payload.playerKey or key,
+        },
         participantStatus = participantStatus,
         partyStatus = payload.partyStatus,
         version = payload.addonVersion or payload.version,

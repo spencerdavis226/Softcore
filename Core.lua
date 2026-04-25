@@ -422,6 +422,26 @@ function SC:AddViolation(violationType, detail, severity, playerKey)
     return violation
 end
 
+function SC:GetActiveViolationSnapshot(playerKey)
+    local db = EnsureDatabase()
+    local count = 0
+    local latest = nil
+
+    for _, violation in ipairs(db.violations or {}) do
+        if violation.status ~= "CLEARED" and (not playerKey or violation.playerKey == playerKey) then
+            count = count + 1
+            if not latest or (violation.createdAt or 0) > (latest.createdAt or 0) then
+                latest = violation
+            end
+        end
+    end
+
+    return {
+        count = count,
+        latest = latest,
+    }
+end
+
 function SC:GetOrCreateParticipant(playerKey)
     local db = EnsureDatabase()
     local key = playerKey or GetPlayerKey(db.character)
@@ -720,6 +740,8 @@ function SC:GetDerivedPartyStatus()
                     return db.run.partyStatus
                 end
             elseif peer.participantStatus == "WARNING" then
+                hasWarning = true
+            elseif (tonumber(peer.activeViolations) or 0) > 0 then
                 hasWarning = true
             elseif peer.participantStatus == "PENDING" or peer.participantStatus == "UNSYNCED" or peer.participantStatus == "NOT_IN_RUN" then
                 db.run.partyStatus = "BLOCKED"

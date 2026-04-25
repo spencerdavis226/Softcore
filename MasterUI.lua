@@ -236,9 +236,19 @@ local function GetPartyDisplayRows()
     local displayRows = {}
 
     for _, peer in ipairs(syncRows) do
+        local displayStatus = tostring(SC.Sync_GetDisplayStatus and SC:Sync_GetDisplayStatus(peer) or peer.participantStatus or "UNKNOWN")
+        if (peer.activeViolations or 0) > 0 then
+            local violationType = peer.latestViolation and peer.latestViolation.type
+            if violationType and violationType ~= "" then
+                displayStatus = "VIOLATION (" .. tostring(violationType) .. ")"
+            else
+                displayStatus = "VIOLATION"
+            end
+        end
+
         table.insert(displayRows, {
             name = peer.name or peer.playerKey or "Unknown",
-            status = tostring(SC.Sync_GetDisplayStatus and SC:Sync_GetDisplayStatus(peer) or peer.participantStatus or "UNKNOWN"),
+            status = displayStatus,
         })
     end
 

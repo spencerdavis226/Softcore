@@ -87,6 +87,8 @@ The group section of the UI shows nearby group members as `VALID`, `FAILED`, `IN
 
 A party member's failure does not fail your character. Softcore shows group blockers and conflicts, but each character's run validity is individual.
 
+Status sync includes a lightweight snapshot of each player's active violation count and latest active violation. The Overview tab may show a synced party member as `VIOLATION (ruleName)` without importing that violation into your local Violations tab or changing your local character validity.
+
 ## Group Proposals
 
 Use `/sc new` or the Run tab to configure and start a run. The Run tab is organized around simple rule sections such as economy/storage, movement, gear/items, and group/dungeon rules. Most rules are simple allowed/disallowed checkboxes.
