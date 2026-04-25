@@ -267,8 +267,8 @@ function SC:Events_Register()
             Broadcast("PLAYER_ENTERING_WORLD")
         end
 
-        if SC.UI_Update then
-            SC:UI_Update()
+        if SC.HUD_Refresh then
+            SC:HUD_Refresh()
         end
     end)
 end

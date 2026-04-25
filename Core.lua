@@ -365,8 +365,8 @@ function SC:AddLog(kind, message, extra)
         table.remove(db.eventLog, 1)
     end
 
-    if self.UI_Update then
-        self:UI_Update()
+    if self.HUD_Refresh then
+        self:HUD_Refresh()
     end
 
     if self.MasterUI_Refresh then
@@ -1065,8 +1065,8 @@ function SC:StartRun(runOptions)
         self:Sync_BroadcastStatus("RUN_START")
     end
 
-    if self.UI_Update then
-        self:UI_Update()
+    if self.HUD_Refresh then
+        self:HUD_Refresh()
     end
 
     return true
@@ -1112,8 +1112,8 @@ function SC:ResetRun()
         self:Sync_BroadcastStatus("RUN_RESET")
     end
 
-    if self.UI_Update then
-        self:UI_Update()
+    if self.HUD_Refresh then
+        self:HUD_Refresh()
     end
 
     return true
@@ -1433,6 +1433,12 @@ function SC:HandleSlash(input)
         else
             Print("proposal handling is not loaded.")
         end
+    elseif command == "hud" then
+        if self.HUD_Toggle then
+            self:HUD_Toggle()
+        else
+            Print("HUD is not loaded.")
+        end
     elseif command == "rule" then
         local ruleName, value = string.match(rest or "", "^(%S+)%s+(%S+)$")
         if ruleName and value then
@@ -1493,8 +1499,8 @@ function SC:Initialize()
         SC:HandleSlash(input)
     end
 
-    if self.UI_Create then
-        self:UI_Create()
+    if self.HUD_Create then
+        self:HUD_Create()
     end
 
     if self.Events_Register then

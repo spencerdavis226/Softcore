@@ -609,6 +609,10 @@ function SC:MasterUI_Refresh()
     RefreshRunPanel(frame)
     RefreshViolationsPanel(frame)
     RefreshLogPanel(frame)
+
+    if SC.HUD_Refresh then
+        SC:HUD_Refresh()
+    end
 end
 
 function SC:OpenMasterWindow(focusTab)
