@@ -8,6 +8,7 @@ local TAB_EVENTS = "EVENTS"
 local TAB_VIOLATIONS = "VIOLATIONS"
 local ROWS_PER_PAGE = 13
 local ROW_HEIGHT = 24
+local EVENT_ROWS = 17
 
 local function Print(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r " .. tostring(message))
@@ -28,25 +29,28 @@ local function RefreshEvents(frame)
     local db = Softcore.db or SoftcoreDB
     local log = (db and db.eventLog) or {}
 
-    frame.eventsMsgFrame:Clear()
-
     if #log == 0 then
-        frame.eventsMsgFrame:AddMessage("|cffaaaaaa(no events recorded)|r")
+        frame.eventsEmptyText:Show()
+        for _, row in ipairs(frame.eventRows) do
+            row:Hide()
+        end
         return
     end
 
-    for index = #log, 1, -1 do
-        local entry = log[index]
-        local line = string.format(
-            "|cffaaaaaa%s|r |cffffcc00[%s]|r %s",
-            FormatTime(entry.time),
-            tostring(entry.kind or "?"),
-            tostring(entry.message or "")
-        )
-        frame.eventsMsgFrame:AddMessage(line)
-    end
+    frame.eventsEmptyText:Hide()
 
-    frame.eventsMsgFrame:ScrollToTop()
+    for rowIndex, row in ipairs(frame.eventRows) do
+        local entry = log[#log - rowIndex + 1]
+
+        if entry then
+            row:Show()
+            row.timeText:SetText(FormatTime(entry.time))
+            row.kindText:SetText("[" .. tostring(entry.kind or "?") .. "]")
+            row.messageText:SetText(Trunc(entry.message or "", 62))
+        else
+            row:Hide()
+        end
+    end
 end
 
 local function GetSortedViolations()
@@ -214,18 +218,31 @@ function SC:OpenLogWindow(focusTab)
     evHdr:SetText("Time          [Type]  Message")
     evHdr:SetJustifyH("LEFT")
 
-    local evMsgFrame = CreateFrame("ScrollingMessageFrame", nil, eventsPanel)
-    evMsgFrame:SetSize(682, 310)
-    evMsgFrame:SetPoint("TOPLEFT", eventsPanel, "TOPLEFT", 0, -22)
-    evMsgFrame:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
-    evMsgFrame:SetMaxLines(500)
-    evMsgFrame:SetFading(false)
-    evMsgFrame:SetJustifyH("LEFT")
-    evMsgFrame:EnableMouseWheel(true)
-    evMsgFrame:SetScript("OnMouseWheel", function(self, delta)
-        if delta > 0 then self:ScrollUp() else self:ScrollDown() end
-    end)
-    frame.eventsMsgFrame = evMsgFrame
+    frame.eventsEmptyText = eventsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.eventsEmptyText:SetPoint("TOPLEFT", eventsPanel, "TOPLEFT", 0, -28)
+    frame.eventsEmptyText:SetWidth(682)
+    frame.eventsEmptyText:SetJustifyH("LEFT")
+    frame.eventsEmptyText:SetText("(no events recorded)")
+
+    frame.eventRows = {}
+    for i = 1, EVENT_ROWS do
+        local row = CreateFrame("Frame", nil, eventsPanel)
+        row:SetSize(682, 18)
+        row:SetPoint("TOPLEFT", eventsPanel, "TOPLEFT", 0, -24 - ((i - 1) * 18))
+
+        local function Fld(x, w)
+            local fs = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            fs:SetPoint("TOPLEFT", x, 0)
+            fs:SetWidth(w)
+            fs:SetJustifyH("LEFT")
+            return fs
+        end
+
+        row.timeText = Fld(0, 82)
+        row.kindText = Fld(88, 130)
+        row.messageText = Fld(222, 452)
+        frame.eventRows[i] = row
+    end
     frame.eventsPanel = eventsPanel
 
     local vPanel = CreateFrame("Frame", nil, frame)

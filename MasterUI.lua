@@ -8,6 +8,7 @@ local TAB_VIOLATIONS = "VIOLATIONS"
 local TAB_LOG = "LOG"
 
 local DISALLOWED_OUTCOME = "WARNING"
+local LOG_ROWS = 22
 
 local GROUPING_OPTIONS = {
     { text = "Grouping Allowed", value = "SYNCED_GROUP_ALLOWED" },
@@ -370,24 +371,28 @@ local function RefreshLogPanel(frame)
     local db = SC.db or SoftcoreDB
     local log = (db and db.eventLog) or {}
 
-    frame.log.events:Clear()
-
     if #log == 0 then
-        frame.log.events:AddMessage("|cffaaaaaa(no events recorded)|r")
+        frame.log.empty:Show()
+        for _, row in ipairs(frame.log.rows) do
+            row:Hide()
+        end
         return
     end
 
-    for index = #log, 1, -1 do
-        local entry = log[index]
-        frame.log.events:AddMessage(string.format(
-            "|cffaaaaaa%s|r |cffffcc00[%s]|r %s",
-            FormatTime(entry.time),
-            tostring(entry.kind or "?"),
-            tostring(entry.message or "")
-        ))
-    end
+    frame.log.empty:Hide()
 
-    frame.log.events:ScrollToTop()
+    for rowIndex, row in ipairs(frame.log.rows) do
+        local entry = log[#log - rowIndex + 1]
+
+        if entry then
+            row:Show()
+            row.time:SetText(FormatTime(entry.time))
+            row.kind:SetText("[" .. tostring(entry.kind or "?") .. "]")
+            row.message:SetText(Trunc(entry.message or "", 76))
+        else
+            row:Hide()
+        end
+    end
 end
 
 local function ConfirmStopRun()
@@ -689,18 +694,18 @@ function SC:OpenMasterWindow(focusTab)
 
     local logPanel = CreatePanel(frame)
     frame.panels[TAB_LOG] = logPanel
-    frame.log = {}
-    frame.log.events = CreateFrame("ScrollingMessageFrame", nil, logPanel)
-    frame.log.events:SetSize(672, 390)
-    frame.log.events:SetPoint("TOPLEFT", logPanel, "TOPLEFT", 0, 0)
-    frame.log.events:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
-    frame.log.events:SetMaxLines(500)
-    frame.log.events:SetFading(false)
-    frame.log.events:SetJustifyH("LEFT")
-    frame.log.events:EnableMouseWheel(true)
-    frame.log.events:SetScript("OnMouseWheel", function(self, delta)
-        if delta > 0 then self:ScrollUp() else self:ScrollDown() end
-    end)
+    frame.log = { rows = {} }
+    frame.log.empty = CreateField(logPanel, 0, 0, 620)
+    frame.log.empty:SetText("(no events recorded)")
+    for index = 1, LOG_ROWS do
+        local row = CreateFrame("Frame", nil, logPanel)
+        row:SetSize(672, 18)
+        row:SetPoint("TOPLEFT", logPanel, "TOPLEFT", 0, -((index - 1) * 18))
+        row.time = CreateField(row, 0, 0, 130)
+        row.kind = CreateField(row, 134, 0, 130)
+        row.message = CreateField(row, 268, 0, 390)
+        frame.log.rows[index] = row
+    end
 
     local bottomClose = CreateButton(frame, "Close", 80, 24)
     bottomClose:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -18, 18)
