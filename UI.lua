@@ -1,43 +1,43 @@
 -- Compact always-visible HUD: run and party status at a glance.
--- Left-click to open the master menu (Violations tab if violations are active).
+-- Left-click opens the master menu (Violations tab if violations are active).
 -- Drag to reposition.  /sc hud to toggle visibility.
 
 local SC = Softcore
 
-local HUD_WIDTH       = 224
-local HUD_PAD         = 8
-local HUD_HERO_H      = 20   -- GameFontNormal row height
-local HUD_MEMBER_H    = 16   -- GameFontNormalSmall row height
+local HUD_WIDTH    = 160
+local HUD_PAD      = 8
 local HUD_MAX_MEMBERS = 5
 
--- Pixel positions (top-anchored, negative Y from top-left)
-local HERO_Y         = -7
-local MEMBERS_TOP_Y  = -(7 + HUD_HERO_H + 4)   -- below hero + gap
-local MEMBER_STEP    = -(HUD_MEMBER_H + 2)
-local HUD_PAD_BOT    = 7
+-- Row geometry
+local HERO_TOP     = -7
+local HERO_H       = 20
+local MEMBER_TOP   = -(HERO_TOP - HERO_TOP + 7 + HERO_H + 4)   -- = -31
+local MEMBER_H     = 16
+local MEMBER_STEP  = -(MEMBER_H + 2)                            -- = -18
 
-local STATUS_DOTS = {
-    VALID      = "|cff4ade80●|r",
-    ACTIVE     = "|cff4ade80●|r",
-    FAILED     = "|cffff4444●|r",
-    BLOCKED    = "|cfffbbf24●|r",
-    CONFLICT   = "|cfffbbf24●|r",
-    VIOLATION  = "|cfffbbf24●|r",
-    WARNING    = "|cfffbbf24●|r",
-    UNSYNCED   = "|cff9ca3af●|r",
-    INACTIVE   = "|cff9ca3af●|r",
-    NOT_IN_RUN = "|cff9ca3af●|r",
+-- Indicator sizes
+local HERO_LIGHT   = 10
+local MEMBER_LIGHT = 8
+
+-- Status → RGB color
+local STATUS_RGB = {
+    VALID      = {0.29, 0.85, 0.50},
+    ACTIVE     = {0.29, 0.85, 0.50},
+    FAILED     = {1.00, 0.27, 0.27},
+    BLOCKED    = {0.98, 0.75, 0.14},
+    CONFLICT   = {0.98, 0.75, 0.14},
+    VIOLATION  = {0.98, 0.75, 0.14},
+    WARNING    = {0.98, 0.75, 0.14},
+    UNSYNCED   = {0.61, 0.64, 0.69},
+    INACTIVE   = {0.61, 0.64, 0.69},
+    NOT_IN_RUN = {0.61, 0.64, 0.69},
 }
-local DOT_NEUTRAL = "|cff9ca3af●|r"
+local RGB_NEUTRAL = {0.61, 0.64, 0.69}
 
-local function Dot(statusStr)
+local function SetLight(texture, statusStr)
     local base = statusStr and string.match(statusStr, "^(%u+)")
-    return (base and STATUS_DOTS[base]) or DOT_NEUTRAL
-end
-
-local function DisplayStatus(s)
-    if s == "WARNING" then return "VIOLATION" end
-    return s or "UNKNOWN"
+    local c = (base and STATUS_RGB[base]) or RGB_NEUTRAL
+    texture:SetColorTexture(c[1], c[2], c[3], 1)
 end
 
 local function ShortName(name)
@@ -50,11 +50,23 @@ local function LocalActiveViolations()
     local playerKey = SC:GetPlayerKey()
     local n = 0
     for _, v in ipairs(db.violations) do
-        if v.playerKey == playerKey and v.status ~= "CLEARED" then
-            n = n + 1
-        end
+        if v.playerKey == playerKey and v.status ~= "CLEARED" then n = n + 1 end
     end
     return n
+end
+
+local function MakeLight(parent, size)
+    local t = parent:CreateTexture(nil, "OVERLAY")
+    t:SetSize(size, size)
+    t:SetColorTexture(RGB_NEUTRAL[1], RGB_NEUTRAL[2], RGB_NEUTRAL[3], 1)
+    return t
+end
+
+local function MakeLabel(parent, fontObj, width)
+    local fs = parent:CreateFontString(nil, "OVERLAY", fontObj)
+    fs:SetWidth(width)
+    fs:SetJustifyH("LEFT")
+    return fs
 end
 
 function SC:HUD_Create()
@@ -86,23 +98,30 @@ function SC:HUD_Create()
     })
     frame:SetBackdropColor(0, 0, 0, 0.80)
 
-    frame.hero = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    frame.hero:SetPoint("TOPLEFT", frame, "TOPLEFT", HUD_PAD, HERO_Y)
-    frame.hero:SetWidth(HUD_WIDTH - HUD_PAD * 2)
-    frame.hero:SetJustifyH("LEFT")
+    -- Hero row: light left-centered in row, label to its right
+    local textW = HUD_WIDTH - HUD_PAD * 2 - HERO_LIGHT - 5
+    frame.heroLight = MakeLight(frame, HERO_LIGHT)
+    frame.heroLight:SetPoint("LEFT", frame, "TOPLEFT", HUD_PAD, HERO_TOP - HERO_H / 2)
+    frame.heroLabel = MakeLabel(frame, "GameFontNormal", textW)
+    frame.heroLabel:SetPoint("TOPLEFT", frame, "TOPLEFT", HUD_PAD + HERO_LIGHT + 5, HERO_TOP)
 
+    -- Member rows: indented, smaller light + label
+    local memberTextW = HUD_WIDTH - HUD_PAD * 2 - 4 - MEMBER_LIGHT - 4
     frame.memberRows = {}
     for i = 1, HUD_MAX_MEMBERS do
-        local fs = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        fs:SetPoint("TOPLEFT", frame, "TOPLEFT", HUD_PAD + 4, MEMBERS_TOP_Y + (i - 1) * MEMBER_STEP)
-        fs:SetWidth(HUD_WIDTH - HUD_PAD * 2 - 4)
-        fs:SetJustifyH("LEFT")
-        frame.memberRows[i] = fs
+        local topY = MEMBER_TOP + (i - 1) * MEMBER_STEP
+        local row = {
+            light = MakeLight(frame, MEMBER_LIGHT),
+            label = MakeLabel(frame, "GameFontNormalSmall", memberTextW),
+        }
+        row.light:SetPoint("LEFT", frame, "TOPLEFT", HUD_PAD + 4, topY - MEMBER_H / 2)
+        row.label:SetPoint("TOPLEFT", frame, "TOPLEFT", HUD_PAD + 4 + MEMBER_LIGHT + 4, topY)
+        row.light:Hide()
+        frame.memberRows[i] = row
     end
 
-    frame.violHint = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.violHint:SetWidth(HUD_WIDTH - HUD_PAD * 2 - 4)
-    frame.violHint:SetJustifyH("LEFT")
+    -- Violation hint row (no light — yellow text only)
+    frame.violHint = MakeLabel(frame, "GameFontNormalSmall", HUD_WIDTH - HUD_PAD * 2 - 4)
 
     self.hudFrame = frame
     self:HUD_Refresh()
@@ -112,71 +131,67 @@ function SC:HUD_Refresh()
     local frame = self.hudFrame
     if not frame then return end
 
-    local db        = self.db or SoftcoreDB
-    local run       = db and db.run or {}
-    local char      = db and db.character or {}
-    local active    = run.active
-    local localKey  = self:GetPlayerKey()
-    local status    = self:GetPlayerStatus()
-    local pStatus   = status.participantStatus or "NOT_IN_RUN"
-    local syncRows  = self.Sync_GetGroupRows and self:Sync_GetGroupRows() or {}
-    local inParty   = IsInGroup() and #syncRows > 0
+    local db       = self.db or SoftcoreDB
+    local run      = db and db.run or {}
+    local char     = db and db.character or {}
+    local active   = run.active
+    local localKey = self:GetPlayerKey()
+    local status   = self:GetPlayerStatus()
+    local pStatus  = status.participantStatus or "NOT_IN_RUN"
+    local syncRows = self.Sync_GetGroupRows and self:Sync_GetGroupRows() or {}
+    local inParty  = IsInGroup() and #syncRows > 0
     local violations = LocalActiveViolations()
 
     -- Hero row
     if not active then
-        frame.hero:SetText(DOT_NEUTRAL .. "  No active run — click to start")
+        SetLight(frame.heroLight, "INACTIVE")
+        frame.heroLabel:SetText("No Run")
     elseif inParty then
-        local partyStatus = status.partyStatus or "INACTIVE"
-        frame.hero:SetText(Dot(partyStatus) .. "  Party: " .. DisplayStatus(partyStatus))
+        SetLight(frame.heroLight, status.partyStatus or "INACTIVE")
+        frame.heroLabel:SetText("Party")
     else
-        local name  = char.name or ShortName(localKey)
-        local level = char.level and ("  " .. char.level) or ""
-        frame.hero:SetText(Dot(pStatus) .. "  " .. name .. level .. "  " .. DisplayStatus(pStatus))
+        SetLight(frame.heroLight, pStatus)
+        frame.heroLabel:SetText("Run Status")
     end
 
-    -- Member rows (party mode only)
+    -- Member rows (party only: local player first, then peers)
     local usedRows = 0
 
     if active and inParty then
-        usedRows = usedRows + 1
-        local name  = char.name or ShortName(localKey)
-        local level = char.level and ("  " .. char.level) or ""
-        frame.memberRows[usedRows]:SetText(Dot(pStatus) .. "  " .. name .. " *" .. level .. "  " .. DisplayStatus(pStatus))
+        usedRows = 1
+        SetLight(frame.memberRows[1].light, pStatus)
+        frame.memberRows[1].label:SetText((char.name or ShortName(localKey)) .. " *")
+        frame.memberRows[1].light:Show()
 
         for _, peer in ipairs(syncRows) do
             if usedRows >= HUD_MAX_MEMBERS then break end
             usedRows = usedRows + 1
-            local raw  = self.Sync_GetDisplayStatus and self:Sync_GetDisplayStatus(peer) or peer.participantStatus or "UNSYNCED"
-            local disp = DisplayStatus(raw)
-            local lv   = peer.level and ("  " .. peer.level) or ""
-            frame.memberRows[usedRows]:SetText(Dot(raw) .. "  " .. ShortName(peer.name) .. lv .. "  " .. disp)
+            local raw = self.Sync_GetDisplayStatus and self:Sync_GetDisplayStatus(peer) or peer.participantStatus or "UNSYNCED"
+            SetLight(frame.memberRows[usedRows].light, raw)
+            frame.memberRows[usedRows].label:SetText(ShortName(peer.name))
+            frame.memberRows[usedRows].light:Show()
         end
     end
 
     for i = usedRows + 1, HUD_MAX_MEMBERS do
-        frame.memberRows[i]:SetText("")
+        frame.memberRows[i].light:Hide()
+        frame.memberRows[i].label:SetText("")
     end
 
-    -- Violation hint row, anchored after last used member (or hero if none)
-    local violY = MEMBERS_TOP_Y + usedRows * MEMBER_STEP
-    if usedRows == 0 then
-        violY = MEMBERS_TOP_Y
-    end
-
+    -- Violation hint (text only, no light needed — yellow is the signal)
     if active and violations > 0 then
+        local violY = MEMBER_TOP + usedRows * MEMBER_STEP
         frame.violHint:ClearAllPoints()
         frame.violHint:SetPoint("TOPLEFT", frame, "TOPLEFT", HUD_PAD + 4, violY)
-        local plural = violations == 1 and "violation" or "violations"
-        frame.violHint:SetText("|cfffbbf24⚠  " .. violations .. " active " .. plural .. " — click to review|r")
+        local word = violations == 1 and "violation" or "violations"
+        frame.violHint:SetText("|cfffbbf24" .. violations .. " active " .. word .. "|r")
     else
         frame.violHint:SetText("")
     end
 
-    -- Resize frame to snugly fit content
+    -- Resize: hero (34px base) + member rows + viol hint row
     local extraRows = usedRows + (active and violations > 0 and 1 or 0)
-    local height = -MEMBERS_TOP_Y + (extraRows > 0 and (extraRows * (HUD_MEMBER_H + 2)) or 0) + HUD_PAD_BOT
-    frame:SetHeight(height)
+    frame:SetHeight(extraRows == 0 and 34 or (36 + extraRows * 18))
 end
 
 function SC:HUD_Toggle()
