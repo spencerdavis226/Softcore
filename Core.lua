@@ -431,8 +431,8 @@ function SC:AddViolation(violationType, detail, severity, playerKey)
         self:Sync_BroadcastViolation(violation)
     end
 
-    if self.LogUI_Refresh then
-        self:LogUI_Refresh()
+    if self.MasterUI_Refresh then
+        self:MasterUI_Refresh()
     end
 
     return violation
@@ -826,8 +826,8 @@ function SC:ClearViolation(violationId, clearedBy, clearReason)
                 if self.Sync_BroadcastViolationClear then
                     self:Sync_BroadcastViolationClear(violation)
                 end
-                if self.LogUI_Refresh then
-                    self:LogUI_Refresh()
+                if self.MasterUI_Refresh then
+                    self:MasterUI_Refresh()
                 end
 
                 local ownerKey = violation.playerKey
@@ -874,10 +874,6 @@ function SC:ImportSharedLog(entry)
         self:MasterUI_Refresh()
     end
 
-    if self.LogUI_Refresh then
-        self:LogUI_Refresh()
-    end
-
     return entry
 end
 
@@ -913,10 +909,6 @@ function SC:ImportSharedViolation(violation)
 
     if self.MasterUI_Refresh then
         self:MasterUI_Refresh()
-    end
-
-    if self.LogUI_Refresh then
-        self:LogUI_Refresh()
     end
 
     return violation
@@ -1314,10 +1306,8 @@ function SC:HandleSlash(input)
     elseif command == "new" then
         if self.OpenMasterWindow then
             self:OpenMasterWindow("RUN")
-        elseif self.OpenStartRunWindow then
-            self:OpenStartRunWindow()
         else
-            Print("start run UI is not loaded.")
+            Print("master UI is not loaded.")
         end
     elseif command == "status" then
         local sub = string.lower(strtrim(rest or ""))
@@ -1340,18 +1330,14 @@ function SC:HandleSlash(input)
             self:PrintLog()
         elseif self.OpenMasterWindow then
             self:OpenMasterWindow("LOG")
-        elseif self.OpenLogWindow then
-            self:OpenLogWindow("EVENTS")
         else
             self:PrintLog()
         end
     elseif command == "violations" then
         if self.OpenMasterWindow then
             self:OpenMasterWindow("VIOLATIONS")
-        elseif self.OpenLogWindow then
-            self:OpenLogWindow("VIOLATIONS")
         else
-            Print("log UI is not loaded.")
+            Print("master UI is not loaded.")
         end
     elseif command == "gear" then
         if self.PrintGearStatus then

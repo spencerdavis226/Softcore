@@ -11,7 +11,5 @@ Integrity.lua
 Events.lua
 UI.lua
 Sync.lua
-StartRunUI.lua
 ProposalUI.lua
-LogUI.lua
 MasterUI.lua

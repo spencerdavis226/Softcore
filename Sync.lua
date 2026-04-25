@@ -759,8 +759,8 @@ function SC:Sync_HandleMessage(message, sender)
         end
     end
 
-    if self.UI_Update then
-        self:UI_Update()
+    if self.HUD_Refresh then
+        self:HUD_Refresh()
     end
 end
 
@@ -788,14 +788,14 @@ function SC:Sync_Initialize()
             SC:Sync_BroadcastStatus("LOGIN")
         end)
         C_Timer.After(UNSYNCED_AFTER, function()
-            if SC.UI_Update then
-                SC:UI_Update()
+            if SC.HUD_Refresh then
+                SC:HUD_Refresh()
             end
         end)
         if C_Timer.NewTicker then
             self.syncTicker = C_Timer.NewTicker(5, function()
-                if SC.UI_Update then
-                    SC:UI_Update()
+                if SC.HUD_Refresh then
+                    SC:HUD_Refresh()
                 end
             end)
             self.syncBroadcastTicker = C_Timer.NewTicker(HEARTBEAT_SECONDS, function()

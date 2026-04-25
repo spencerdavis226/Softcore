@@ -460,8 +460,8 @@ function SC:ReceiveProposalResponse(payload, playerKey)
                 self:Sync_SendProposalCancelled(proposal)
             end
 
-            if self.UI_Update then
-                self:UI_Update()
+            if self.HUD_Refresh then
+                self:HUD_Refresh()
             end
         end
     end
@@ -498,8 +498,8 @@ function SC:ReceiveRunConfirmed(payload, confirmerKey)
 
     Print("run started: all members accepted.")
 
-    if self.UI_Update then
-        self:UI_Update()
+    if self.HUD_Refresh then
+        self:HUD_Refresh()
     end
 end
 
@@ -520,8 +520,8 @@ function SC:ReceiveProposalCancelled(payload, cancellerKey)
 
     Print("proposal cancelled: " .. tostring(proposal.runName) .. ".")
 
-    if self.UI_Update then
-        self:UI_Update()
+    if self.HUD_Refresh then
+        self:HUD_Refresh()
     end
 end
 
@@ -564,8 +564,8 @@ function SC:ShowProposalPopup(proposal)
 end
 
 function SC:ProposeRunFromSlash()
-    if self.OpenStartRunWindow then
-        self:OpenStartRunWindow()
+    if self.OpenMasterWindow then
+        self:OpenMasterWindow("RUN")
     else
         self:CreateRunProposal("Softcore Run", self:GetDefaultRuleset(), "RUN")
         Print("proposed run.")
