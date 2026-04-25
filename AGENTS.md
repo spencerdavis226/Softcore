@@ -110,7 +110,17 @@ Starting while solo can start immediately.
 
 Starting while grouped may need a proposal/acceptance flow so everyone uses compatible settings.
 
-When a run is already active, rule values should be visible but not casually editable. Mid-run changes should go through a future amendment/modify flow and should be logged.
+When a run is already active, rule values should be visible but not casually editable. Mid-run changes should go through an amendment/modify flow and should be logged.
+
+The Run tab should support a draft amendment mode:
+
+- normal active runs show locked rule values
+- Modify Rules unlocks a draft copy of the current rules
+- changed values should be visually distinguished where practical
+- applying changes creates an amendment, logs old/new values, and applies changes going forward
+- canceling returns to the locked active rules without changing the run
+
+For grouped runs, the same draft amendment shape should eventually become a party proposal/review flow. A popup can notify players, but the actual review should live in the Run tab with changed values highlighted and clear Accept/Decline actions.
 
 The UI should avoid long dropdown labels that run into columns or overlap.
 
@@ -273,13 +283,19 @@ If rules are compatible but run IDs differ, the addon should not silently merge 
 
 A future flow may allow players to explicitly align or merge into a shared group run while preserving prior history.
 
-### Later: Rule Amendments
+### Next: Rule Amendments
 
-Support changing rules mid-run through a visible amendment flow.
+Support changing rules mid-run through a visible amendment flow in the Run tab.
 
 Rule changes should be logged.
 
 Rule changes should generally apply going forward, not retroactively erase past violations.
+
+Implement this in small steps:
+
+- first: local solo draft/apply/cancel behavior
+- next: grouped proposal/review/accept/decline behavior
+- later: explicit merge/alignment flows for separate runs
 
 ### Later: Export / Session Summary
 

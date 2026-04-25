@@ -112,7 +112,9 @@ A proposed run does not start for any player until all current party members acc
 
 Disallowed actions create violations. Event violations, like opening a disallowed mailbox, can be reviewed and cleared from the Violations tab (`/sc violations`). State violations, like invalid equipped gear, remain active until the condition is fixed and then cleared. Compatibility blockers — unsynced party members, rule mismatches, or a level gap above the allowed maximum — block party progress but do not fail any character and are not violations.
 
-Mid-run rule changes are not meant to be casual direct edits. The intended future direction is a visible modify/amendment flow that logs changes and applies them going forward.
+Mid-run rule changes are handled as amendments. The Run tab is the intended home for this flow: locked active rules normally, a Modify Rules draft mode for changes, and logged old/new values when changes are applied. Changes apply going forward and do not erase prior deaths, violations, or audit history.
+
+For grouped runs, the next direction is to reuse the same amendment shape as a party proposal/review flow. A popup may notify players, but review should happen in the Run tab with changed values highlighted and clear Accept/Decline actions.
 
 ## Violations and Log
 

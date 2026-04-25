@@ -36,6 +36,23 @@ local MOVEMENT_RULES = {
     { label = "Allow flying", key = "flying" },
 }
 
+local EDITABLE_RULE_ORDER = {
+    "groupingMode",
+    "auctionHouse",
+    "mailbox",
+    "trade",
+    "bank",
+    "warbandBank",
+    "guildBank",
+    "mounts",
+    "flying",
+    "gearQuality",
+    "heirlooms",
+    "maxLevelGap",
+    "maxLevelGapValue",
+    "dungeonRepeat",
+}
+
 local function Print(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r " .. tostring(message))
 end
@@ -166,6 +183,9 @@ local function CreateAllowCheckbox(parent, rules, spec, x, y)
     checkbox:SetChecked(not IsDisallowed(rules[spec.key]))
     checkbox:SetScript("OnClick", function(self)
         SetDisallowedRule(rules, spec.key, self:GetChecked())
+        if SC.MasterUI_Refresh then
+            SC:MasterUI_Refresh()
+        end
     end)
     return checkbox
 end
@@ -207,6 +227,46 @@ local function CopyRulesInto(target, source)
     for key, value in pairs(source or {}) do
         target[key] = value
     end
+end
+
+local function BuildRuleChanges(previousRules, nextRules)
+    local changes = {}
+
+    for _, ruleName in ipairs(EDITABLE_RULE_ORDER) do
+        local previousValue = previousRules and previousRules[ruleName]
+        local nextValue = nextRules and nextRules[ruleName]
+
+        if tostring(previousValue) ~= tostring(nextValue) then
+            changes[ruleName] = nextValue
+        end
+    end
+
+    return changes
+end
+
+local function CountRuleChanges(changes)
+    local count = 0
+
+    for _ in pairs(changes or {}) do
+        count = count + 1
+    end
+
+    return count
+end
+
+local function FormatRuleChangeSummary(previousRules, changes)
+    if CountRuleChanges(changes) == 0 then
+        return "No rule changes selected."
+    end
+
+    local parts = {}
+    for _, ruleName in ipairs(EDITABLE_RULE_ORDER) do
+        if changes[ruleName] ~= nil then
+            table.insert(parts, ruleName .. ": " .. tostring(previousRules[ruleName]) .. " -> " .. tostring(changes[ruleName]))
+        end
+    end
+
+    return Trunc(table.concat(parts, "  |  "), 118)
 end
 
 local function GetSortedActiveViolations()
@@ -300,7 +360,6 @@ local function SetRunSetupEnabled(frame, enabled)
 
     start.casualBtn:SetEnabled(enabled)
     start.ironmanBtn:SetEnabled(enabled)
-    start.primaryBtn:SetShown(enabled)
 
     for _, control in ipairs(start.controls) do
         if control.Enable and control.Disable then
@@ -328,11 +387,12 @@ end
 local function RefreshRunPanel(frame)
     local active = IsActiveRun()
     local db = SC.db or SoftcoreDB
+    local modifying = active and frame.start.isModifyingRules
 
     frame.start.inactiveText:SetShown(not active)
     frame.start.activeText:SetShown(active)
 
-    if active and db and db.run and db.run.ruleset then
+    if active and db and db.run and db.run.ruleset and not modifying then
         CopyRulesInto(frame.start.selectedRules, db.run.ruleset)
     elseif not frame.start.selectedRules then
         frame.start.selectedRules = SC:GetDefaultRuleset()
@@ -341,15 +401,34 @@ local function RefreshRunPanel(frame)
     frame.start.groupingDropdown:SetShown(true)
     frame.start.gearDropdown:SetShown(true)
     frame.start.maxGapBox:SetShown(true)
+    frame.start.casualBtn:SetShown(not active)
+    frame.start.ironmanBtn:SetShown(not active)
     for _, control in ipairs(frame.start.controls) do
         control:SetShown(true)
     end
-    frame.start.stopBtn:SetShown(active)
-    frame.start.modifyBtn:SetShown(active)
-    SetRunSetupEnabled(frame, not active)
+    frame.start.primaryBtn:SetShown(not active)
+    frame.start.stopBtn:SetShown(active and not modifying)
+    frame.start.modifyBtn:SetShown(active and not modifying)
+    frame.start.applyChangesBtn:SetShown(modifying)
+    frame.start.cancelChangesBtn:SetShown(modifying)
+    frame.start.changeSummary:SetShown(modifying)
+    SetRunSetupEnabled(frame, (not active) or modifying)
+
+    if active then
+        if modifying then
+            frame.start.activeText:SetText("Draft rule amendment. Changes apply going forward and will be logged.")
+        else
+            frame.start.activeText:SetText("Active run rules are locked. Use Modify Rules to draft a logged amendment.")
+        end
+    end
 
     if frame.start.RefreshControls then
         frame.start:RefreshControls()
+    end
+
+    if modifying then
+        local changes = BuildRuleChanges(frame.start.draftBaseRules or {}, frame.start.selectedRules or {})
+        frame.start.changeSummary:SetText(FormatRuleChangeSummary(frame.start.draftBaseRules or {}, changes))
     end
 end
 
@@ -560,6 +639,7 @@ function SC:OpenMasterWindow(focusTab)
         if SC.ApplyGroupingMode then
             SC:ApplyGroupingMode(frame.start.selectedRules)
         end
+        SC:MasterUI_Refresh()
     end, 140)
     frame.start.groupingDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 92, -120)
 
@@ -583,6 +663,7 @@ function SC:OpenMasterWindow(focusTab)
     table.insert(frame.start.controls, CreateLabel(startPanel, "Gear limit", 350, -196, "GameFontNormalSmall", 80))
     frame.start.gearDropdown = CreateDropdown(startPanel, "SoftcoreMasterGearDropdown", GEAR_OPTIONS, frame.start.selectedRules.gearQuality, function(value)
         frame.start.selectedRules.gearQuality = value
+        SC:MasterUI_Refresh()
     end, 145)
     frame.start.gearDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 452, -188)
     frame.start.heirloomCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow heirlooms", key = "heirlooms" }, 350, -232)
@@ -596,6 +677,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.maxGapCheck.label:SetText("Enforce max level gap")
     frame.start.maxGapCheck:SetScript("OnClick", function(self)
         frame.start.selectedRules.maxLevelGap = self:GetChecked() and DISALLOWED_OUTCOME or "ALLOWED"
+        SC:MasterUI_Refresh()
     end)
     table.insert(frame.start.controls, frame.start.maxGapCheck)
     table.insert(frame.start.controls, CreateLabel(startPanel, "Max gap", 378, -340, "GameFontNormalSmall", 70))
@@ -609,6 +691,9 @@ function SC:OpenMasterWindow(focusTab)
         if value then
             frame.start.selectedRules.maxLevelGapValue = value
         end
+    end)
+    frame.start.maxGapBox:SetScript("OnEditFocusLost", function()
+        SC:MasterUI_Refresh()
     end)
     frame.start.dungeonRepeatCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow repeated dungeons", key = "dungeonRepeat" }, 350, -370)
     table.insert(frame.start.controls, frame.start.dungeonRepeatCheck)
@@ -670,7 +755,50 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.stopBtn:SetScript("OnClick", ConfirmStopRun)
     frame.start.modifyBtn = CreateButton(startPanel, "Modify Rules", 110, 24)
     frame.start.modifyBtn:SetPoint("LEFT", frame.start.stopBtn, "RIGHT", 8, 0)
-    frame.start.modifyBtn:Disable()
+    frame.start.modifyBtn:SetScript("OnClick", function()
+        local db = SC.db or SoftcoreDB
+        if not db or not db.run or not db.run.ruleset then return end
+
+        frame.start.isModifyingRules = true
+        frame.start.draftBaseRules = SC:CopyTable(db.run.ruleset)
+        CopyRulesInto(frame.start.selectedRules, db.run.ruleset)
+        SC:MasterUI_Refresh()
+    end)
+    frame.start.applyChangesBtn = CreateButton(startPanel, "Apply Changes", 120, 24)
+    frame.start.applyChangesBtn:SetPoint("LEFT", frame.start.primaryBtn, "RIGHT", 8, 0)
+    frame.start.applyChangesBtn:SetScript("OnClick", function()
+        local changes = BuildRuleChanges(frame.start.draftBaseRules or {}, frame.start.selectedRules or {})
+        if CountRuleChanges(changes) == 0 then
+            Print("no rule changes selected.")
+            return
+        end
+
+        if IsInGroup() then
+            Print("group rule amendment proposals are next; changes were not applied.")
+            return
+        end
+
+        if SC.ProposeRuleAmendment and SC.AcceptRuleAmendment and SC.ApplyRuleAmendment then
+            local amendment = SC:ProposeRuleAmendment(changes, "Run rules modified from the Run tab.")
+            SC:AcceptRuleAmendment(amendment.id)
+            SC:ApplyRuleAmendment(amendment.id)
+            frame.start.isModifyingRules = false
+            frame.start.draftBaseRules = nil
+            Print("rule changes applied.")
+        else
+            Print("rule amendment handling is not loaded.")
+        end
+
+        SC:MasterUI_Refresh()
+    end)
+    frame.start.cancelChangesBtn = CreateButton(startPanel, "Cancel", 80, 24)
+    frame.start.cancelChangesBtn:SetPoint("LEFT", frame.start.applyChangesBtn, "RIGHT", 8, 0)
+    frame.start.cancelChangesBtn:SetScript("OnClick", function()
+        frame.start.isModifyingRules = false
+        frame.start.draftBaseRules = nil
+        SC:MasterUI_Refresh()
+    end)
+    frame.start.changeSummary = CreateField(startPanel, 0, -404, 640)
 
     local overviewPanel = CreatePanel(frame)
     frame.panels[TAB_OVERVIEW] = overviewPanel
