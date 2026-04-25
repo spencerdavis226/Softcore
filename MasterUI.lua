@@ -816,23 +816,39 @@ function SC:OpenMasterWindow(focusTab)
         table.insert(UISpecialFrames, "SoftcoreMasterFrame")
     end
     frame:SetBackdrop({
-        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true,
-        tileSize = 16,
-        edgeSize = 12,
-        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+        tile = true, tileSize = 32, edgeSize = 32,
+        insets = { left = 11, right = 11, top = 11, bottom = 11 },
     })
     frame:SetBackdropColor(0, 0, 0, 0.92)
+
+    local headerBg = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
+    headerBg:SetPoint("TOPLEFT",  frame, "TOPLEFT",  13, -13)
+    headerBg:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -13, -13)
+    headerBg:SetHeight(38)
+    headerBg:SetColorTexture(0.03, 0.03, 0.07, 0.92)
+
+    local headerSep = frame:CreateTexture(nil, "ARTWORK")
+    headerSep:SetHeight(1)
+    headerSep:SetPoint("TOPLEFT",  frame, "TOPLEFT",  13, -51)
+    headerSep:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -13, -51)
+    headerSep:SetColorTexture(0.48, 0.38, 0.12, 0.9)
+
+    local tabSep = frame:CreateTexture(nil, "ARTWORK")
+    tabSep:SetHeight(1)
+    tabSep:SetPoint("TOPLEFT",  frame, "TOPLEFT",  13, -78)
+    tabSep:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -13, -78)
+    tabSep:SetColorTexture(0.22, 0.22, 0.22, 0.8)
     frame.activeTab = NormalizeTab(focusTab)
     frame.panels = {}
 
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 18, -14)
-    title:SetText("Softcore")
+    title:SetPoint("TOPLEFT", 20, -16)
+    title:SetText("|cffffd700Softcore|r")
 
-    local closeBtn = CreateButton(frame, "X", 24, 24)
-    closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -14, -12)
+    local closeBtn = CreateFrame("Button", "SoftcoreMasterCloseButton", frame, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 4, 4)
     closeBtn:SetScript("OnClick", function() frame:Hide() end)
 
     local function AddTab(fieldName, label, tabName, relativeTo)
@@ -878,7 +894,7 @@ function SC:OpenMasterWindow(focusTab)
         ApplyStartPreset(frame, "IRONMAN")
     end)
 
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Core", 0, -72, "GameFontNormal"))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "|cffffd700Core|r", 0, -72, "GameFontNormal"))
     table.insert(frame.start.controls, CreateLabel(startPanel, "Death is permanent for each character.", 0, -98, "GameFontHighlightSmall", 300))
     table.insert(frame.start.controls, CreateLabel(startPanel, "Grouping", 0, -128, "GameFontNormalSmall", 80))
     frame.start.groupingDropdown = CreateDropdown(startPanel, "SoftcoreMasterGroupingDropdown", GROUPING_OPTIONS, frame.start.selectedRules.groupingMode, function(value)
@@ -890,7 +906,7 @@ function SC:OpenMasterWindow(focusTab)
     end, 140)
     frame.start.groupingDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 92, -120)
 
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Economy / Storage", 0, -168, "GameFontNormal"))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "|cffffd700Economy / Storage|r", 0, -168, "GameFontNormal"))
     local y = -194
     for _, spec in ipairs(ECONOMY_RULES) do
         local checkbox = CreateAllowCheckbox(startPanel, frame.start.selectedRules, spec, 0, y)
@@ -898,7 +914,7 @@ function SC:OpenMasterWindow(focusTab)
         y = y - 30
     end
 
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Movement", 350, -72, "GameFontNormal"))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "|cffffd700Movement|r", 350, -72, "GameFontNormal"))
     y = -98
     for _, spec in ipairs(MOVEMENT_RULES) do
         local checkbox = CreateAllowCheckbox(startPanel, frame.start.selectedRules, spec, 350, y)
@@ -906,7 +922,7 @@ function SC:OpenMasterWindow(focusTab)
         y = y - 30
     end
 
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Gear / Items", 350, -168, "GameFontNormal"))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "|cffffd700Gear / Items|r", 350, -168, "GameFontNormal"))
     table.insert(frame.start.controls, CreateLabel(startPanel, "Gear limit", 350, -196, "GameFontNormalSmall", 80))
     frame.start.gearDropdown = CreateDropdown(startPanel, "SoftcoreMasterGearDropdown", GEAR_OPTIONS, frame.start.selectedRules.gearQuality, function(value)
         frame.start.selectedRules.gearQuality = value
@@ -916,7 +932,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.heirloomCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow heirlooms", key = "heirlooms" }, 350, -232)
     table.insert(frame.start.controls, frame.start.heirloomCheck)
 
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Group / Dungeon", 350, -278, "GameFontNormal"))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "|cffffd700Group / Dungeon|r", 350, -278, "GameFontNormal"))
     frame.start.maxGapCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
     frame.start.maxGapCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 350, -304)
     frame.start.maxGapCheck.label = frame.start.maxGapCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -1114,7 +1130,13 @@ function SC:OpenMasterWindow(focusTab)
         frame.activeTab = TAB_RUN
         SC:MasterUI_Refresh()
     end)
-    CreateLabel(overviewPanel, "Party", 0, -188, "GameFontNormal", 200)
+    local partySep = overviewPanel:CreateTexture(nil, "ARTWORK")
+    partySep:SetHeight(1)
+    partySep:SetPoint("TOPLEFT",  overviewPanel, "TOPLEFT",  0, -172)
+    partySep:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", 0, -172)
+    partySep:SetColorTexture(0.3, 0.3, 0.3, 0.6)
+
+    CreateLabel(overviewPanel, "|cffffd700Party|r", 0, -188, "GameFontNormal", 200)
     frame.overview.resyncBtn = CreateButton(overviewPanel, "Resync", 72, 20)
     frame.overview.resyncBtn:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", 210, -185)
     frame.overview.resyncBtn:SetScript("OnClick", function()
@@ -1127,12 +1149,24 @@ function SC:OpenMasterWindow(focusTab)
     CreateLabel(overviewPanel, "Lvl",   198, -210, "GameFontNormalSmall", 36)
     CreateLabel(overviewPanel, "Status",238, -210, "GameFontNormalSmall", 178)
     CreateLabel(overviewPanel, "Total Violations", 420, -210, "GameFontNormalSmall", 140)
+
+    local columnSep = overviewPanel:CreateTexture(nil, "ARTWORK")
+    columnSep:SetHeight(1)
+    columnSep:SetPoint("TOPLEFT",  overviewPanel, "TOPLEFT",  0, -223)
+    columnSep:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", 0, -223)
+    columnSep:SetColorTexture(0.25, 0.25, 0.25, 0.6)
+
     frame.overview.partyEmpty = CreateField(overviewPanel, 0, -232, 620)
     frame.overview.partyEmpty:SetText("(no synced party members)")
     for index = 1, 8 do
         local row = CreateFrame("Frame", nil, overviewPanel)
         row:SetSize(620, 22)
         row:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", 0, -256 - ((index - 1) * 24))
+        if index % 2 == 0 then
+            local rowBg = row:CreateTexture(nil, "BACKGROUND")
+            rowBg:SetAllPoints(row)
+            rowBg:SetColorTexture(1, 1, 1, 0.04)
+        end
         row.name  = CreateField(row, 0,   0, 190)
         row.level = CreateField(row, 198, 0, 36)
         row.status = CreateField(row, 238, 0, 178)
@@ -1147,12 +1181,22 @@ function SC:OpenMasterWindow(focusTab)
     CreateLabel(violationsPanel, "Owner", 122, 0, "GameFontNormalSmall", 90)
     CreateLabel(violationsPanel, "Type", 216, 0, "GameFontNormalSmall", 108)
     CreateLabel(violationsPanel, "Detail", 328, 0, "GameFontNormalSmall", 260)
+    local violColSep = violationsPanel:CreateTexture(nil, "ARTWORK")
+    violColSep:SetHeight(1)
+    violColSep:SetPoint("TOPLEFT",  violationsPanel, "TOPLEFT",  0, -16)
+    violColSep:SetPoint("TOPRIGHT", violationsPanel, "TOPRIGHT", 0, -16)
+    violColSep:SetColorTexture(0.25, 0.25, 0.25, 0.6)
     frame.violations.empty = CreateField(violationsPanel, 0, -26, 620)
     frame.violations.empty:SetText("(no active violations)")
     for index = 1, 12 do
         local row = CreateFrame("Frame", nil, violationsPanel)
         row:SetSize(672, 28)
         row:SetPoint("TOPLEFT", violationsPanel, "TOPLEFT", 0, -26 - ((index - 1) * 30))
+        if index % 2 == 0 then
+            local rowBg = row:CreateTexture(nil, "BACKGROUND")
+            rowBg:SetAllPoints(row)
+            rowBg:SetColorTexture(1, 1, 1, 0.04)
+        end
         row.time = CreateField(row, 0, 0, 118)
         row.owner = CreateField(row, 122, 0, 90)
         row.type = CreateField(row, 216, 0, 108)
@@ -1169,12 +1213,22 @@ function SC:OpenMasterWindow(focusTab)
     CreateLabel(logPanel, "Actor", 134, 0, "GameFontNormalSmall", 90)
     CreateLabel(logPanel, "Type", 228, 0, "GameFontNormalSmall", 128)
     CreateLabel(logPanel, "Message", 360, 0, "GameFontNormalSmall", 300)
+    local logColSep = logPanel:CreateTexture(nil, "ARTWORK")
+    logColSep:SetHeight(1)
+    logColSep:SetPoint("TOPLEFT",  logPanel, "TOPLEFT",  0, -16)
+    logColSep:SetPoint("TOPRIGHT", logPanel, "TOPRIGHT", 0, -16)
+    logColSep:SetColorTexture(0.25, 0.25, 0.25, 0.6)
     frame.log.empty = CreateField(logPanel, 0, -24, 620)
     frame.log.empty:SetText("(no events recorded)")
     for index = 1, LOG_ROWS do
         local row = CreateFrame("Frame", nil, logPanel)
         row:SetSize(672, 18)
         row:SetPoint("TOPLEFT", logPanel, "TOPLEFT", 0, -24 - ((index - 1) * 18))
+        if index % 2 == 0 then
+            local rowBg = row:CreateTexture(nil, "BACKGROUND")
+            rowBg:SetAllPoints(row)
+            rowBg:SetColorTexture(1, 1, 1, 0.04)
+        end
         row.time = CreateField(row, 0, 0, 130)
         row.actor = CreateField(row, 134, 0, 90)
         row.kind = CreateField(row, 228, 0, 128)
