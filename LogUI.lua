@@ -35,7 +35,8 @@ local function RefreshEvents(frame)
         return
     end
 
-    for _, entry in ipairs(log) do
+    for index = #log, 1, -1 do
+        local entry = log[index]
         local line = string.format(
             "|cffaaaaaa%s|r |cffffcc00[%s]|r %s",
             FormatTime(entry.time),
@@ -45,7 +46,7 @@ local function RefreshEvents(frame)
         frame.eventsMsgFrame:AddMessage(line)
     end
 
-    frame.eventsMsgFrame:ScrollToBottom()
+    frame.eventsMsgFrame:ScrollToTop()
 end
 
 local function GetSortedViolations()

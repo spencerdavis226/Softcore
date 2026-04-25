@@ -9,6 +9,34 @@ local TAB_LOG = "LOG"
 local TAB_RULES = "RULES"
 local TAB_PARTY = "PARTY"
 
+local DISALLOWED_OUTCOME = "WARNING"
+
+local GROUPING_OPTIONS = {
+    { text = "Grouping Allowed", value = "SYNCED_GROUP_ALLOWED" },
+    { text = "Solo Only", value = "SOLO_SELF_FOUND" },
+}
+
+local GEAR_OPTIONS = {
+    { text = "Any gear", value = "ALLOWED" },
+    { text = "White/gray only", value = "WHITE_GRAY_ONLY" },
+    { text = "Green or lower", value = "GREEN_OR_LOWER" },
+    { text = "Blue or lower", value = "BLUE_OR_LOWER" },
+}
+
+local ECONOMY_RULES = {
+    { label = "Allow Auction House", key = "auctionHouse" },
+    { label = "Allow Mailbox", key = "mailbox" },
+    { label = "Allow Trade", key = "trade" },
+    { label = "Allow Bank", key = "bank" },
+    { label = "Allow Warband Bank", key = "warbandBank" },
+    { label = "Allow Guild Bank", key = "guildBank" },
+}
+
+local MOVEMENT_RULES = {
+    { label = "Allow mounts", key = "mounts" },
+    { label = "Allow flying", key = "flying" },
+}
+
 local function Print(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r " .. tostring(message))
 end
@@ -76,6 +104,93 @@ local function CreateField(parent, x, y, width)
     return fs
 end
 
+local function CreateLabel(parent, text, x, y, template, width)
+    local fs = CreateField(parent, x, y, width or 220)
+    fs:SetFontObject(_G[template or "GameFontNormalSmall"])
+    fs:SetText(text)
+    return fs
+end
+
+local function GetOptionText(options, value)
+    for _, option in ipairs(options) do
+        if option.value == value then
+            return option.text
+        end
+    end
+
+    return tostring(value or "")
+end
+
+local function CreateDropdown(parent, name, options, selectedValue, onSelect, width)
+    local dropdown = CreateFrame("Frame", name, parent, "UIDropDownMenuTemplate")
+    UIDropDownMenu_SetWidth(dropdown, width or 145)
+    UIDropDownMenu_SetText(dropdown, GetOptionText(options, selectedValue))
+    UIDropDownMenu_Initialize(dropdown, function(_, level)
+        for _, option in ipairs(options) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = option.text
+            info.func = function()
+                UIDropDownMenu_SetText(dropdown, option.text)
+                onSelect(option.value)
+            end
+            UIDropDownMenu_AddButton(info, level)
+        end
+    end)
+    return dropdown
+end
+
+local function IsDisallowed(value)
+    return value ~= nil and value ~= "ALLOWED" and value ~= "LOG_ONLY"
+end
+
+local function SetDisallowedRule(rules, key, checked)
+    rules[key] = checked and "ALLOWED" or DISALLOWED_OUTCOME
+end
+
+local function CreateAllowCheckbox(parent, rules, spec, x, y)
+    local checkbox = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    checkbox:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    checkbox.label = checkbox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    checkbox.label:SetPoint("LEFT", checkbox, "RIGHT", 2, 0)
+    checkbox.label:SetWidth(230)
+    checkbox.label:SetJustifyH("LEFT")
+    checkbox.label:SetText(spec.label)
+    checkbox:SetChecked(not IsDisallowed(rules[spec.key]))
+    checkbox:SetScript("OnClick", function(self)
+        SetDisallowedRule(rules, spec.key, self:GetChecked())
+    end)
+    return checkbox
+end
+
+local function ApplyStartPreset(frame, preset)
+    local rules = frame.start.selectedRules
+
+    rules.groupingMode = preset == "IRONMAN" and "SOLO_SELF_FOUND" or "SYNCED_GROUP_ALLOWED"
+    rules.gearQuality = preset == "IRONMAN" and "WHITE_GRAY_ONLY" or "ALLOWED"
+    rules.maxLevelGap = preset == "IRONMAN" and DISALLOWED_OUTCOME or "ALLOWED"
+    rules.maxLevelGapValue = 3
+    rules.heirlooms = DISALLOWED_OUTCOME
+    rules.dungeonRepeat = preset == "IRONMAN" and DISALLOWED_OUTCOME or "ALLOWED"
+    rules.instanceWithUnsyncedPlayers = "ALLOWED"
+    rules.unsyncedMembers = "ALLOWED"
+
+    for _, spec in ipairs(ECONOMY_RULES) do
+        SetDisallowedRule(rules, spec.key, not (preset == "IRONMAN" or spec.key == "auctionHouse" or spec.key == "mailbox" or spec.key == "trade" or spec.key == "bank" or spec.key == "warbandBank" or spec.key == "guildBank"))
+    end
+
+    for _, spec in ipairs(MOVEMENT_RULES) do
+        SetDisallowedRule(rules, spec.key, preset ~= "IRONMAN")
+    end
+
+    if SC.ApplyGroupingMode then
+        SC:ApplyGroupingMode(rules)
+    end
+
+    if frame.start.RefreshControls then
+        frame.start:RefreshControls()
+    end
+end
+
 local function GetSortedActiveViolations()
     local db = SC.db or SoftcoreDB
     local source = (db and db.violations) or {}
@@ -113,8 +228,20 @@ local function RefreshStartPanel(frame)
 
     frame.start.inactiveText:SetShown(not active)
     frame.start.activeText:SetShown(active)
-    frame.start.startDefaultBtn:SetShown(not active)
-    frame.start.configureBtn:SetShown(not active)
+    frame.start.casualBtn:SetShown(not active)
+    frame.start.ironmanBtn:SetShown(not active)
+    frame.start.primaryBtn:SetShown(not active)
+    frame.start.groupingDropdown:SetShown(not active)
+    frame.start.gearDropdown:SetShown(not active)
+    frame.start.maxGapBox:SetShown(not active)
+
+    for _, control in ipairs(frame.start.controls) do
+        control:SetShown(not active)
+    end
+
+    if frame.start.RefreshControls then
+        frame.start:RefreshControls()
+    end
 end
 
 local function RefreshViolationsPanel(frame)
@@ -161,7 +288,8 @@ local function RefreshLogPanel(frame)
         return
     end
 
-    for _, entry in ipairs(log) do
+    for index = #log, 1, -1 do
+        local entry = log[index]
         frame.log.events:AddMessage(string.format(
             "|cffaaaaaa%s|r |cffffcc00[%s]|r %s",
             FormatTime(entry.time),
@@ -170,7 +298,7 @@ local function RefreshLogPanel(frame)
         ))
     end
 
-    frame.log.events:ScrollToBottom()
+    frame.log.events:ScrollToTop()
 end
 
 local function RefreshRulesPanel(frame)
@@ -191,23 +319,40 @@ end
 
 local function RefreshPartyPanel(frame)
     local db = SC.db or SoftcoreDB
-    local rows = SC.Sync_GetGroupRows and SC:Sync_GetGroupRows() or {}
+    local syncRows = SC.Sync_GetGroupRows and SC:Sync_GetGroupRows() or {}
     local participantOrder = db and db.run and db.run.participantOrder or {}
     local participants = db and db.run and db.run.participants or {}
+    local localKey = SC:GetPlayerKey()
+    local displayRows = {}
 
-    frame.party.empty:SetShown(#rows == 0 and #participantOrder <= 1)
+    for _, peer in ipairs(syncRows) do
+        table.insert(displayRows, {
+            name = peer.name or peer.playerKey or "Unknown",
+            status = tostring(SC.Sync_GetDisplayStatus and SC:Sync_GetDisplayStatus(peer) or peer.participantStatus or "UNKNOWN"),
+        })
+    end
+
+    for _, participantKey in ipairs(participantOrder) do
+        if participantKey ~= localKey then
+            local participant = participants[participantKey]
+            if participant then
+                table.insert(displayRows, {
+                    name = participant.playerKey,
+                    status = tostring(participant.status or "UNKNOWN"),
+                })
+            end
+        end
+    end
+
+    frame.party.empty:SetShown(#displayRows == 0)
 
     for index, row in ipairs(frame.party.rows) do
-        local peer = rows[index]
-        local participantKey = participantOrder[index]
-        local participant = participantKey and participants[participantKey]
+        local display = displayRows[index]
 
-        if peer then
+        if display then
             row:Show()
-            row:SetText((peer.name or peer.playerKey or "Unknown") .. " - " .. tostring(SC.Sync_GetDisplayStatus and SC:Sync_GetDisplayStatus(peer) or peer.participantStatus or "UNKNOWN"))
-        elseif participant then
-            row:Show()
-            row:SetText(tostring(participant.playerKey) .. " - " .. tostring(participant.status or "UNKNOWN"))
+            row.name:SetText(Trunc(display.name, 38))
+            row.status:SetText(display.status)
         else
             row:Hide()
         end
@@ -338,15 +483,124 @@ function SC:OpenMasterWindow(focusTab)
 
     local startPanel = CreatePanel(frame)
     frame.panels[TAB_START] = startPanel
-    frame.start = {}
+    frame.start = { controls = {}, selectedRules = SC:GetDefaultRuleset() }
+    frame.start.selectedRules.dungeonRepeat = "ALLOWED"
+    frame.start.selectedRules.instanceWithUnsyncedPlayers = "ALLOWED"
+    frame.start.selectedRules.unsyncedMembers = "ALLOWED"
     frame.start.inactiveText = CreateField(startPanel, 0, 0, 620)
     frame.start.inactiveText:SetText("No active Softcore run.")
     frame.start.activeText = CreateField(startPanel, 0, 0, 620)
     frame.start.activeText:SetText("A run is already active. Use the Status tab to review or stop it.")
-    frame.start.startDefaultBtn = CreateButton(startPanel, "Start Run", 120, 24)
-    frame.start.startDefaultBtn:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -36)
-    frame.start.startDefaultBtn:SetScript("OnClick", function()
-        local ruleset = SC:GetDefaultRuleset()
+
+    frame.start.casualBtn = CreateButton(startPanel, "Casual", 86, 22)
+    frame.start.casualBtn:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -32)
+    frame.start.casualBtn:SetScript("OnClick", function()
+        ApplyStartPreset(frame, "CASUAL")
+    end)
+
+    frame.start.ironmanBtn = CreateButton(startPanel, "Ironman", 86, 22)
+    frame.start.ironmanBtn:SetPoint("LEFT", frame.start.casualBtn, "RIGHT", 8, 0)
+    frame.start.ironmanBtn:SetScript("OnClick", function()
+        ApplyStartPreset(frame, "IRONMAN")
+    end)
+
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Core", 0, -72, "GameFontNormal"))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Death is permanent for each character.", 0, -98, "GameFontHighlightSmall", 300))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Grouping", 0, -128, "GameFontNormalSmall", 80))
+    frame.start.groupingDropdown = CreateDropdown(startPanel, "SoftcoreMasterGroupingDropdown", GROUPING_OPTIONS, frame.start.selectedRules.groupingMode, function(value)
+        frame.start.selectedRules.groupingMode = value
+        if SC.ApplyGroupingMode then
+            SC:ApplyGroupingMode(frame.start.selectedRules)
+        end
+    end, 140)
+    frame.start.groupingDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 92, -120)
+
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Economy / Storage", 0, -168, "GameFontNormal"))
+    local y = -194
+    for _, spec in ipairs(ECONOMY_RULES) do
+        local checkbox = CreateAllowCheckbox(startPanel, frame.start.selectedRules, spec, 0, y)
+        table.insert(frame.start.controls, checkbox)
+        y = y - 30
+    end
+
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Movement", 350, -72, "GameFontNormal"))
+    y = -98
+    for _, spec in ipairs(MOVEMENT_RULES) do
+        local checkbox = CreateAllowCheckbox(startPanel, frame.start.selectedRules, spec, 350, y)
+        table.insert(frame.start.controls, checkbox)
+        y = y - 30
+    end
+
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Gear / Items", 350, -168, "GameFontNormal"))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Gear limit", 350, -196, "GameFontNormalSmall", 80))
+    frame.start.gearDropdown = CreateDropdown(startPanel, "SoftcoreMasterGearDropdown", GEAR_OPTIONS, frame.start.selectedRules.gearQuality, function(value)
+        frame.start.selectedRules.gearQuality = value
+    end, 145)
+    frame.start.gearDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 452, -188)
+    frame.start.heirloomCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow heirlooms", key = "heirlooms" }, 350, -232)
+    table.insert(frame.start.controls, frame.start.heirloomCheck)
+
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Group / Dungeon", 350, -278, "GameFontNormal"))
+    frame.start.maxGapCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
+    frame.start.maxGapCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 350, -304)
+    frame.start.maxGapCheck.label = frame.start.maxGapCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.start.maxGapCheck.label:SetPoint("LEFT", frame.start.maxGapCheck, "RIGHT", 2, 0)
+    frame.start.maxGapCheck.label:SetText("Enforce max level gap")
+    frame.start.maxGapCheck:SetScript("OnClick", function(self)
+        frame.start.selectedRules.maxLevelGap = self:GetChecked() and DISALLOWED_OUTCOME or "ALLOWED"
+    end)
+    table.insert(frame.start.controls, frame.start.maxGapCheck)
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Max gap", 378, -340, "GameFontNormalSmall", 70))
+    frame.start.maxGapBox = CreateFrame("EditBox", nil, startPanel, "InputBoxTemplate")
+    frame.start.maxGapBox:SetSize(42, 22)
+    frame.start.maxGapBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 450, -334)
+    frame.start.maxGapBox:SetAutoFocus(false)
+    frame.start.maxGapBox:SetNumeric(true)
+    frame.start.maxGapBox:SetScript("OnTextChanged", function(self)
+        local value = tonumber(self:GetText())
+        if value then
+            frame.start.selectedRules.maxLevelGapValue = value
+        end
+    end)
+    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow repeated dungeons", key = "dungeonRepeat" }, 350, -370)
+    table.insert(frame.start.controls, frame.start.dungeonRepeatCheck)
+
+    function frame.start:RefreshControls()
+        if SC.ApplyGroupingMode then
+            SC:ApplyGroupingMode(self.selectedRules)
+        end
+        self.selectedRules.instanceWithUnsyncedPlayers = "ALLOWED"
+        self.selectedRules.unsyncedMembers = "ALLOWED"
+
+        UIDropDownMenu_SetText(self.groupingDropdown, GetOptionText(GROUPING_OPTIONS, self.selectedRules.groupingMode))
+        UIDropDownMenu_SetText(self.gearDropdown, GetOptionText(GEAR_OPTIONS, self.selectedRules.gearQuality))
+        self.maxGapCheck:SetChecked(self.selectedRules.maxLevelGap ~= "ALLOWED")
+        self.maxGapBox:SetText(tostring(self.selectedRules.maxLevelGapValue or 3))
+
+        for _, checkbox in ipairs(self.controls) do
+            if checkbox.label and checkbox.GetChecked and checkbox ~= self.maxGapCheck then
+                local text = checkbox.label:GetText()
+                for _, spec in ipairs(ECONOMY_RULES) do
+                    if text == spec.label then checkbox:SetChecked(not IsDisallowed(self.selectedRules[spec.key])) end
+                end
+                for _, spec in ipairs(MOVEMENT_RULES) do
+                    if text == spec.label then checkbox:SetChecked(not IsDisallowed(self.selectedRules[spec.key])) end
+                end
+            end
+        end
+        self.heirloomCheck:SetChecked(not IsDisallowed(self.selectedRules.heirlooms))
+        self.dungeonRepeatCheck:SetChecked(not IsDisallowed(self.selectedRules.dungeonRepeat))
+    end
+
+    frame.start.primaryBtn = CreateButton(startPanel, "Start Run", 120, 24)
+    frame.start.primaryBtn:SetPoint("BOTTOMLEFT", startPanel, "BOTTOMLEFT", 0, 0)
+    frame.start.primaryBtn:SetScript("OnClick", function()
+        local ruleset = SC:CopyTable(frame.start.selectedRules)
+        if SC.ApplyGroupingMode then
+            SC:ApplyGroupingMode(ruleset)
+        end
+        ruleset.instanceWithUnsyncedPlayers = "ALLOWED"
+        ruleset.unsyncedMembers = "ALLOWED"
         if IsInGroup() then
             if SC.CreateRunProposal then
                 SC:CreateRunProposal("Softcore Run", ruleset, "RUN")
@@ -362,13 +616,7 @@ function SC:OpenMasterWindow(focusTab)
         end
         SC:MasterUI_Refresh()
     end)
-    frame.start.configureBtn = CreateButton(startPanel, "Configure Rules", 130, 24)
-    frame.start.configureBtn:SetPoint("LEFT", frame.start.startDefaultBtn, "RIGHT", 8, 0)
-    frame.start.configureBtn:SetScript("OnClick", function()
-        if SC.OpenStartRunWindow then
-            SC:OpenStartRunWindow()
-        end
-    end)
+    ApplyStartPreset(frame, "CASUAL")
 
     local statusPanel = CreatePanel(frame)
     frame.panels[TAB_STATUS] = statusPanel
@@ -430,7 +678,12 @@ function SC:OpenMasterWindow(focusTab)
     frame.party.empty = CreateField(partyPanel, 0, 0, 620)
     frame.party.empty:SetText("(no synced party members)")
     for index = 1, 12 do
-        frame.party.rows[index] = CreateField(partyPanel, 0, -((index - 1) * 24), 620)
+        local row = CreateFrame("Frame", nil, partyPanel)
+        row:SetSize(620, 22)
+        row:SetPoint("TOPLEFT", partyPanel, "TOPLEFT", 0, -24 - ((index - 1) * 24))
+        row.name = CreateField(row, 0, 0, 360)
+        row.status = CreateField(row, 380, 0, 180)
+        frame.party.rows[index] = row
     end
 
     local bottomClose = CreateButton(frame, "Close", 80, 24)
