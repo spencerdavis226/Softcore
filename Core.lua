@@ -1082,7 +1082,7 @@ end
 
 function SC:PrintHelp()
     Print("/sc - open the Softcore menu")
-    Print("/sc status - open the Status tab")
+    Print("/sc status - open the Overview tab")
     Print("/sc start - start a local run")
     Print("/sc status chat - print current run status")
     Print("/sc reset confirm - reset the local run")
@@ -1091,18 +1091,18 @@ function SC:PrintHelp()
     Print("/sc violations - open the Violations tab")
     Print("/sc gear - print gear rules and invalid equipped items")
     Print("/sc dungeons - print dungeon entries for this run")
-    Print("/sc roster - open the Party tab")
-    Print("/sc participants - open the Party tab")
+    Print("/sc roster - open the Overview tab")
+    Print("/sc participants - open the Overview tab")
     Print("/sc add Player-Realm - add a pending participant")
     Print("/sc retire - retire this character without failing")
-    Print("/sc rules - open the Rules tab")
+    Print("/sc rules - open the Run tab")
     Print("/sc rules chat - print current ruleset")
     Print("/sc rule ruleName value - change a rule locally")
-    Print("/sc run - open the Status tab")
+    Print("/sc run - open the Overview tab")
     Print("/sc conflicts - print sync conflicts")
     Print("/sc resync - request full state from party")
     Print("/sc access - print storage and economy access rules")
-    Print("/sc new - open the Start tab")
+    Print("/sc new - open the Run tab")
     Print("/sc proposal - show the pending proposal")
     Print("/sc accept - accept the pending proposal")
     Print("/sc decline - decline the pending proposal")
@@ -1125,7 +1125,7 @@ function SC:HandleSlash(input)
         self:StartRun()
     elseif command == "new" then
         if self.OpenMasterWindow then
-            self:OpenMasterWindow("START")
+            self:OpenMasterWindow("RUN")
         elseif self.OpenStartRunWindow then
             self:OpenStartRunWindow()
         else
@@ -1136,7 +1136,7 @@ function SC:HandleSlash(input)
         if sub == "chat" or sub == "print" then
             self:PrintStatus()
         elseif self.OpenMasterWindow then
-            self:OpenMasterWindow("STATUS")
+            self:OpenMasterWindow("OVERVIEW")
         else
             self:PrintStatus()
         end
@@ -1182,7 +1182,7 @@ function SC:HandleSlash(input)
         if sub == "chat" or sub == "print" then
             self:PrintRoster()
         elseif self.OpenMasterWindow then
-            self:OpenMasterWindow("PARTY")
+            self:OpenMasterWindow("OVERVIEW")
         else
             self:PrintRoster()
         end
@@ -1191,7 +1191,7 @@ function SC:HandleSlash(input)
         if sub == "chat" or sub == "print" then
             self:PrintRun()
         elseif self.OpenMasterWindow then
-            self:OpenMasterWindow("STATUS")
+            self:OpenMasterWindow("OVERVIEW")
         else
             self:PrintRun()
         end
@@ -1209,7 +1209,7 @@ function SC:HandleSlash(input)
         if sub == "chat" or sub == "print" then
             self:PrintRules()
         elseif self.OpenMasterWindow then
-            self:OpenMasterWindow("RULES")
+            self:OpenMasterWindow("RUN")
         else
             self:PrintRules()
         end

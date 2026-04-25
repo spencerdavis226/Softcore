@@ -16,21 +16,21 @@ Version 0.4.0 tracks your local run, applies structured rules, syncs resilient s
 
 - `/softcore` or `/sc` - open the Softcore menu.
 - `/sc start` - start a new local run.
-- `/sc new` - open the Start tab.
-- `/sc status` - open the Status tab. Use `/sc status chat` to print current run status.
+- `/sc new` - open the Run tab.
+- `/sc status` - open the Overview tab. Use `/sc status chat` to print current run status.
 - `/sc reset confirm` - reset the local run.
 - `/sc log` - open the Log tab. Use `/sc log chat` to print to chat instead.
 - `/sc violations` - open the Violations tab.
 - `/sc gear` - print gear rules and invalid equipped items.
 - `/sc dungeons` - print dungeon entries for the current run.
-- `/sc roster` - open the Party tab. Use `/sc roster chat` to print tracked run participants.
+- `/sc roster` - open the Overview tab. Use `/sc roster chat` to print tracked run participants.
 - `/sc add Player-Realm` - add a pending participant until the v0.3 join UI exists.
 - `/sc retire` - retire this character without marking it failed.
-- `/sc rules` - open the Rules tab. Use `/sc rules chat` to print the current ruleset.
+- `/sc rules` - open the Run tab. Use `/sc rules chat` to print the current ruleset.
 - `/sc rule mailbox ALLOWED` - change a rule locally and log a prospective amendment.
 - `/sc resync` - request full run state from party members.
-- `/sc participants` - open the Party tab.
-- `/sc run` - open the Status tab. Use `/sc run chat` to print run metadata.
+- `/sc participants` - open the Overview tab.
+- `/sc run` - open the Overview tab. Use `/sc run chat` to print run metadata.
 - `/sc conflicts` - print detected sync conflicts.
 - `/sc access` - print storage and economy access rules.
 - `/sc propose` - open/propose a new group run.
@@ -64,12 +64,10 @@ Use `/sc` to open the main menu.
 
 Tabs are:
 
-- **Start** when no run is active.
-- **Status** when a run is active, including a confirmed Stop Run action.
+- **Overview** for local status and party/participant state.
+- **Run** for starting a run, reviewing locked active rules, and stopping a run.
 - **Violations** for active clearable issues.
 - **Log** for recent audit history.
-- **Rules** for the current run rules.
-- **Party** for participants and synced party status.
 
 ## Group Sync
 

@@ -2,12 +2,10 @@
 
 local SC = Softcore
 
-local TAB_START = "START"
-local TAB_STATUS = "STATUS"
+local TAB_RUN = "RUN"
+local TAB_OVERVIEW = "OVERVIEW"
 local TAB_VIOLATIONS = "VIOLATIONS"
 local TAB_LOG = "LOG"
-local TAB_RULES = "RULES"
-local TAB_PARTY = "PARTY"
 
 local DISALLOWED_OUTCOME = "WARNING"
 
@@ -62,20 +60,20 @@ local function IsActiveRun()
 end
 
 local function GetDefaultTab()
-    return IsActiveRun() and TAB_STATUS or TAB_START
+    return IsActiveRun() and TAB_OVERVIEW or TAB_RUN
 end
 
 local function NormalizeTab(tab)
-    if tab == TAB_LOG or tab == TAB_RULES or tab == TAB_PARTY or tab == TAB_VIOLATIONS then
+    if tab == "START" or tab == "RULES" then
+        return TAB_RUN
+    end
+
+    if tab == "STATUS" or tab == "PARTY" then
+        return TAB_OVERVIEW
+    end
+
+    if tab == TAB_LOG or tab == TAB_RUN or tab == TAB_OVERVIEW or tab == TAB_VIOLATIONS then
         return tab
-    end
-
-    if tab == TAB_START and not IsActiveRun() then
-        return TAB_START
-    end
-
-    if tab == TAB_STATUS and IsActiveRun() then
-        return TAB_STATUS
     end
 
     return GetDefaultTab()
@@ -191,6 +189,16 @@ local function ApplyStartPreset(frame, preset)
     end
 end
 
+local function CopyRulesInto(target, source)
+    for key in pairs(target) do
+        target[key] = nil
+    end
+
+    for key, value in pairs(source or {}) do
+        target[key] = value
+    end
+end
+
 local function GetSortedActiveViolations()
     local db = SC.db or SoftcoreDB
     local source = (db and db.violations) or {}
@@ -209,35 +217,116 @@ local function GetSortedActiveViolations()
     return result
 end
 
-local function RefreshStatusPanel(frame)
+local function GetPartyDisplayRows()
+    local db = SC.db or SoftcoreDB
+    local syncRows = SC.Sync_GetGroupRows and SC:Sync_GetGroupRows() or {}
+    local participantOrder = db and db.run and db.run.participantOrder or {}
+    local participants = db and db.run and db.run.participants or {}
+    local localKey = SC:GetPlayerKey()
+    local displayRows = {}
+
+    for _, peer in ipairs(syncRows) do
+        table.insert(displayRows, {
+            name = peer.name or peer.playerKey or "Unknown",
+            status = tostring(SC.Sync_GetDisplayStatus and SC:Sync_GetDisplayStatus(peer) or peer.participantStatus or "UNKNOWN"),
+        })
+    end
+
+    for _, participantKey in ipairs(participantOrder) do
+        if participantKey ~= localKey then
+            local participant = participants[participantKey]
+            if participant then
+                table.insert(displayRows, {
+                    name = participant.playerKey,
+                    status = tostring(participant.status or "UNKNOWN"),
+                })
+            end
+        end
+    end
+
+    return displayRows
+end
+
+local function RefreshOverviewPanel(frame)
     local db = SC.db or SoftcoreDB
     local run = db and db.run or {}
     local status = SC:GetPlayerStatus()
+    local partyRows = GetPartyDisplayRows()
 
-    SetLine(frame.status.run, "Run", run.runName or "Softcore Run")
-    SetLine(frame.status.localStatus, "You", status.participantStatus or "NOT_IN_RUN")
-    SetLine(frame.status.partyStatus, "Party", status.partyStatus or "INACTIVE")
-    SetLine(frame.status.started, "Started", FormatTime(run.startTime))
-    SetLine(frame.status.deaths, "Deaths", run.deathCount or 0)
-    SetLine(frame.status.violations, "Active violations", #GetSortedActiveViolations())
-    SetLine(frame.status.runId, "Run ID", run.runId or "none")
+    SetLine(frame.overview.run, "Run", run.runName or "Softcore Run")
+    SetLine(frame.overview.localStatus, "You", status.participantStatus or "NOT_IN_RUN")
+    SetLine(frame.overview.partyStatus, "Party", status.partyStatus or "INACTIVE")
+    SetLine(frame.overview.started, "Started", FormatTime(run.startTime))
+    SetLine(frame.overview.deaths, "Deaths", run.deathCount or 0)
+    SetLine(frame.overview.violations, "Active violations", #GetSortedActiveViolations())
+    SetLine(frame.overview.runId, "Run ID", run.runId or "none")
+
+    frame.overview.partyEmpty:SetShown(#partyRows == 0)
+
+    for index, row in ipairs(frame.overview.partyRows) do
+        local display = partyRows[index]
+        if display then
+            row:Show()
+            row.name:SetText(Trunc(display.name, 38))
+            row.status:SetText(display.status)
+        else
+            row:Hide()
+        end
+    end
 end
 
-local function RefreshStartPanel(frame)
+local function SetRunSetupEnabled(frame, enabled)
+    local start = frame.start
+
+    start.casualBtn:SetEnabled(enabled)
+    start.ironmanBtn:SetEnabled(enabled)
+    start.primaryBtn:SetShown(enabled)
+
+    for _, control in ipairs(start.controls) do
+        if control.Enable and control.Disable then
+            if enabled then control:Enable() else control:Disable() end
+        end
+    end
+
+    if UIDropDownMenu_EnableDropDown and UIDropDownMenu_DisableDropDown then
+        if enabled then
+            UIDropDownMenu_EnableDropDown(start.groupingDropdown)
+            UIDropDownMenu_EnableDropDown(start.gearDropdown)
+        else
+            UIDropDownMenu_DisableDropDown(start.groupingDropdown)
+            UIDropDownMenu_DisableDropDown(start.gearDropdown)
+        end
+    end
+
+    if enabled then
+        start.maxGapBox:Enable()
+    else
+        start.maxGapBox:Disable()
+    end
+end
+
+local function RefreshRunPanel(frame)
     local active = IsActiveRun()
+    local db = SC.db or SoftcoreDB
 
     frame.start.inactiveText:SetShown(not active)
     frame.start.activeText:SetShown(active)
-    frame.start.casualBtn:SetShown(not active)
-    frame.start.ironmanBtn:SetShown(not active)
-    frame.start.primaryBtn:SetShown(not active)
-    frame.start.groupingDropdown:SetShown(not active)
-    frame.start.gearDropdown:SetShown(not active)
-    frame.start.maxGapBox:SetShown(not active)
 
-    for _, control in ipairs(frame.start.controls) do
-        control:SetShown(not active)
+    if active and db and db.run and db.run.ruleset then
+        CopyRulesInto(frame.start.selectedRules, db.run.ruleset)
+    elseif not frame.start.selectedRules then
+        frame.start.selectedRules = SC:GetDefaultRuleset()
     end
+
+    frame.start.groupingDropdown:SetShown(true)
+    frame.start.gearDropdown:SetShown(true)
+    frame.start.maxGapBox:SetShown(true)
+    for _, control in ipairs(frame.start.controls) do
+        control:SetShown(true)
+    end
+    frame.start.stopBtn:SetShown(active)
+    frame.start.modifyBtn:SetShown(active)
+    SetRunSetupEnabled(frame, not active)
 
     if frame.start.RefreshControls then
         frame.start:RefreshControls()
@@ -301,69 +390,11 @@ local function RefreshLogPanel(frame)
     frame.log.events:ScrollToTop()
 end
 
-local function RefreshRulesPanel(frame)
-    local db = SC.db or SoftcoreDB
-    local rules = db and db.run and db.run.ruleset or SC:GetDefaultRuleset()
-    local order = SC.GetRuleOrder and SC:GetRuleOrder() or {}
-
-    for index, row in ipairs(frame.rules.rows) do
-        local ruleName = order[index]
-        if ruleName then
-            row:Show()
-            row:SetText(ruleName .. " = " .. tostring(rules[ruleName]))
-        else
-            row:Hide()
-        end
-    end
-end
-
-local function RefreshPartyPanel(frame)
-    local db = SC.db or SoftcoreDB
-    local syncRows = SC.Sync_GetGroupRows and SC:Sync_GetGroupRows() or {}
-    local participantOrder = db and db.run and db.run.participantOrder or {}
-    local participants = db and db.run and db.run.participants or {}
-    local localKey = SC:GetPlayerKey()
-    local displayRows = {}
-
-    for _, peer in ipairs(syncRows) do
-        table.insert(displayRows, {
-            name = peer.name or peer.playerKey or "Unknown",
-            status = tostring(SC.Sync_GetDisplayStatus and SC:Sync_GetDisplayStatus(peer) or peer.participantStatus or "UNKNOWN"),
-        })
-    end
-
-    for _, participantKey in ipairs(participantOrder) do
-        if participantKey ~= localKey then
-            local participant = participants[participantKey]
-            if participant then
-                table.insert(displayRows, {
-                    name = participant.playerKey,
-                    status = tostring(participant.status or "UNKNOWN"),
-                })
-            end
-        end
-    end
-
-    frame.party.empty:SetShown(#displayRows == 0)
-
-    for index, row in ipairs(frame.party.rows) do
-        local display = displayRows[index]
-
-        if display then
-            row:Show()
-            row.name:SetText(Trunc(display.name, 38))
-            row.status:SetText(display.status)
-        else
-            row:Hide()
-        end
-    end
-end
-
 local function ConfirmStopRun()
     if not StaticPopupDialogs or not StaticPopup_Show then
         SC:ResetRun()
         if SC.masterFrame then
-            SC.masterFrame.activeTab = TAB_START
+            SC.masterFrame.activeTab = TAB_RUN
             SC:MasterUI_Refresh()
         end
         return
@@ -376,7 +407,7 @@ local function ConfirmStopRun()
         OnAccept = function()
             SC:ResetRun()
             if SC.masterFrame then
-                SC.masterFrame.activeTab = TAB_START
+                SC.masterFrame.activeTab = TAB_RUN
                 SC:MasterUI_Refresh()
             end
         end,
@@ -395,26 +426,19 @@ function SC:MasterUI_Refresh()
 
     frame.activeTab = NormalizeTab(frame.activeTab)
 
-    frame.startTab:SetShown(not IsActiveRun())
-    frame.statusTab:SetShown(IsActiveRun())
-
     for tabName, panel in pairs(frame.panels) do
         panel:SetShown(tabName == frame.activeTab)
     end
 
-    frame.startTab:SetEnabled(frame.activeTab ~= TAB_START)
-    frame.statusTab:SetEnabled(frame.activeTab ~= TAB_STATUS)
+    frame.overviewTab:SetEnabled(frame.activeTab ~= TAB_OVERVIEW)
+    frame.runTab:SetEnabled(frame.activeTab ~= TAB_RUN)
     frame.violationsTab:SetEnabled(frame.activeTab ~= TAB_VIOLATIONS)
     frame.logTab:SetEnabled(frame.activeTab ~= TAB_LOG)
-    frame.rulesTab:SetEnabled(frame.activeTab ~= TAB_RULES)
-    frame.partyTab:SetEnabled(frame.activeTab ~= TAB_PARTY)
 
-    RefreshStartPanel(frame)
-    RefreshStatusPanel(frame)
+    RefreshOverviewPanel(frame)
+    RefreshRunPanel(frame)
     RefreshViolationsPanel(frame)
     RefreshLogPanel(frame)
-    RefreshRulesPanel(frame)
-    RefreshPartyPanel(frame)
 end
 
 function SC:OpenMasterWindow(focusTab)
@@ -474,15 +498,13 @@ function SC:OpenMasterWindow(focusTab)
         return tab
     end
 
-    local firstTab = AddTab("startTab", "Start", TAB_START)
-    AddTab("statusTab", "Status", TAB_STATUS)
-    local violationsTab = AddTab("violationsTab", "Violations", TAB_VIOLATIONS, firstTab)
+    local overviewTab = AddTab("overviewTab", "Overview", TAB_OVERVIEW)
+    local runTab = AddTab("runTab", "Run", TAB_RUN, overviewTab)
+    local violationsTab = AddTab("violationsTab", "Violations", TAB_VIOLATIONS, runTab)
     local logTab = AddTab("logTab", "Log", TAB_LOG, violationsTab)
-    local rulesTab = AddTab("rulesTab", "Rules", TAB_RULES, logTab)
-    AddTab("partyTab", "Party", TAB_PARTY, rulesTab)
 
     local startPanel = CreatePanel(frame)
-    frame.panels[TAB_START] = startPanel
+    frame.panels[TAB_RUN] = startPanel
     frame.start = { controls = {}, selectedRules = SC:GetDefaultRuleset() }
     frame.start.selectedRules.dungeonRepeat = "ALLOWED"
     frame.start.selectedRules.instanceWithUnsyncedPlayers = "ALLOWED"
@@ -490,7 +512,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.inactiveText = CreateField(startPanel, 0, 0, 620)
     frame.start.inactiveText:SetText("No active Softcore run.")
     frame.start.activeText = CreateField(startPanel, 0, 0, 620)
-    frame.start.activeText:SetText("A run is already active. Use the Status tab to review or stop it.")
+    frame.start.activeText:SetText("Active run rules are locked. Future rule changes will use a visible amendment flow.")
 
     frame.start.casualBtn = CreateButton(startPanel, "Casual", 86, 22)
     frame.start.casualBtn:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -32)
@@ -612,26 +634,41 @@ function SC:OpenMasterWindow(focusTab)
                 runName = "Softcore Run",
                 ruleset = ruleset,
             })
-            frame.activeTab = TAB_STATUS
+            frame.activeTab = TAB_OVERVIEW
         end
         SC:MasterUI_Refresh()
     end)
     ApplyStartPreset(frame, "CASUAL")
+    frame.start.stopBtn = CreateButton(startPanel, "Stop Run", 100, 24)
+    frame.start.stopBtn:SetPoint("LEFT", frame.start.primaryBtn, "RIGHT", 8, 0)
+    frame.start.stopBtn:SetScript("OnClick", ConfirmStopRun)
+    frame.start.modifyBtn = CreateButton(startPanel, "Modify Rules", 110, 24)
+    frame.start.modifyBtn:SetPoint("LEFT", frame.start.stopBtn, "RIGHT", 8, 0)
+    frame.start.modifyBtn:Disable()
 
-    local statusPanel = CreatePanel(frame)
-    frame.panels[TAB_STATUS] = statusPanel
-    frame.status = {
-        run = CreateField(statusPanel, 0, 0),
-        localStatus = CreateField(statusPanel, 0, -24),
-        partyStatus = CreateField(statusPanel, 0, -48),
-        started = CreateField(statusPanel, 0, -72),
-        deaths = CreateField(statusPanel, 0, -96),
-        violations = CreateField(statusPanel, 0, -120),
-        runId = CreateField(statusPanel, 0, -144),
+    local overviewPanel = CreatePanel(frame)
+    frame.panels[TAB_OVERVIEW] = overviewPanel
+    frame.overview = {
+        run = CreateField(overviewPanel, 0, 0),
+        localStatus = CreateField(overviewPanel, 0, -24),
+        partyStatus = CreateField(overviewPanel, 0, -48),
+        started = CreateField(overviewPanel, 0, -72),
+        deaths = CreateField(overviewPanel, 0, -96),
+        violations = CreateField(overviewPanel, 0, -120),
+        runId = CreateField(overviewPanel, 0, -144),
+        partyRows = {},
     }
-    local stopBtn = CreateButton(statusPanel, "Stop Run", 100, 24)
-    stopBtn:SetPoint("TOPLEFT", statusPanel, "TOPLEFT", 0, -184)
-    stopBtn:SetScript("OnClick", ConfirmStopRun)
+    CreateLabel(overviewPanel, "Party", 0, -188, "GameFontNormal", 620)
+    frame.overview.partyEmpty = CreateField(overviewPanel, 0, -214, 620)
+    frame.overview.partyEmpty:SetText("(no synced party members)")
+    for index = 1, 8 do
+        local row = CreateFrame("Frame", nil, overviewPanel)
+        row:SetSize(620, 22)
+        row:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", 0, -238 - ((index - 1) * 24))
+        row.name = CreateField(row, 0, 0, 360)
+        row.status = CreateField(row, 380, 0, 180)
+        frame.overview.partyRows[index] = row
+    end
 
     local violationsPanel = CreatePanel(frame)
     frame.panels[TAB_VIOLATIONS] = violationsPanel
@@ -664,27 +701,6 @@ function SC:OpenMasterWindow(focusTab)
     frame.log.events:SetScript("OnMouseWheel", function(self, delta)
         if delta > 0 then self:ScrollUp() else self:ScrollDown() end
     end)
-
-    local rulesPanel = CreatePanel(frame)
-    frame.panels[TAB_RULES] = rulesPanel
-    frame.rules = { rows = {} }
-    for index = 1, 24 do
-        frame.rules.rows[index] = CreateField(rulesPanel, 0, -((index - 1) * 17), 620)
-    end
-
-    local partyPanel = CreatePanel(frame)
-    frame.panels[TAB_PARTY] = partyPanel
-    frame.party = { rows = {} }
-    frame.party.empty = CreateField(partyPanel, 0, 0, 620)
-    frame.party.empty:SetText("(no synced party members)")
-    for index = 1, 12 do
-        local row = CreateFrame("Frame", nil, partyPanel)
-        row:SetSize(620, 22)
-        row:SetPoint("TOPLEFT", partyPanel, "TOPLEFT", 0, -24 - ((index - 1) * 24))
-        row.name = CreateField(row, 0, 0, 360)
-        row.status = CreateField(row, 380, 0, 180)
-        frame.party.rows[index] = row
-    end
 
     local bottomClose = CreateButton(frame, "Close", 80, 24)
     bottomClose:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -18, 18)
