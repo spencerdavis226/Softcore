@@ -268,7 +268,6 @@ Only after core behavior is stable:
 - compact/expanded views
 - better styling
 - better colors
-- sound toggles
 - slash command help
 - README cleanup
 - changelog
