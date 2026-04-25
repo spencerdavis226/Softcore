@@ -33,7 +33,7 @@ local ECONOMY_RULES = {
 
 local MOVEMENT_RULES = {
     { label = "Allow mounts", key = "mounts" },
-    { label = "Allow flying (not flight paths)", key = "flying" },
+    { label = "Allow Flying Mounts (incl. Druid form)", key = "flying" },
 }
 
 local EDITABLE_RULE_ORDER = {
@@ -313,7 +313,7 @@ local RULE_DISPLAY_NAMES = {
     warbandBank    = "Warband Bank",
     guildBank      = "Guild Bank",
     mounts         = "Mounts",
-    flying         = "Flying (not flight paths)",
+    flying         = "Flying Mounts (incl. Druid form)",
     gearQuality    = "Gear Limit",
     heirlooms      = "Heirlooms",
     maxLevelGap    = "Level Gap Enforcement",
@@ -365,6 +365,17 @@ local function GetSortedActiveViolations()
     return result
 end
 
+local function CountAllViolations(playerKey)
+    local db = SC.db or SoftcoreDB
+    local count = 0
+    for _, v in ipairs(db and db.violations or {}) do
+        if v.playerKey == playerKey then
+            count = count + 1
+        end
+    end
+    return count
+end
+
 local function GetPartyDisplayRows()
     local db = SC.db or SoftcoreDB
     local syncRows = SC.Sync_GetGroupRows and SC:Sync_GetGroupRows() or {}
@@ -379,6 +390,7 @@ local function GetPartyDisplayRows()
         name = (localName or "You") .. " *",
         level = db and db.character and db.character.level,
         status = localStatus.participantStatus or "NOT_IN_RUN",
+        totalViolations = CountAllViolations(localKey),
     })
 
     for _, peer in ipairs(syncRows) do
@@ -396,6 +408,7 @@ local function GetPartyDisplayRows()
             name = peer.name or peer.playerKey or "Unknown",
             level = peer.level,
             status = displayStatus,
+            totalViolations = CountAllViolations(peer.playerKey or ""),
         })
     end
 
@@ -407,6 +420,7 @@ local function GetPartyDisplayRows()
                     name = participant.playerKey,
                     level = participant.currentLevel,
                     status = tostring(participant.status or "UNKNOWN"),
+                    totalViolations = CountAllViolations(participantKey),
                 })
             end
         end
@@ -457,6 +471,8 @@ local function RefreshOverviewPanel(frame)
             row.name:SetText(Trunc(display.name, 24))
             row.level:SetText(display.level and tostring(display.level) or "")
             row.status:SetText(ColorStatus(display.status))
+            local total = display.totalViolations or 0
+            row.total:SetText(total > 0 and "|cfffbbf24" .. total .. "|r" or "0")
         else
             row:Hide()
         end
@@ -1091,18 +1107,20 @@ function SC:OpenMasterWindow(focusTab)
             Print("resync requested.")
         end
     end)
-    CreateLabel(overviewPanel, "Name", 0, -210, "GameFontNormalSmall", 200)
-    CreateLabel(overviewPanel, "Lvl", 260, -210, "GameFontNormalSmall", 40)
-    CreateLabel(overviewPanel, "Status", 310, -210, "GameFontNormalSmall", 280)
+    CreateLabel(overviewPanel, "Name",  0,   -210, "GameFontNormalSmall", 190)
+    CreateLabel(overviewPanel, "Lvl",   198, -210, "GameFontNormalSmall", 36)
+    CreateLabel(overviewPanel, "Status",238, -210, "GameFontNormalSmall", 178)
+    CreateLabel(overviewPanel, "Total", 420, -210, "GameFontNormalSmall", 80)
     frame.overview.partyEmpty = CreateField(overviewPanel, 0, -232, 620)
     frame.overview.partyEmpty:SetText("(no synced party members)")
     for index = 1, 8 do
         local row = CreateFrame("Frame", nil, overviewPanel)
         row:SetSize(620, 22)
         row:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", 0, -256 - ((index - 1) * 24))
-        row.name = CreateField(row, 0, 0, 256)
-        row.level = CreateField(row, 260, 0, 40)
-        row.status = CreateField(row, 310, 0, 280)
+        row.name  = CreateField(row, 0,   0, 190)
+        row.level = CreateField(row, 198, 0, 36)
+        row.status = CreateField(row, 238, 0, 178)
+        row.total  = CreateField(row, 420, 0, 80)
         frame.overview.partyRows[index] = row
     end
 
