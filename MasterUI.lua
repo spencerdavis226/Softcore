@@ -17,7 +17,7 @@ local GROUPING_OPTIONS = {
 
 local GEAR_OPTIONS = {
     { text = "Any gear", value = "ALLOWED" },
-    { text = "White/gray only", value = "WHITE_GRAY_ONLY" },
+    { text = "White/grey only", value = "WHITE_GRAY_ONLY" },
     { text = "Green or lower", value = "GREEN_OR_LOWER" },
     { text = "Blue or lower", value = "BLUE_OR_LOWER" },
 }
@@ -33,7 +33,7 @@ local ECONOMY_RULES = {
 
 local MOVEMENT_RULES = {
     { label = "Allow mounts", key = "mounts" },
-    { label = "Allow flying", key = "flying" },
+    { label = "Allow flying (not flight paths)", key = "flying" },
 }
 
 local EDITABLE_RULE_ORDER = {
@@ -313,7 +313,7 @@ local RULE_DISPLAY_NAMES = {
     warbandBank    = "Warband Bank",
     guildBank      = "Guild Bank",
     mounts         = "Mounts",
-    flying         = "Flying",
+    flying         = "Flying (not flight paths)",
     gearQuality    = "Gear Limit",
     heirlooms      = "Heirlooms",
     maxLevelGap    = "Level Gap Enforcement",
@@ -922,7 +922,14 @@ function SC:OpenMasterWindow(focusTab)
 
         UIDropDownMenu_SetText(self.groupingDropdown, GetOptionText(GROUPING_OPTIONS, self.selectedRules.groupingMode))
         UIDropDownMenu_SetText(self.gearDropdown, GetOptionText(GEAR_OPTIONS, self.selectedRules.gearQuality))
-        self.maxGapCheck:SetChecked(self.selectedRules.maxLevelGap ~= "ALLOWED")
+        local isSolo = self.selectedRules.groupingMode == "SOLO_SELF_FOUND"
+        if isSolo then
+            self.selectedRules.maxLevelGap = "ALLOWED"
+        end
+        self.maxGapCheck:SetChecked(not isSolo and self.selectedRules.maxLevelGap ~= "ALLOWED")
+        self.maxGapCheck:SetEnabled(not isSolo)
+        self.maxGapCheck.label:SetFontObject(isSolo and GameFontDisableSmall or GameFontNormalSmall)
+        if isSolo then self.maxGapBox:Disable() end
         self.maxGapBox:SetText(tostring(self.selectedRules.maxLevelGapValue or 3))
 
         for _, checkbox in ipairs(self.controls) do
