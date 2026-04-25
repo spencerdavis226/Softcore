@@ -309,7 +309,9 @@ function SC:ProposeRuleAmendment(newRules, reason)
         amendmentId = amendment.id,
     })
 
-    if self.Sync_SendProposal then
+    if self.Sync_SendAmendmentProposal then
+        self:Sync_SendAmendmentProposal(amendment)
+    elseif self.Sync_SendProposal then
         self:Sync_SendProposal("AMENDMENT_PROPOSE", amendment.id)
     end
 
@@ -402,6 +404,127 @@ function SC:ApplyRuleAmendment(amendmentId)
     end
 
     return nil
+end
+
+function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
+    local db = GetDB()
+    if not db.run or not db.run.active then return end
+    if payload.runId and db.run.runId and payload.runId ~= db.run.runId then return end
+
+    local amendmentId = payload.amendmentId or payload.proposalId
+    if not amendmentId then return end
+
+    for _, existing in ipairs(db.ruleAmendments) do
+        if existing.id == amendmentId then return end
+    end
+
+    local newRules = self.DeserializePartialRules and self:DeserializePartialRules(payload.newRules) or {}
+    local previousRules = self.DeserializePartialRules and self:DeserializePartialRules(payload.previousRules) or {}
+
+    local amendment = {
+        id = amendmentId,
+        runId = payload.runId or db.run.runId,
+        newRules = newRules,
+        previousRules = previousRules,
+        reason = payload.reason or "Rule amendment proposed.",
+        status = "PENDING",
+        proposedAt = tonumber(payload.proposedAt) or time(),
+        proposedBy = payload.proposedBy or senderKey,
+        remote = true,
+    }
+
+    table.insert(db.ruleAmendments, amendment)
+    self:AddLog("RULE_AMENDMENT_RECEIVED", "Rule amendment proposed by " .. tostring(senderKey or "?"), {
+        amendmentId = amendmentId,
+    })
+
+    if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+    if self.HUD_Refresh then self:HUD_Refresh() end
+end
+
+function SC:ReceiveRuleAmendmentResponse(payload, senderKey)
+    local db = GetDB()
+    local amendmentId = payload.amendmentId or payload.proposalId
+    if not amendmentId then return end
+
+    local localKey = self:GetPlayerKey()
+
+    for _, amendment in ipairs(db.ruleAmendments) do
+        if amendment.id == amendmentId and amendment.status == "PENDING" then
+            if amendment.proposedBy ~= localKey then return end
+
+            if payload.type == "AMENDMENT_ACCEPT" then
+                amendment.acceptances = amendment.acceptances or {}
+                amendment.acceptances[senderKey] = true
+
+                local syncRows = self.Sync_GetGroupRows and self:Sync_GetGroupRows() or {}
+                local allAccepted = true
+                for _, peer in ipairs(syncRows) do
+                    if peer.playerKey and not amendment.acceptances[peer.playerKey] then
+                        allAccepted = false
+                        break
+                    end
+                end
+
+                if allAccepted then
+                    amendment.status = "ACCEPTED"
+                    amendment.acceptedAt = time()
+                    self:ApplyRuleAmendment(amendmentId)
+                    if self.Sync_SendAmendmentApplied then
+                        self:Sync_SendAmendmentApplied(amendment)
+                    end
+                    DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r Rule amendment accepted by all — applied.")
+                end
+
+            elseif payload.type == "AMENDMENT_DECLINE" then
+                amendment.status = "DECLINED"
+                amendment.declinedAt = time()
+                amendment.declinedBy = senderKey
+                if self.Sync_SendAmendmentCancelled then
+                    self:Sync_SendAmendmentCancelled(amendment)
+                end
+                DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r |cfffbbf24Rule amendment declined by " .. tostring(senderKey or "?") .. ".|r")
+            end
+
+            if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+            return
+        end
+    end
+end
+
+function SC:ReceiveRuleAmendmentApplied(payload)
+    local db = GetDB()
+    local amendmentId = payload.amendmentId
+    if not amendmentId then return end
+
+    for _, amendment in ipairs(db.ruleAmendments) do
+        if amendment.id == amendmentId and amendment.status == "PENDING" then
+            amendment.status = "ACCEPTED"
+            amendment.acceptedAt = time()
+            self:ApplyRuleAmendment(amendmentId)
+            DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r Rule amendment applied.")
+            break
+        end
+    end
+
+    if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+end
+
+function SC:ReceiveRuleAmendmentCancelled(payload)
+    local db = GetDB()
+    local amendmentId = payload.amendmentId
+    if not amendmentId then return end
+
+    for _, amendment in ipairs(db.ruleAmendments) do
+        if amendment.id == amendmentId and amendment.status == "PENDING" then
+            amendment.status = "DECLINED"
+            amendment.declinedAt = time()
+            break
+        end
+    end
+
+    DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r |cfffbbf24Rule amendment was cancelled.|r")
+    if self.MasterUI_Refresh then self:MasterUI_Refresh() end
 end
 
 function SC:GetRuleOrder()

@@ -304,6 +304,49 @@ local function FormatRuleChangeSummary(previousRules, changes)
     return Trunc(table.concat(parts, "  |  "), 118)
 end
 
+local RULE_DISPLAY_NAMES = {
+    groupingMode   = "Grouping Mode",
+    auctionHouse   = "Auction House",
+    mailbox        = "Mailbox",
+    trade          = "Trade",
+    bank           = "Bank",
+    warbandBank    = "Warband Bank",
+    guildBank      = "Guild Bank",
+    mounts         = "Mounts",
+    flying         = "Flying",
+    gearQuality    = "Gear Limit",
+    heirlooms      = "Heirlooms",
+    maxLevelGap    = "Level Gap Enforcement",
+    maxLevelGapValue = "Max Level Gap",
+    dungeonRepeat  = "Repeated Dungeons",
+}
+
+local function FriendlyRuleValue(ruleName, value)
+    if value == nil then return "|cff9ca3af?|r" end
+    if ruleName == "groupingMode" then
+        if value == "SYNCED_GROUP_ALLOWED" then return "grouping" end
+        if value == "SOLO_SELF_FOUND" then return "solo only" end
+    end
+    if ruleName == "gearQuality" then
+        return GetOptionText(GEAR_OPTIONS, value)
+    end
+    if ruleName == "maxLevelGapValue" then
+        return tostring(value)
+    end
+    if value == "ALLOWED" or value == "LOG_ONLY" then return "allowed" end
+    return "disallowed"
+end
+
+local function GetPendingAmendment()
+    local db = SC.db or SoftcoreDB
+    for _, amendment in ipairs(db and db.ruleAmendments or {}) do
+        if amendment.status == "PENDING" then
+            return amendment
+        end
+    end
+    return nil
+end
+
 local function GetSortedActiveViolations()
     local db = SC.db or SoftcoreDB
     local source = (db and db.violations) or {}
@@ -449,10 +492,107 @@ local function SetRunSetupEnabled(frame, enabled)
     end
 end
 
+local function RefreshAmendmentPanel(frame, amendment, isProposer)
+    local panel = frame.start.amendmentPanel
+    local localShortName = string.match(tostring(amendment.proposedBy or "?"), "^([^-]+)")
+
+    if isProposer then
+        panel.title:SetText("|cfffbbf24Pending rule amendment|r — waiting for party")
+        panel.proposer:SetText("You proposed this amendment.")
+    else
+        panel.title:SetText("|cfffbbf24Pending rule amendment|r")
+        panel.proposer:SetText("Proposed by: " .. (localShortName or "?"))
+    end
+    panel.reason:SetText("Reason: " .. Trunc(amendment.reason or "", 90))
+
+    local changeCount = 0
+    for _, ruleName in ipairs(EDITABLE_RULE_ORDER) do
+        if amendment.newRules[ruleName] ~= nil then
+            changeCount = changeCount + 1
+            if changeCount <= 8 then
+                local oldVal = amendment.previousRules[ruleName]
+                local newVal = amendment.newRules[ruleName]
+                local label = RULE_DISPLAY_NAMES[ruleName] or ruleName
+                panel.changeLines[changeCount]:SetText(
+                    "• " .. label .. ": " .. FriendlyRuleValue(ruleName, oldVal) .. " → " .. FriendlyRuleValue(ruleName, newVal)
+                )
+            end
+        end
+    end
+    for i = changeCount + 1, 8 do
+        panel.changeLines[i]:SetText("")
+    end
+
+    local contentH = 72 + (math.max(1, changeCount) * 16) + 42
+    panel:SetHeight(contentH)
+
+    panel.acceptBtn:SetShown(not isProposer)
+    panel.declineBtn:SetShown(not isProposer)
+    panel.cancelBtn:SetShown(isProposer)
+    panel.waitText:SetShown(isProposer)
+
+    if not isProposer then
+        panel.acceptBtn:SetScript("OnClick", function()
+            if SC.AcceptRuleAmendment then SC:AcceptRuleAmendment(amendment.id) end
+            SC:MasterUI_Refresh()
+        end)
+        panel.declineBtn:SetScript("OnClick", function()
+            if SC.DeclineRuleAmendment then SC:DeclineRuleAmendment(amendment.id) end
+            SC:MasterUI_Refresh()
+        end)
+    else
+        panel.cancelBtn:SetScript("OnClick", function()
+            local db = SC.db or SoftcoreDB
+            for _, a in ipairs(db and db.ruleAmendments or {}) do
+                if a.id == amendment.id and a.status == "PENDING" then
+                    a.status = "DECLINED"
+                    a.declinedAt = time()
+                    a.declinedBy = SC:GetPlayerKey()
+                    if SC.Sync_SendAmendmentCancelled then SC:Sync_SendAmendmentCancelled(a) end
+                    break
+                end
+            end
+            frame.start.isModifyingRules = false
+            frame.start.draftBaseRules = nil
+            SC:MasterUI_Refresh()
+        end)
+    end
+end
+
+local function HideAllRunControls(frame)
+    frame.start.inactiveText:Hide()
+    frame.start.activeText:Hide()
+    frame.start.casualBtn:Hide()
+    frame.start.ironmanBtn:Hide()
+    for _, control in ipairs(frame.start.controls) do control:Hide() end
+    frame.start.groupingDropdown:Hide()
+    frame.start.gearDropdown:Hide()
+    frame.start.maxGapBox:Hide()
+    frame.start.primaryBtn:Hide()
+    frame.start.stopBtn:Hide()
+    frame.start.modifyBtn:Hide()
+    frame.start.applyChangesBtn:Hide()
+    frame.start.cancelChangesBtn:Hide()
+    frame.start.changeSummary:Hide()
+end
+
 local function RefreshRunPanel(frame)
     local active = IsActiveRun()
     local db = SC.db or SoftcoreDB
     local modifying = active and frame.start.isModifyingRules
+
+    -- Amendment panel takes over the whole tab when one is pending
+    local pendingAmendment = GetPendingAmendment()
+    if pendingAmendment and frame.start.amendmentPanel then
+        HideAllRunControls(frame)
+        local localKey = SC:GetPlayerKey()
+        frame.start.amendmentPanel:Show()
+        RefreshAmendmentPanel(frame, pendingAmendment, pendingAmendment.proposedBy == localKey)
+        return
+    end
+    if frame.start.amendmentPanel then
+        frame.start.amendmentPanel:Hide()
+    end
 
     frame.start.inactiveText:SetShown(not active)
     frame.start.activeText:SetShown(active)
@@ -481,7 +621,13 @@ local function RefreshRunPanel(frame)
 
     if active then
         if modifying then
-            frame.start.activeText:SetText("Draft rule amendment. Changes apply going forward and will be logged.")
+            if IsInGroup() then
+                frame.start.applyChangesBtn:SetText("Propose to Party")
+                frame.start.activeText:SetText("Draft rule amendment — will be sent to all party members for approval.")
+            else
+                frame.start.applyChangesBtn:SetText("Apply Changes")
+                frame.start.activeText:SetText("Draft rule amendment. Changes apply going forward and will be logged.")
+            end
         else
             frame.start.activeText:SetText("Active run rules are locked. Use Modify Rules to draft a logged amendment.")
         end
@@ -843,19 +989,25 @@ function SC:OpenMasterWindow(focusTab)
         end
 
         if IsInGroup() then
-            Print("group rule amendment proposals are next; changes were not applied.")
-            return
-        end
-
-        if SC.ProposeRuleAmendment and SC.AcceptRuleAmendment and SC.ApplyRuleAmendment then
-            local amendment = SC:ProposeRuleAmendment(changes, "Run rules modified from the Run tab.")
-            SC:AcceptRuleAmendment(amendment.id)
-            SC:ApplyRuleAmendment(amendment.id)
-            frame.start.isModifyingRules = false
-            frame.start.draftBaseRules = nil
-            Print("rule changes applied.")
+            if SC.ProposeRuleAmendment then
+                SC:ProposeRuleAmendment(changes, "Run rules modified from the Run tab.")
+                frame.start.isModifyingRules = false
+                frame.start.draftBaseRules = nil
+                Print("rule amendment proposed to party.")
+            else
+                Print("rule amendment handling is not loaded.")
+            end
         else
-            Print("rule amendment handling is not loaded.")
+            if SC.ProposeRuleAmendment and SC.AcceptRuleAmendment and SC.ApplyRuleAmendment then
+                local amendment = SC:ProposeRuleAmendment(changes, "Run rules modified from the Run tab.")
+                SC:AcceptRuleAmendment(amendment.id)
+                SC:ApplyRuleAmendment(amendment.id)
+                frame.start.isModifyingRules = false
+                frame.start.draftBaseRules = nil
+                Print("rule changes applied.")
+            else
+                Print("rule amendment handling is not loaded.")
+            end
         end
 
         SC:MasterUI_Refresh()
@@ -868,6 +1020,40 @@ function SC:OpenMasterWindow(focusTab)
         SC:MasterUI_Refresh()
     end)
     frame.start.changeSummary = CreateField(startPanel, 0, -404, 640)
+
+    -- Amendment proposal overlay (replaces rule controls when a pending amendment exists)
+    local amendPanel = CreateFrame("Frame", nil, startPanel, "BackdropTemplate")
+    amendPanel:SetSize(640, 200)
+    amendPanel:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, 0)
+    amendPanel:EnableMouse(true)
+    amendPanel:SetBackdrop({
+        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true, tileSize = 16, edgeSize = 8,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    amendPanel:SetBackdropColor(0.05, 0.05, 0, 0.95)
+    amendPanel:Hide()
+
+    amendPanel.title   = CreateField(amendPanel, 10, -10, 620)
+    amendPanel.title:SetFontObject(GameFontNormal)
+    amendPanel.proposer = CreateField(amendPanel, 10, -30, 620)
+    amendPanel.reason   = CreateField(amendPanel, 10, -48, 620)
+    amendPanel.changeLines = {}
+    for i = 1, 8 do
+        amendPanel.changeLines[i] = CreateField(amendPanel, 10, -64 - (i - 1) * 16, 620)
+    end
+    amendPanel.acceptBtn  = CreateButton(amendPanel, "Accept",          90, 24)
+    amendPanel.declineBtn = CreateButton(amendPanel, "Decline",         90, 24)
+    amendPanel.cancelBtn  = CreateButton(amendPanel, "Cancel Proposal", 120, 24)
+    amendPanel.acceptBtn:SetPoint("BOTTOMLEFT",  amendPanel, "BOTTOMLEFT", 10, 10)
+    amendPanel.declineBtn:SetPoint("LEFT", amendPanel.acceptBtn, "RIGHT", 8, 0)
+    amendPanel.cancelBtn:SetPoint("BOTTOMLEFT",  amendPanel, "BOTTOMLEFT", 10, 10)
+    amendPanel.waitText = CreateField(amendPanel, 10, -999, 620)
+    amendPanel.waitText:SetPoint("BOTTOMLEFT", amendPanel, "BOTTOMLEFT", 10, 42)
+    amendPanel.waitText:SetText("|cfffbbf24Waiting for party members to accept...|r")
+
+    frame.start.amendmentPanel = amendPanel
 
     local overviewPanel = CreatePanel(frame)
     frame.panels[TAB_OVERVIEW] = overviewPanel

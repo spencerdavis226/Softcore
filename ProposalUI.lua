@@ -126,6 +126,35 @@ function SC:SerializeRuleset(ruleset)
     return table.concat(parts, PAIR_SEPARATOR)
 end
 
+function SC:SerializePartialRules(rules)
+    local parts = {}
+    for key, value in pairs(rules or {}) do
+        table.insert(parts, Escape(key) .. "=" .. Escape(value))
+    end
+    return table.concat(parts, PAIR_SEPARATOR)
+end
+
+function SC:DeserializePartialRules(serialized)
+    local rules = {}
+    for pair in string.gmatch(serialized or "", "([^" .. PAIR_SEPARATOR .. "]+)") do
+        local key, value = string.match(pair, "^([^=]+)=(.*)$")
+        if key then
+            key = Unescape(key)
+            value = Unescape(value)
+            if value == "true" then
+                rules[key] = true
+            elseif value == "false" then
+                rules[key] = false
+            elseif key == "maxLevelGapValue" and tonumber(value) then
+                rules[key] = tonumber(value)
+            else
+                rules[key] = value
+            end
+        end
+    end
+    return rules
+end
+
 function SC:DeserializeRuleset(serialized)
     local ruleset = self:GetDefaultRuleset()
 

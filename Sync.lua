@@ -445,7 +445,37 @@ end
 function SC:Sync_SendProposal(proposalType, proposalId)
     SendPayload({
         type = proposalType,
+        amendmentId = proposalId,
         proposalId = proposalId,
+    })
+end
+
+function SC:Sync_SendAmendmentProposal(amendment)
+    SendPayload({
+        type = "AMENDMENT_PROPOSE",
+        amendmentId = amendment.id,
+        runId = amendment.runId,
+        newRules = self.SerializePartialRules and self:SerializePartialRules(amendment.newRules) or "",
+        previousRules = self.SerializePartialRules and self:SerializePartialRules(amendment.previousRules) or "",
+        reason = amendment.reason or "",
+        proposedBy = amendment.proposedBy or "",
+        proposedAt = tostring(amendment.proposedAt or time()),
+    })
+end
+
+function SC:Sync_SendAmendmentApplied(amendment)
+    SendPayload({
+        type = "AMENDMENT_APPLIED",
+        amendmentId = amendment.id,
+        runId = amendment.runId,
+    })
+end
+
+function SC:Sync_SendAmendmentCancelled(amendment)
+    SendPayload({
+        type = "AMENDMENT_CANCELLED",
+        amendmentId = amendment.id,
+        runId = amendment.runId,
     })
 end
 
@@ -656,11 +686,31 @@ function SC:Sync_HandleMessage(message, sender)
         return
     end
 
-    if payload.type == "AMENDMENT_PROPOSE" or payload.type == "AMENDMENT_ACCEPT" or payload.type == "AMENDMENT_DECLINE" or payload.type == "VIOLATION_CLEAR" then
-        self:AddLog("SYNC_" .. payload.type, "Received " .. payload.type .. " from " .. key, {
-            playerKey = key,
-            proposalId = payload.proposalId,
-        })
+    if payload.type == "AMENDMENT_PROPOSE" then
+        if self.ReceiveRuleAmendmentProposal then
+            self:ReceiveRuleAmendmentProposal(payload, key)
+        end
+        return
+    end
+
+    if payload.type == "AMENDMENT_ACCEPT" or payload.type == "AMENDMENT_DECLINE" then
+        if self.ReceiveRuleAmendmentResponse then
+            self:ReceiveRuleAmendmentResponse(payload, key)
+        end
+        return
+    end
+
+    if payload.type == "AMENDMENT_APPLIED" then
+        if self.ReceiveRuleAmendmentApplied then
+            self:ReceiveRuleAmendmentApplied(payload, key)
+        end
+        return
+    end
+
+    if payload.type == "AMENDMENT_CANCELLED" then
+        if self.ReceiveRuleAmendmentCancelled then
+            self:ReceiveRuleAmendmentCancelled(payload, key)
+        end
         return
     end
 
