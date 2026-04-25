@@ -14,3 +14,4 @@ Sync.lua
 StartRunUI.lua
 ProposalUI.lua
 LogUI.lua
+MasterUI.lua

@@ -343,6 +343,10 @@ function SC:AddLog(kind, message, extra)
         self:UI_Update()
     end
 
+    if self.MasterUI_Refresh then
+        self:MasterUI_Refresh()
+    end
+
     return entry
 end
 
@@ -1077,25 +1081,28 @@ function SC:PrintLog()
 end
 
 function SC:PrintHelp()
+    Print("/sc - open the Softcore menu")
+    Print("/sc status - open the Status tab")
     Print("/sc start - start a local run")
-    Print("/sc status - print current run status")
+    Print("/sc status chat - print current run status")
     Print("/sc reset confirm - reset the local run")
-    Print("/sc log - open the Log GUI (Events tab)")
+    Print("/sc log - open the Log tab")
     Print("/sc log chat - print recent events to chat")
-    Print("/sc violations - open the Log GUI (Violations tab)")
+    Print("/sc violations - open the Violations tab")
     Print("/sc gear - print gear rules and invalid equipped items")
     Print("/sc dungeons - print dungeon entries for this run")
-    Print("/sc roster - print run participants")
-    Print("/sc participants - print run participants")
+    Print("/sc roster - open the Party tab")
+    Print("/sc participants - open the Party tab")
     Print("/sc add Player-Realm - add a pending participant")
     Print("/sc retire - retire this character without failing")
-    Print("/sc rules - print current ruleset")
+    Print("/sc rules - open the Rules tab")
+    Print("/sc rules chat - print current ruleset")
     Print("/sc rule ruleName value - change a rule locally")
-    Print("/sc run - print run metadata")
+    Print("/sc run - open the Status tab")
     Print("/sc conflicts - print sync conflicts")
     Print("/sc resync - request full state from party")
     Print("/sc access - print storage and economy access rules")
-    Print("/sc new - open the Start New Run window")
+    Print("/sc new - open the Start tab")
     Print("/sc proposal - show the pending proposal")
     Print("/sc accept - accept the pending proposal")
     Print("/sc decline - decline the pending proposal")
@@ -1108,16 +1115,31 @@ function SC:HandleSlash(input)
     local command, rest = string.match(text, "^(%S*)%s*(.-)$")
     command = string.lower(command or "")
 
-    if command == "start" then
+    if command == "" or command == "menu" then
+        if self.OpenMasterWindow then
+            self:OpenMasterWindow()
+        else
+            self:PrintStatus()
+        end
+    elseif command == "start" then
         self:StartRun()
     elseif command == "new" then
-        if self.OpenStartRunWindow then
+        if self.OpenMasterWindow then
+            self:OpenMasterWindow("START")
+        elseif self.OpenStartRunWindow then
             self:OpenStartRunWindow()
         else
             Print("start run UI is not loaded.")
         end
-    elseif command == "status" or command == "" then
-        self:PrintStatus()
+    elseif command == "status" then
+        local sub = string.lower(strtrim(rest or ""))
+        if sub == "chat" or sub == "print" then
+            self:PrintStatus()
+        elseif self.OpenMasterWindow then
+            self:OpenMasterWindow("STATUS")
+        else
+            self:PrintStatus()
+        end
     elseif command == "reset" then
         if string.lower(rest or "") == "confirm" then
             self:ResetRun()
@@ -1128,13 +1150,17 @@ function SC:HandleSlash(input)
         local sub = string.lower(strtrim(rest or ""))
         if sub == "chat" or sub == "print" then
             self:PrintLog()
+        elseif self.OpenMasterWindow then
+            self:OpenMasterWindow("LOG")
         elseif self.OpenLogWindow then
             self:OpenLogWindow("EVENTS")
         else
             self:PrintLog()
         end
     elseif command == "violations" then
-        if self.OpenLogWindow then
+        if self.OpenMasterWindow then
+            self:OpenMasterWindow("VIOLATIONS")
+        elseif self.OpenLogWindow then
             self:OpenLogWindow("VIOLATIONS")
         else
             Print("log UI is not loaded.")
@@ -1152,9 +1178,23 @@ function SC:HandleSlash(input)
             Print("dungeon tracking is not loaded.")
         end
     elseif command == "roster" or command == "participants" then
-        self:PrintRoster()
+        local sub = string.lower(strtrim(rest or ""))
+        if sub == "chat" or sub == "print" then
+            self:PrintRoster()
+        elseif self.OpenMasterWindow then
+            self:OpenMasterWindow("PARTY")
+        else
+            self:PrintRoster()
+        end
     elseif command == "run" then
-        self:PrintRun()
+        local sub = string.lower(strtrim(rest or ""))
+        if sub == "chat" or sub == "print" then
+            self:PrintRun()
+        elseif self.OpenMasterWindow then
+            self:OpenMasterWindow("STATUS")
+        else
+            self:PrintRun()
+        end
     elseif command == "conflicts" then
         self:PrintConflicts()
     elseif command == "resync" then
@@ -1165,7 +1205,14 @@ function SC:HandleSlash(input)
             Print("sync is not ready yet.")
         end
     elseif command == "rules" then
-        self:PrintRules()
+        local sub = string.lower(strtrim(rest or ""))
+        if sub == "chat" or sub == "print" then
+            self:PrintRules()
+        elseif self.OpenMasterWindow then
+            self:OpenMasterWindow("RULES")
+        else
+            self:PrintRules()
+        end
     elseif command == "access" then
         self:PrintAccessRules()
     elseif command == "proposal" then

@@ -14,23 +14,23 @@ Version 0.4.0 tracks your local run, applies structured rules, syncs resilient s
 
 ## Slash Commands
 
-- `/softcore` or `/sc` - show current status.
+- `/softcore` or `/sc` - open the Softcore menu.
 - `/sc start` - start a new local run.
-- `/sc new` - open the Start New Run window.
-- `/sc status` - print current run status.
+- `/sc new` - open the Start tab.
+- `/sc status` - open the Status tab. Use `/sc status chat` to print current run status.
 - `/sc reset confirm` - reset the local run.
-- `/sc log` - open the Log GUI (Events tab). Use `/sc log chat` to print to chat instead.
-- `/sc violations` - open the Log GUI on the Violations tab.
+- `/sc log` - open the Log tab. Use `/sc log chat` to print to chat instead.
+- `/sc violations` - open the Violations tab.
 - `/sc gear` - print gear rules and invalid equipped items.
 - `/sc dungeons` - print dungeon entries for the current run.
-- `/sc roster` - print tracked run participants.
+- `/sc roster` - open the Party tab. Use `/sc roster chat` to print tracked run participants.
 - `/sc add Player-Realm` - add a pending participant until the v0.3 join UI exists.
 - `/sc retire` - retire this character without marking it failed.
-- `/sc rules` - print the current ruleset.
+- `/sc rules` - open the Rules tab. Use `/sc rules chat` to print the current ruleset.
 - `/sc rule mailbox ALLOWED` - change a rule locally and log a prospective amendment.
 - `/sc resync` - request full run state from party members.
-- `/sc participants` - print tracked run participants.
-- `/sc run` - print run metadata.
+- `/sc participants` - open the Party tab.
+- `/sc run` - open the Status tab. Use `/sc run chat` to print run metadata.
 - `/sc conflicts` - print detected sync conflicts.
 - `/sc access` - print storage and economy access rules.
 - `/sc propose` - open/propose a new group run.
@@ -57,6 +57,19 @@ Version 0.4.0 tracks your local run, applies structured rules, syncs resilient s
 - Level changes and zone changes.
 - Violations for disallowed trade, mail, auction house, storage, movement, gear, or dungeon actions.
 - Death is always permanent for the character that died.
+
+## Softcore Menu
+
+Use `/sc` to open the main menu.
+
+Tabs are:
+
+- **Start** when no run is active.
+- **Status** when a run is active, including a confirmed Stop Run action.
+- **Violations** for active clearable issues.
+- **Log** for recent audit history.
+- **Rules** for the current run rules.
+- **Party** for participants and synced party status.
 
 ## Group Sync
 
@@ -91,11 +104,11 @@ The primary button at the bottom of the window is dynamic:
 
 A proposed run does not start for any player until all current party members accept. If any member declines, the proposal is cancelled for everyone. All party members must be running Softcore and synced before the run can begin. Use `/sc accept` or `/sc decline` as slash-command fallbacks.
 
-Disallowed actions create violations. Event violations, like opening a disallowed mailbox, can be reviewed and cleared in the Log GUI (`/sc violations`). State violations, like invalid equipped gear, remain active until the condition is fixed and then cleared. Compatibility blockers — unsynced party members, rule mismatches, or a level gap above the allowed maximum — block party progress but do not fail any character and are not violations.
+Disallowed actions create violations. Event violations, like opening a disallowed mailbox, can be reviewed and cleared from the Violations tab (`/sc violations`). State violations, like invalid equipped gear, remain active until the condition is fixed and then cleared. Compatibility blockers — unsynced party members, rule mismatches, or a level gap above the allowed maximum — block party progress but do not fail any character and are not violations.
 
-## Violations and the Log GUI
+## Violations and Log
 
-Use `/sc log` to open the Log GUI. The **Events** tab shows a scrollable history of recorded events. The **Violations** tab shows active violations.
+Use `/sc log` to open the Log tab in the Softcore menu. Use `/sc violations` to open the active Violations tab.
 
 Violations are never deleted. Clicking **Clear** marks a violation `CLEARED`, records who cleared it, and adds an audit log entry.
 
@@ -104,7 +117,7 @@ Rules for clearing violations:
 - Death violations are **never** clearable.
 - Fatal or character-fail severity violations are **never** clearable.
 - Compatibility blocker types (unsynced members, level gap, outsider grouping) are **never** clearable.
-- All other violations — including gear violations — can be cleared with one click in the Log GUI.
+- All other violations — including gear violations — can be cleared with one click in the Violations tab.
 
 Gear limit tiers are:
 
