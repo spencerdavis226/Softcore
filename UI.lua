@@ -4,6 +4,22 @@
 
 local SC = Softcore
 
+local function SavePosition(key, frame)
+    SoftcoreDB = SoftcoreDB or {}
+    SoftcoreDB.ui = SoftcoreDB.ui or {}
+    SoftcoreDB.ui[key] = { x = frame:GetLeft(), y = frame:GetTop() }
+end
+
+local function RestorePosition(key, frame, defaultX, defaultY)
+    local pos = SoftcoreDB and SoftcoreDB.ui and SoftcoreDB.ui[key]
+    frame:ClearAllPoints()
+    if pos and pos.x and pos.y then
+        frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
+    else
+        frame:SetPoint("CENTER", UIParent, "CENTER", defaultX or 0, defaultY or 0)
+    end
+end
+
 local HUD_WIDTH    = 160
 local HUD_PAD      = 8
 local HUD_MAX_MEMBERS = 5
@@ -78,12 +94,15 @@ function SC:HUD_Create()
     local frame = CreateFrame("Button", "SoftcoreHUDFrame", UIParent, "BackdropTemplate")
     frame:SetWidth(HUD_WIDTH)
     frame:SetHeight(34)
-    frame:SetPoint("CENTER", UIParent, "CENTER", 0, 150)
+    RestorePosition("hud", frame, 0, 150)
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", frame.StartMoving)
-    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+    frame:SetScript("OnDragStop", function(f)
+        f:StopMovingOrSizing()
+        SavePosition("hud", f)
+    end)
     frame:RegisterForClicks("LeftButtonUp")
     frame:SetScript("OnClick", function()
         if SC.OpenMasterWindow then

@@ -2,6 +2,22 @@
 
 local SC = Softcore
 
+local function SavePosition(key, frame)
+    SoftcoreDB = SoftcoreDB or {}
+    SoftcoreDB.ui = SoftcoreDB.ui or {}
+    SoftcoreDB.ui[key] = { x = frame:GetLeft(), y = frame:GetTop() }
+end
+
+local function RestorePosition(key, frame, defaultX, defaultY)
+    local pos = SoftcoreDB and SoftcoreDB.ui and SoftcoreDB.ui[key]
+    frame:ClearAllPoints()
+    if pos and pos.x and pos.y then
+        frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", pos.x, pos.y)
+    else
+        frame:SetPoint("CENTER", UIParent, "CENTER", defaultX or 0, defaultY or 0)
+    end
+end
+
 local TAB_RUN = "RUN"
 local TAB_OVERVIEW = "OVERVIEW"
 local TAB_VIOLATIONS = "VIOLATIONS"
@@ -787,13 +803,16 @@ function SC:OpenMasterWindow(focusTab)
 
     local frame = CreateFrame("Frame", "SoftcoreMasterFrame", UIParent, "BackdropTemplate")
     frame:SetSize(720, 560)
-    frame:SetPoint("CENTER")
+    RestorePosition("master", frame)
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:EnableKeyboard(true)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", frame.StartMoving)
-    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+    frame:SetScript("OnDragStop", function(f)
+        f:StopMovingOrSizing()
+        SavePosition("master", f)
+    end)
     frame:SetScript("OnKeyDown", function(self, key)
         if key == "ESCAPE" then
             self:Hide()
