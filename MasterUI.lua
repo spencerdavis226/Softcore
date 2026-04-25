@@ -67,6 +67,10 @@ local EDITABLE_RULE_ORDER = {
     "maxLevelGap",
     "maxLevelGapValue",
     "dungeonRepeat",
+    "consumables",
+    "instancedPvP",
+    "maxDeaths",
+    "maxDeathsValue",
 }
 
 local function Print(message)
@@ -261,6 +265,11 @@ local function ApplyStartPreset(frame, preset)
         SetDisallowedRule(rules, spec.key, preset ~= "IRONMAN")
     end
 
+    SetDisallowedRule(rules, "consumables", preset ~= "IRONMAN")
+    SetDisallowedRule(rules, "instancedPvP", false)
+    rules.maxDeaths = false
+    rules.maxDeathsValue = 1
+
     if SC.ApplyGroupingMode then
         SC:ApplyGroupingMode(rules)
     end
@@ -335,6 +344,10 @@ local RULE_DISPLAY_NAMES = {
     maxLevelGap    = "Level Gap Enforcement",
     maxLevelGapValue = "Max Level Gap",
     dungeonRepeat  = "Repeated Dungeons",
+    consumables    = "Consumables",
+    instancedPvP   = "Instanced PvP",
+    maxDeaths      = "Death Limit",
+    maxDeathsValue = "Max Deaths",
 }
 
 local function FriendlyRuleValue(ruleName, value)
@@ -600,6 +613,7 @@ local function HideAllRunControls(frame)
     frame.start.groupingDropdown:Hide()
     frame.start.gearDropdown:Hide()
     frame.start.maxGapBox:Hide()
+    frame.start.maxDeathsBox:Hide()
     frame.start.primaryBtn:Hide()
     frame.start.stopBtn:Hide()
     frame.start.modifyBtn:Hide()
@@ -638,6 +652,7 @@ local function RefreshRunPanel(frame)
     frame.start.groupingDropdown:SetShown(true)
     frame.start.gearDropdown:SetShown(true)
     frame.start.maxGapBox:SetShown(true)
+    frame.start.maxDeathsBox:SetShown(true)
     frame.start.casualBtn:SetShown(not active)
     frame.start.ironmanBtn:SetShown(not active)
     for _, control in ipairs(frame.start.controls) do
@@ -802,7 +817,7 @@ function SC:OpenMasterWindow(focusTab)
     end
 
     local frame = CreateFrame("Frame", "SoftcoreMasterFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(720, 560)
+    frame:SetSize(720, 600)
     RestorePosition("master", frame)
     frame:SetMovable(true)
     frame:EnableMouse(true)
@@ -872,6 +887,7 @@ function SC:OpenMasterWindow(focusTab)
     local logTab = AddTab("logTab", "Log", TAB_LOG, violationsTab)
 
     local startPanel = CreatePanel(frame)
+    startPanel:SetHeight(470)
     frame.panels[TAB_RUN] = startPanel
     frame.start = { controls = {}, selectedRules = SC:GetDefaultRuleset() }
     frame.start.selectedRules.dungeonRepeat = "ALLOWED"
@@ -896,7 +912,32 @@ function SC:OpenMasterWindow(focusTab)
 
     table.insert(frame.start.controls, CreateLabel(startPanel, "|cffffd700Core|r", 0, -72, "GameFontNormal"))
     table.insert(frame.start.controls, CreateLabel(startPanel, "Death is permanent for each character.", 0, -98, "GameFontHighlightSmall", 300))
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Grouping", 0, -128, "GameFontNormalSmall", 80))
+
+    frame.start.maxDeathsCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
+    frame.start.maxDeathsCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -120)
+    frame.start.maxDeathsCheck.label = frame.start.maxDeathsCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.start.maxDeathsCheck.label:SetPoint("LEFT", frame.start.maxDeathsCheck, "RIGHT", 2, 0)
+    frame.start.maxDeathsCheck.label:SetText("Limit deaths per character")
+    frame.start.maxDeathsCheck:SetScript("OnClick", function(self)
+        frame.start.selectedRules.maxDeaths = self:GetChecked() and true or false
+        SC:MasterUI_Refresh()
+    end)
+    table.insert(frame.start.controls, frame.start.maxDeathsCheck)
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Max deaths", 28, -154, "GameFontNormalSmall", 80))
+    frame.start.maxDeathsBox = CreateFrame("EditBox", nil, startPanel, "InputBoxTemplate")
+    frame.start.maxDeathsBox:SetSize(42, 22)
+    frame.start.maxDeathsBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 112, -148)
+    frame.start.maxDeathsBox:SetAutoFocus(false)
+    frame.start.maxDeathsBox:SetNumeric(true)
+    frame.start.maxDeathsBox:SetScript("OnTextChanged", function(self)
+        local value = tonumber(self:GetText())
+        if value then frame.start.selectedRules.maxDeathsValue = value end
+    end)
+    frame.start.maxDeathsBox:SetScript("OnEditFocusLost", function()
+        SC:MasterUI_Refresh()
+    end)
+
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Grouping", 0, -188, "GameFontNormalSmall", 80))
     frame.start.groupingDropdown = CreateDropdown(startPanel, "SoftcoreMasterGroupingDropdown", GROUPING_OPTIONS, frame.start.selectedRules.groupingMode, function(value)
         frame.start.selectedRules.groupingMode = value
         if SC.ApplyGroupingMode then
@@ -904,10 +945,10 @@ function SC:OpenMasterWindow(focusTab)
         end
         SC:MasterUI_Refresh()
     end, 140)
-    frame.start.groupingDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 92, -120)
+    frame.start.groupingDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 92, -180)
 
-    table.insert(frame.start.controls, CreateLabel(startPanel, "|cffffd700Economy / Storage|r", 0, -168, "GameFontNormal"))
-    local y = -194
+    table.insert(frame.start.controls, CreateLabel(startPanel, "|cffffd700Economy / Storage|r", 0, -228, "GameFontNormal"))
+    local y = -254
     for _, spec in ipairs(ECONOMY_RULES) do
         local checkbox = CreateAllowCheckbox(startPanel, frame.start.selectedRules, spec, 0, y)
         table.insert(frame.start.controls, checkbox)
@@ -931,10 +972,12 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.gearDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 452, -188)
     frame.start.heirloomCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow heirlooms", key = "heirlooms" }, 350, -232)
     table.insert(frame.start.controls, frame.start.heirloomCheck)
+    frame.start.consumablesCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow consumables (potions, flasks, food)", key = "consumables" }, 350, -262)
+    table.insert(frame.start.controls, frame.start.consumablesCheck)
 
-    table.insert(frame.start.controls, CreateLabel(startPanel, "|cffffd700Group / Dungeon|r", 350, -278, "GameFontNormal"))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "|cffffd700Group / Dungeon|r", 350, -308, "GameFontNormal"))
     frame.start.maxGapCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
-    frame.start.maxGapCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 350, -304)
+    frame.start.maxGapCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 350, -334)
     frame.start.maxGapCheck.label = frame.start.maxGapCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.start.maxGapCheck.label:SetPoint("LEFT", frame.start.maxGapCheck, "RIGHT", 2, 0)
     frame.start.maxGapCheck.label:SetText("Enforce max level gap")
@@ -943,10 +986,10 @@ function SC:OpenMasterWindow(focusTab)
         SC:MasterUI_Refresh()
     end)
     table.insert(frame.start.controls, frame.start.maxGapCheck)
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Max gap", 378, -340, "GameFontNormalSmall", 70))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Max gap", 378, -370, "GameFontNormalSmall", 70))
     frame.start.maxGapBox = CreateFrame("EditBox", nil, startPanel, "InputBoxTemplate")
     frame.start.maxGapBox:SetSize(42, 22)
-    frame.start.maxGapBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 450, -334)
+    frame.start.maxGapBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 450, -364)
     frame.start.maxGapBox:SetAutoFocus(false)
     frame.start.maxGapBox:SetNumeric(true)
     frame.start.maxGapBox:SetScript("OnTextChanged", function(self)
@@ -958,8 +1001,10 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.maxGapBox:SetScript("OnEditFocusLost", function()
         SC:MasterUI_Refresh()
     end)
-    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow repeated dungeons", key = "dungeonRepeat" }, 350, -370)
+    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow repeated dungeons", key = "dungeonRepeat" }, 350, -400)
     table.insert(frame.start.controls, frame.start.dungeonRepeatCheck)
+    frame.start.instancedPvPCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow instanced PvP (BGs & arenas)", key = "instancedPvP" }, 350, -430)
+    table.insert(frame.start.controls, frame.start.instancedPvPCheck)
 
     function frame.start:RefreshControls()
         if SC.ApplyGroupingMode then
@@ -993,6 +1038,17 @@ function SC:OpenMasterWindow(focusTab)
         end
         self.heirloomCheck:SetChecked(not IsDisallowed(self.selectedRules.heirlooms))
         self.dungeonRepeatCheck:SetChecked(not IsDisallowed(self.selectedRules.dungeonRepeat))
+        self.consumablesCheck:SetChecked(not IsDisallowed(self.selectedRules.consumables))
+        self.instancedPvPCheck:SetChecked(not IsDisallowed(self.selectedRules.instancedPvP))
+
+        local deathLimitOn = self.selectedRules.maxDeaths == true
+        self.maxDeathsCheck:SetChecked(deathLimitOn)
+        self.maxDeathsBox:SetText(tostring(self.selectedRules.maxDeathsValue or 3))
+        if deathLimitOn then
+            self.maxDeathsBox:Enable()
+        else
+            self.maxDeathsBox:Disable()
+        end
     end
 
     frame.start.primaryBtn = CreateButton(startPanel, "Start Run", 120, 24)

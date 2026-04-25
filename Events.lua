@@ -37,23 +37,42 @@ end
 
 local function HandlePlayerDead()
     local db = SC.db or SoftcoreDB
-    if not db or not db.run then
-        return
-    end
+    if not db or not db.run then return end
 
-    -- The first death during an active run permanently fails this character only.
     local playerKey = SC:GetPlayerKey()
     local participant = SC:GetOrCreateParticipant(playerKey)
-    if db.run.active and participant.status ~= "FAILED" then
-        db.run.deathCount = db.run.deathCount + 1
+    if not db.run.active or participant.status == "FAILED" then return end
+
+    db.run.deathCount = (db.run.deathCount or 0) + 1
+    participant.deathCount = (participant.deathCount or 0) + 1
+
+    local maxDeaths = db.run.ruleset and db.run.ruleset.maxDeaths
+    local maxDeathsValue = tonumber(db.run.ruleset and db.run.ruleset.maxDeathsValue) or 1
+
+    if maxDeaths and maxDeathsValue > 1 then
+        if participant.deathCount >= maxDeathsValue then
+            local detail = "Death limit reached (" .. participant.deathCount .. "/" .. maxDeathsValue .. " deaths)."
+            SC:AddLog("DEATH", detail)
+            SC:MarkParticipantFailed(playerKey, detail)
+            SC:AddViolation("death", detail, "FATAL", playerKey)
+            DEFAULT_CHAT_FRAME:AddMessage("|cffff5555Softcore: character failed — death limit reached (" .. participant.deathCount .. "/" .. maxDeathsValue .. ").|r")
+        else
+            local remaining = maxDeathsValue - participant.deathCount
+            local detail = "Died (" .. participant.deathCount .. "/" .. maxDeathsValue .. " deaths, " .. remaining .. " remaining)."
+            SC:AddLog("DEATH", detail)
+            SC:AddViolation("death", detail, "WARNING", playerKey)
+            DEFAULT_CHAT_FRAME:AddMessage("|cfffbbf24Softcore: death recorded — " .. remaining .. " life/lives remaining.|r")
+        end
+    else
         SC:AddLog("DEATH", "Character died. Run failed permanently.")
         SC:ApplyRuleOutcome("death", {
             playerKey = playerKey,
             detail = "Character died. Character failed permanently.",
         })
         DEFAULT_CHAT_FRAME:AddMessage("|cffff5555Softcore: character failed due to death.|r")
-        Broadcast("PLAYER_DEAD")
     end
+
+    Broadcast("PLAYER_DEAD")
 end
 
 local function HandleLevelUp(level)
@@ -70,12 +89,31 @@ end
 
 local function HandleZoneChanged()
     local db = SC.db or SoftcoreDB
-    if not db then
-        return
-    end
+    if not db then return end
 
     db.character.zone = GetRealZoneText() or db.character.zone or "Unknown"
     SC:AddLog("ZONE_CHANGED", "Entered " .. tostring(db.character.zone) .. ".")
+end
+
+local pvpWarnedAt = 0
+local PVP_WARNING_THROTTLE = 60
+
+local function CheckInstancedPvP()
+    local db = SC.db or SoftcoreDB
+    if not db or not db.run or not db.run.active then return end
+
+    local _, instanceType = GetInstanceInfo()
+    if instanceType ~= "pvp" and instanceType ~= "arena" then return end
+
+    local now = time()
+    if now - pvpWarnedAt < PVP_WARNING_THROTTLE then return end
+    pvpWarnedAt = now
+
+    SC:ApplyRuleOutcome("instancedPvP", {
+        playerKey = SC:GetPlayerKey(),
+        detail = "Entered instanced PvP (" .. tostring(instanceType) .. ").",
+    })
+    Broadcast("instancedPvP")
 end
 
 local function HandleWarning(event)
@@ -216,6 +254,7 @@ function SC:Events_Register()
             end
         elseif event == "ZONE_CHANGED_NEW_AREA" then
             HandleZoneChanged()
+            CheckInstancedPvP()
             if SC.CheckInstanceIntegrity then
                 SC:CheckInstanceIntegrity()
             end
@@ -272,4 +311,30 @@ function SC:Events_Register()
             SC:HUD_Refresh()
         end
     end)
+
+    -- Consumable detection: hook bag item use, flag Consumable-type items.
+    -- Subtype "Other" is skipped because it includes toys and misc one-use items.
+    local function OnUseContainerItem(bag, slot)
+        if not SC:IsRunActive() then return end
+        local rule = SC:GetRule("consumables")
+        if not rule or rule == "ALLOWED" then return end
+
+        if not (C_Container and C_Container.GetContainerItemLink) then return end
+        local link = C_Container.GetContainerItemLink(bag, slot)
+        if not link then return end
+
+        local itemName, _, _, _, _, itemType, itemSubType = GetItemInfo(link)
+        if itemType ~= "Consumable" or itemSubType == "Other" then return end
+
+        SC:ApplyRuleOutcome("consumables", {
+            playerKey = SC:GetPlayerKey(),
+            detail = "Used consumable: " .. tostring(itemName or "?") .. " (" .. tostring(itemSubType or "?") .. ").",
+        })
+    end
+
+    if C_Container and C_Container.UseContainerItem then
+        hooksecurefunc(C_Container, "UseContainerItem", OnUseContainerItem)
+    else
+        hooksecurefunc("UseContainerItem", OnUseContainerItem)
+    end
 end

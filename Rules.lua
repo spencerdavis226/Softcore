@@ -33,6 +33,10 @@ local RULE_ORDER = {
     "voidStorage",
     "craftingOrders",
     "vendor",
+    "consumables",
+    "instancedPvP",
+    "maxDeaths",
+    "maxDeathsValue",
 }
 
 local HASH_RULE_ORDER = {
@@ -62,6 +66,10 @@ local HASH_RULE_ORDER = {
     "voidStorage",
     "craftingOrders",
     "vendor",
+    "consumables",
+    "instancedPvP",
+    "maxDeaths",
+    "maxDeathsValue",
 }
 
 local BOOLEAN_RULES = {
@@ -69,6 +77,7 @@ local BOOLEAN_RULES = {
     allowLateJoin = true,
     allowReplacementCharacters = true,
     requireLeaderApprovalForJoin = true,
+    maxDeaths = true,
 }
 
 local ACCESS_RULES = {
@@ -92,6 +101,8 @@ local SEVERITY_ONLY_RULES = {
     maxLevelGap = true,
     dungeonRepeat = true,
     instanceWithUnsyncedPlayers = true,
+    consumables = true,
+    instancedPvP = true,
 }
 
 local GEAR_QUALITY_VALUES = {
@@ -134,7 +145,7 @@ local function CopyRules(rules)
 end
 
 local function IsValidRuleValue(ruleName, value)
-    if ruleName == "maxLevelGapValue" then
+    if ruleName == "maxLevelGapValue" or ruleName == "maxDeathsValue" then
         return tonumber(value) ~= nil
     end
 
@@ -162,7 +173,7 @@ local function IsValidRuleValue(ruleName, value)
 end
 
 local function NormalizeRuleValue(ruleName, value)
-    if ruleName == "maxLevelGapValue" then
+    if ruleName == "maxLevelGapValue" or ruleName == "maxDeathsValue" then
         return tonumber(value)
     end
 

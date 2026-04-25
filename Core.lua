@@ -137,6 +137,10 @@ local function CreateDefaultRuleset()
         voidStorage = "LOG_ONLY",
         craftingOrders = "LOG_ONLY",
         vendor = "ALLOWED",
+        consumables = "ALLOWED",
+        instancedPvP = "ALLOWED",
+        maxDeaths = false,
+        maxDeathsValue = 3,
     }
 
     return ApplyGroupingModeRules(ruleset)
