@@ -438,6 +438,7 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
         amendmentId = amendmentId,
     })
 
+    if self.PlayUISound then self:PlayUISound("PROPOSAL_RECEIVED") end
     if self.MasterUI_Refresh then self:MasterUI_Refresh() end
     if self.HUD_Refresh then self:HUD_Refresh() end
 end

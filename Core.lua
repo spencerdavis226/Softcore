@@ -14,6 +14,21 @@ local function Print(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r " .. tostring(message))
 end
 
+function SC:PlayUISound(event)
+    if not PlaySound then return end
+    local SK = _G["SOUNDKIT"]
+    if not SK then return end
+    local sounds = {
+        RUN_STARTED       = SK.IG_QUEST_LOG_ACCEPT,          -- quest-accept chime
+        VIOLATION         = SK.UI_ERROR_MESSAGE,              -- UI error buzz
+        DEATH             = SK.IG_QUEST_FAILED,               -- quest-failed hit
+        VIOLATION_CLEARED = SK.IG_QUEST_OBJECTIVE_COMPLETE,   -- objective ding
+        PROPOSAL_RECEIVED = SK.READY_CHECK,                   -- ready-check ping
+    }
+    local id = sounds[event]
+    if id then PlaySound(id, "SFX") end
+end
+
 local function FormatTime(timestamp)
     if not timestamp then
         return "never"
@@ -431,6 +446,13 @@ function SC:AddViolation(violationType, detail, severity, playerKey)
         self:Sync_BroadcastViolation(violation)
     end
 
+    local sev = violation.severity
+    if sev == "FATAL" or sev == "CHARACTER_FAIL" then
+        self:PlayUISound("DEATH")
+    else
+        self:PlayUISound("VIOLATION")
+    end
+
     if self.MasterUI_Refresh then
         self:MasterUI_Refresh()
     end
@@ -826,6 +848,7 @@ function SC:ClearViolation(violationId, clearedBy, clearReason)
                 if self.Sync_BroadcastViolationClear then
                     self:Sync_BroadcastViolationClear(violation)
                 end
+                self:PlayUISound("VIOLATION_CLEARED")
                 if self.MasterUI_Refresh then
                     self:MasterUI_Refresh()
                 end
@@ -1051,6 +1074,7 @@ function SC:StartRun(runOptions)
 
     self:AddLog("RUN_START", "Run started for " .. db.character.name .. "-" .. db.character.realm .. ".")
     self:RefreshParticipantsFromRoster()
+    self:PlayUISound("RUN_STARTED")
     Print("run started.")
 
     if self.Sync_BroadcastStatus then

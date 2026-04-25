@@ -341,6 +341,7 @@ function SC:ReceiveRunProposal(payload, proposerKey)
     end
 
     self:StoreProposal(proposal)
+    if self.PlayUISound then self:PlayUISound("PROPOSAL_RECEIVED") end
     self:ShowProposalPopup(proposal)
 end
 
