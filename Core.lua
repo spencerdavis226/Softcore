@@ -829,6 +829,21 @@ function SC:ClearViolation(violationId, clearedBy, clearReason)
                 if self.LogUI_Refresh then
                     self:LogUI_Refresh()
                 end
+
+                local ownerKey = violation.playerKey
+                local ownerParticipant = ownerKey and db.run.participants and db.run.participants[ownerKey]
+                if ownerParticipant and ownerParticipant.status == "WARNING" then
+                    local hasActiveViolation = false
+                    for _, v in ipairs(db.violations) do
+                        if v.playerKey == ownerKey and v.status ~= "CLEARED" and v.severity ~= "FATAL" then
+                            hasActiveViolation = true
+                            break
+                        end
+                    end
+                    if not hasActiveViolation then
+                        ownerParticipant.status = "ACTIVE"
+                    end
+                end
             end
 
             return violation
