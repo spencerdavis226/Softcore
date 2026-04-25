@@ -152,10 +152,6 @@ function SC:ScanEquippedGear(force)
                     detail = "Heirloom equipped: " .. tostring(item.link),
                 })
             else
-                self:AddLog("GEAR_QUALITY", "Invalid equipped item: " .. tostring(item.link), {
-                    ruleName = "gearQuality",
-                    gearQuality = item.quality,
-                })
                 self:AddViolation("gearQuality", "Invalid equipped item: " .. tostring(item.link), "WARNING", self:GetPlayerKey())
             end
         end

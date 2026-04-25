@@ -350,6 +350,17 @@ function SC:LogEvent(kind, message)
     return self:AddLog(kind, message)
 end
 
+local function BuildViolationAddedMessage(violation)
+    local violationType = tostring(violation and violation.type or "unknown")
+    local detail = violation and violation.detail
+
+    if detail and detail ~= "" then
+        return "Violation added: " .. violationType .. " - " .. tostring(detail)
+    end
+
+    return "Violation added: " .. violationType
+end
+
 function SC:AddViolation(violationType, detail, severity, playerKey)
     local db = EnsureDatabase()
     local now = time()
@@ -370,9 +381,10 @@ function SC:AddViolation(violationType, detail, severity, playerKey)
     }
 
     table.insert(db.violations, violation)
-    self:AddLog("VIOLATION_ADDED", detail, {
+    self:AddLog("VIOLATION_ADDED", BuildViolationAddedMessage(violation), {
         violationId = violation.id,
         violationType = violation.type,
+        violationDetail = violation.detail,
         severity = violation.severity,
     })
 

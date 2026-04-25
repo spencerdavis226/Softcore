@@ -264,20 +264,12 @@ function SC:ApplyRuleOutcome(ruleName, context)
             participant.status = "WARNING"
         end
 
-        self:AddLog("WARNING", detail, {
-            ruleName = ruleName,
-            outcome = outcome,
-        })
         self:AddViolation(ruleName, detail, "WARNING", playerKey)
         return evaluation
     end
 
     if outcome == "FATAL" or outcome == "CHARACTER_FAIL" then
         self:MarkParticipantFailed(playerKey, detail)
-        self:AddLog("RULE_FATAL", detail, {
-            ruleName = ruleName,
-            outcome = outcome,
-        })
         self:AddViolation(ruleName, detail, "FATAL", playerKey)
         return evaluation
     end
