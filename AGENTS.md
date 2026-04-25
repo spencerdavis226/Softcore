@@ -25,6 +25,8 @@ Party/group status should be derived from local and remote state. It should not 
 
 Keep the addon simple and readable.
 
+Prefer one primary interface: a master Softcore menu with a small, optional HUD later for quick status. Avoid proliferating separate windows unless there is a strong reason.
+
 Prefer clear user-facing concepts:
 
 - `Failed`: a character died or permanently failed
@@ -36,6 +38,17 @@ Prefer clear user-facing concepts:
 - `Valid`: character is alive and has no active issues
 
 Avoid exposing overly technical internal states in the UI unless needed.
+
+The master menu should stay compact and understandable. A good current shape is:
+
+- `Overview`: local run status plus party/participant snapshot
+- `Run`: start a run, review active locked rules, stop a run, and eventually modify rules through a visible amendment flow
+- `Violations`: active clearable issues
+- `Log`: audit history, newest entries first
+
+If no run is active, opening the menu should emphasize starting/configuring a run. If a run is active, opening the menu should emphasize current status.
+
+A future HUD should be small and glanceable, with simple local and party indicators such as safe, blocked, violation, or failed/death states. Remote failures should be visible without automatically failing the local player.
 
 ## Rule Philosophy
 
@@ -82,7 +95,7 @@ The addon should avoid tedious approval flows unless they are needed for a clear
 
 ## Start Run Direction
 
-The Start Run UI should stay simple.
+The Start Run / Run UI should stay simple.
 
 Prefer:
 
@@ -96,6 +109,8 @@ Prefer:
 Starting while solo can start immediately.
 
 Starting while grouped may need a proposal/acceptance flow so everyone uses compatible settings.
+
+When a run is already active, rule values should be visible but not casually editable. Mid-run changes should go through a future amendment/modify flow and should be logged.
 
 The UI should avoid long dropdown labels that run into columns or overlap.
 
@@ -141,10 +156,15 @@ For violations:
 - store who cleared them
 - store when they were cleared
 - add a log entry when something is cleared
+- include useful detail in both added and cleared entries, such as item names for gear issues when available
 
 Death should not be clearable.
 
 Compatibility blockers and conflicts are generally not clearable violations. They should resolve when the condition resolves.
+
+Clearing a violation should be quick and low-friction for now: click Clear, preserve the audit trail, and do not require a typed reason unless that becomes valuable later.
+
+Logs should read from top to bottom with the newest entries at the top.
 
 ## Sync Direction
 
@@ -160,6 +180,8 @@ Incoming sync can update:
 - proposal status
 - compatibility warnings
 - shared display state
+
+Party-visible logs and violations should eventually make the responsible character clear. Anyone-in-party clearing and shared log behavior should be designed conservatively so local history is not silently overwritten.
 
 Handle edge cases gracefully:
 
@@ -197,18 +219,20 @@ Do not add:
 
 ## Loose Roadmap
 
-### Near-term: Log / Violations UI
+### Current Direction: Master Menu
 
-Build or improve a GUI for:
+Use the master menu as the main UI surface:
 
-- viewing events
-- viewing active violations
-- clearing accidental violations while preserving audit history
-- preserving audit history
+- Overview for local/party status
+- Run for start/configuration, locked active rules, stop run, and future amendments
+- Violations for active clearable issues
+- Log for newest-first audit history
 
-### Next: Status Dashboard
+Older standalone windows may remain as fallbacks during development, but the product direction is to keep the user-facing UI centralized.
 
-Build a clearer dashboard for:
+### Next: Status Dashboard / HUD
+
+Improve the Overview tab and later add a small HUD for:
 
 - local character status
 - party status
@@ -224,6 +248,17 @@ The dashboard should clearly separate:
 - party compatibility
 - violations
 - blockers/conflicts
+
+The HUD should be minimal and glanceable, not a second full dashboard.
+
+### Next: Sync and Party Audit Robustness
+
+Improve party behavior so that:
+
+- party violations and logs clearly show which character caused them
+- active and cleared violations sync in a predictable way
+- clearing remote-visible violations has a conservative shared history model
+- players leaving/rejoining remain understandable without corrupting local state
 
 ### Later: Merge / Compatibility Flow
 
@@ -266,7 +301,7 @@ Only after core behavior is stable:
 - compact/expanded views
 - better styling
 - better colors
-- sound toggles
+- sound toggles and intentional addon sounds
 - slash command help
 - README cleanup
 - changelog

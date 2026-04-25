@@ -2,7 +2,7 @@
 
 Softcore is a lightweight Retail World of Warcraft addon for hardcore-style leveling accountability with friends.
 
-Version 0.4.0 tracks your local run, applies structured rules, syncs resilient status, includes a simple group run proposal flow, and provides a log/violation review GUI.
+Version 0.4.0 tracks your local run, applies structured rules, syncs resilient status, includes a simple group run proposal flow, and provides a master menu for run setup, status, logs, and violation review.
 
 ## Setup
 
@@ -67,7 +67,11 @@ Tabs are:
 - **Overview** for local status and party/participant state.
 - **Run** for starting a run, reviewing locked active rules, and stopping a run.
 - **Violations** for active clearable issues.
-- **Log** for recent audit history.
+- **Log** for recent audit history, newest entries first.
+
+When no run is active, the menu opens toward starting/configuring a run. When a run is active, the menu opens toward the current run overview.
+
+The long-term UI direction is one primary master menu plus a small optional HUD for quick local/party status. Older standalone windows may remain during development as fallbacks, but new UI work should generally move into the master menu.
 
 ## Group Sync
 
@@ -85,7 +89,7 @@ A party member's failure does not fail your character. Softcore shows group bloc
 
 ## Group Proposals
 
-Use `/sc new` to configure and start a run. The window is organized into Run Setup, Core Rules, Economy / Storage, Movement, Gear / Item, and Group / Dungeon sections. Most rules are simple allowed/disallowed checkboxes.
+Use `/sc new` or the Run tab to configure and start a run. The Run tab is organized around simple rule sections such as economy/storage, movement, gear/items, and group/dungeon rules. Most rules are simple allowed/disallowed checkboxes.
 
 Death is permanent per character.
 
@@ -94,21 +98,25 @@ Grouping mode has two choices:
 - `Group` requires party members to be synced with matching Softcore rules. Unsynced members block group progress but do not fail anyone.
 - `Solo` does not auto-add group members as valid run participants. Grouping can create a local violation according to the solo/self-found grouping rule.
 
-The primary button at the bottom of the window is dynamic:
+The primary run action is:
 
-- **Start Run** — shown when the player is not grouped. Clicking starts the run immediately.
-- **Propose Run** — shown when the player is grouped. Clicking sends a proposal to all current party members.
-- **Proposal Pending** — shown while waiting for all party members to accept.
+- solo: start immediately
+- grouped: send a compatible run proposal to the current party when proposal handling is available
+- active run: show locked rule values and a confirmed Stop Run action
 
 A proposed run does not start for any player until all current party members accept. If any member declines, the proposal is cancelled for everyone. All party members must be running Softcore and synced before the run can begin. Use `/sc accept` or `/sc decline` as slash-command fallbacks.
 
 Disallowed actions create violations. Event violations, like opening a disallowed mailbox, can be reviewed and cleared from the Violations tab (`/sc violations`). State violations, like invalid equipped gear, remain active until the condition is fixed and then cleared. Compatibility blockers — unsynced party members, rule mismatches, or a level gap above the allowed maximum — block party progress but do not fail any character and are not violations.
 
+Mid-run rule changes are not meant to be casual direct edits. The intended future direction is a visible modify/amendment flow that logs changes and applies them going forward.
+
 ## Violations and Log
 
 Use `/sc log` to open the Log tab in the Softcore menu. Use `/sc violations` to open the active Violations tab.
 
-Violations are never deleted. Clicking **Clear** marks a violation `CLEARED`, records who cleared it, and adds an audit log entry.
+Violations are never deleted. Clicking **Clear** marks a violation `CLEARED`, records who cleared it, and adds an audit log entry. Clearing is intentionally one click for now; the audit trail is preserved instead of requiring a typed reason.
+
+Log entries are shown newest-first. Violation added and cleared entries should include useful detail when available, such as the item involved in a gear-quality issue.
 
 Rules for clearing violations:
 
@@ -125,5 +133,9 @@ Gear limit tiers are:
 - `Blue or lower`
 
 For late or replacement joins, use `/sc propose-add Player-Realm`. Failed characters remain failed; a replacement character is tracked separately by `Player-Realm`.
+
+Future sync work should make party-visible violations and log entries clearly identify which character caused or cleared them, while preserving the rule that remote state does not silently overwrite local character validity.
+
+Intentional addon sounds are postponed until the core behavior is stable. Default WoW UI sounds are fine.
 
 No combat automation, combat recommendations, protected action buttons, or external libraries are used.
