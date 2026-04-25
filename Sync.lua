@@ -5,6 +5,7 @@ local SC = Softcore
 local PREFIX = "SOFTCORE"
 local UNSYNCED_AFTER = 30
 local HEARTBEAT_SECONDS = 10
+local MAX_AUDIT_TEXT = 120
 
 SC.syncEnabled = true
 SC.groupStatuses = SC.groupStatuses or {}
@@ -175,6 +176,29 @@ end
 local function LocalPlayerKey()
     local name, realm = UnitFullName("player")
     return PlayerKey(name, realm)
+end
+
+local function Trunc(value, maxLen)
+    value = tostring(value or "")
+    if #value <= maxLen then
+        return value
+    end
+
+    return string.sub(value, 1, maxLen - 2) .. ".."
+end
+
+local function CanShareAudit()
+    local db = GetDB()
+    return IsInGroup() and db.run and db.run.active and db.run.runId
+end
+
+local function CanImportSharedAudit(payload)
+    local db = GetDB()
+    if not db.run or not db.run.active or not db.run.runId then
+        return false
+    end
+
+    return payload.runId and payload.runId == db.run.runId
 end
 
 local function RecordConflict(playerKey, conflictType, localValue, remoteValue)
@@ -425,6 +449,58 @@ function SC:Sync_SendProposal(proposalType, proposalId)
     })
 end
 
+function SC:Sync_BroadcastLog(entry)
+    if not CanShareAudit() or not entry or not entry.id then
+        return
+    end
+
+    SendPayload({
+        type = "PARTY_LOG",
+        auditId = entry.id,
+        auditKind = entry.kind,
+        auditMessage = Trunc(entry.message, MAX_AUDIT_TEXT),
+        auditTime = entry.time,
+        actorKey = entry.actorKey or entry.playerKey,
+        auditPlayerKey = entry.playerKey,
+        violationId = entry.violationId,
+        violationType = entry.violationType,
+        violationDetail = Trunc(entry.violationDetail, MAX_AUDIT_TEXT),
+        violationPlayerKey = entry.violationPlayerKey,
+        clearedBy = entry.clearedBy,
+    })
+end
+
+function SC:Sync_BroadcastViolation(violation)
+    if not CanShareAudit() or not violation or not violation.id then
+        return
+    end
+
+    SendPayload({
+        type = "PARTY_VIOLATION",
+        violationId = violation.id,
+        violationType = violation.type,
+        violationDetail = Trunc(violation.detail, MAX_AUDIT_TEXT),
+        violationSeverity = violation.severity,
+        violationStatus = violation.status,
+        violationPlayerKey = violation.playerKey,
+        violationCreatedAt = violation.createdAt,
+    })
+end
+
+function SC:Sync_BroadcastViolationClear(violation)
+    if not CanShareAudit() or not violation or not violation.id then
+        return
+    end
+
+    SendPayload({
+        type = "PARTY_VIOLATION_CLEAR",
+        violationId = violation.id,
+        clearedBy = violation.clearedBy,
+        clearedAt = violation.clearedAt,
+        clearReason = Trunc(violation.clearReason, MAX_AUDIT_TEXT),
+    })
+end
+
 function SC:Sync_SendRunProposal(proposal)
     SendPayload({
         type = "PROPOSAL",
@@ -521,6 +597,61 @@ function SC:Sync_HandleMessage(message, sender)
     if payload.type == "PROPOSAL_CANCELLED" then
         if self.ReceiveProposalCancelled then
             self:ReceiveProposalCancelled(payload, key)
+        end
+        return
+    end
+
+    if payload.type == "PARTY_LOG" then
+        if CanImportSharedAudit(payload) and self.ImportSharedLog then
+            self:ImportSharedLog({
+                id = payload.auditId,
+                logEntryId = payload.auditId,
+                runId = payload.runId,
+                time = tonumber(payload.auditTime) or time(),
+                kind = payload.auditKind,
+                message = payload.auditMessage,
+                playerKey = payload.auditPlayerKey or payload.playerKey or key,
+                actorKey = payload.actorKey or payload.playerKey or key,
+                violationId = payload.violationId,
+                violationType = payload.violationType,
+                violationDetail = payload.violationDetail,
+                violationPlayerKey = payload.violationPlayerKey,
+                clearedBy = payload.clearedBy,
+                shared = true,
+            })
+        end
+        return
+    end
+
+    if payload.type == "PARTY_VIOLATION" then
+        if CanImportSharedAudit(payload) and self.ImportSharedViolation then
+            self:ImportSharedViolation({
+                id = payload.violationId,
+                violationId = payload.violationId,
+                runId = payload.runId,
+                playerKey = payload.violationPlayerKey or payload.playerKey or key,
+                type = payload.violationType,
+                detail = payload.violationDetail,
+                severity = payload.violationSeverity or "WARNING",
+                status = payload.violationStatus or "ACTIVE",
+                createdAt = tonumber(payload.violationCreatedAt) or time(),
+                clearedAt = nil,
+                clearedBy = nil,
+                clearReason = nil,
+                shared = true,
+            })
+        end
+        return
+    end
+
+    if payload.type == "PARTY_VIOLATION_CLEAR" then
+        if CanImportSharedAudit(payload) and self.ImportSharedViolationClear then
+            self:ImportSharedViolationClear(
+                payload.violationId,
+                payload.clearedBy or payload.playerKey or key,
+                tonumber(payload.clearedAt) or time(),
+                payload.clearReason
+            )
         end
         return
     end

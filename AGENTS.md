@@ -182,9 +182,11 @@ Incoming sync can update:
 - shared display state
 - lightweight remote violation snapshots for display, such as active count and latest active violation
 
-Party-visible logs and violations should eventually make the responsible character clear. Anyone-in-party clearing and shared log behavior should be designed conservatively so local history is not silently overwritten.
+Party-visible logs and violations should make the responsible character clear. Shared party audit behavior should be conservative so local history is not silently overwritten.
 
 Remote violation snapshots should remain display/advisory data. They can affect derived party status, such as showing `VIOLATION`, but they should not be inserted into the local `violations` table or change local character validity without an explicit future flow.
+
+For grouped players on the same synced run, new audit events may be shared into the normal Log and Violations tabs as they happen. This should not become a full historical merge. When a player leaves party, future events from that player should stop being added locally. Remote shared violations can be displayed and cleared as audit records, but they must not mutate local character validity.
 
 Handle edge cases gracefully:
 

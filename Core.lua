@@ -234,6 +234,8 @@ local function EnsureDatabase()
     SoftcoreDB.sync = SoftcoreDB.sync or {}
     SoftcoreDB.sync.remoteSequences = SoftcoreDB.sync.remoteSequences or {}
     SoftcoreDB.sync.localSequence = SoftcoreDB.sync.localSequence or 0
+    SoftcoreDB.sync.seenAuditIds = SoftcoreDB.sync.seenAuditIds or {}
+    SoftcoreDB.sync.seenViolationIds = SoftcoreDB.sync.seenViolationIds or {}
     SoftcoreDB.runHistory = SoftcoreDB.runHistory or {}
 
     EnsureRunDefaults(SoftcoreDB.run)
@@ -335,6 +337,7 @@ end
 function SC:AddLog(kind, message, extra)
     local db = EnsureDatabase()
     local logEntryId = CreateStableId("log")
+    local suppressAuditSync = extra and extra.suppressAuditSync
     local entry = {
         id = logEntryId,
         logEntryId = logEntryId,
@@ -348,11 +351,14 @@ function SC:AddLog(kind, message, extra)
 
     if extra then
         for key, value in pairs(extra) do
-            entry[key] = value
+            if key ~= "suppressAuditSync" then
+                entry[key] = value
+            end
         end
     end
 
     table.insert(db.eventLog, entry)
+    db.sync.seenAuditIds[entry.id] = true
 
     -- Keep the visible saved log useful but small for this early addon phase.
     while #db.eventLog > self.maxLogEntries do
@@ -365,6 +371,10 @@ function SC:AddLog(kind, message, extra)
 
     if self.MasterUI_Refresh then
         self:MasterUI_Refresh()
+    end
+
+    if self.Sync_BroadcastLog and not suppressAuditSync and not string.match(tostring(kind or ""), "^SYNC_") then
+        self:Sync_BroadcastLog(entry)
     end
 
     return entry
@@ -405,6 +415,7 @@ function SC:AddViolation(violationType, detail, severity, playerKey)
     }
 
     table.insert(db.violations, violation)
+    db.sync.seenViolationIds[violation.id] = true
     self:AddLog("VIOLATION_ADDED", BuildViolationAddedMessage(violation), {
         violationId = violation.id,
         violationType = violation.type,
@@ -413,7 +424,12 @@ function SC:AddViolation(violationType, detail, severity, playerKey)
         severity = violation.severity,
         playerKey = violation.playerKey,
         actorKey = violation.playerKey,
+        suppressAuditSync = true,
     })
+
+    if self.Sync_BroadcastViolation then
+        self:Sync_BroadcastViolation(violation)
+    end
 
     if self.LogUI_Refresh then
         self:LogUI_Refresh()
@@ -805,13 +821,121 @@ function SC:ClearViolation(violationId, clearedBy, clearReason)
                     actorKey = violation.clearedBy,
                     clearedBy = violation.clearedBy,
                     clearReason = violation.clearReason,
+                    suppressAuditSync = true,
                 })
-                if self.Sync_SendProposal then
-                    self:Sync_SendProposal("VIOLATION_CLEAR", violation.id)
+                if self.Sync_BroadcastViolationClear then
+                    self:Sync_BroadcastViolationClear(violation)
                 end
                 if self.LogUI_Refresh then
                     self:LogUI_Refresh()
                 end
+            end
+
+            return violation
+        end
+    end
+
+    return nil
+end
+
+function SC:ImportSharedLog(entry)
+    if type(entry) ~= "table" or not entry.id then
+        return nil
+    end
+
+    local db = EnsureDatabase()
+    if db.sync.seenAuditIds[entry.id] then
+        return nil
+    end
+
+    db.sync.seenAuditIds[entry.id] = true
+    table.insert(db.eventLog, entry)
+
+    while #db.eventLog > self.maxLogEntries do
+        table.remove(db.eventLog, 1)
+    end
+
+    if self.MasterUI_Refresh then
+        self:MasterUI_Refresh()
+    end
+
+    if self.LogUI_Refresh then
+        self:LogUI_Refresh()
+    end
+
+    return entry
+end
+
+function SC:ImportSharedViolation(violation)
+    if type(violation) ~= "table" or not violation.id then
+        return nil
+    end
+
+    local db = EnsureDatabase()
+    if db.sync.seenViolationIds[violation.id] then
+        return nil
+    end
+
+    db.sync.seenViolationIds[violation.id] = true
+    table.insert(db.violations, violation)
+
+    self:ImportSharedLog({
+        id = violation.logEntryId or (violation.id .. ":added"),
+        logEntryId = violation.logEntryId or (violation.id .. ":added"),
+        runId = violation.runId,
+        time = violation.createdAt,
+        kind = "VIOLATION_ADDED",
+        message = BuildViolationAddedMessage(violation),
+        playerKey = violation.playerKey,
+        actorKey = violation.playerKey,
+        violationId = violation.id,
+        violationType = violation.type,
+        violationDetail = violation.detail,
+        violationPlayerKey = violation.playerKey,
+        severity = violation.severity,
+        shared = true,
+    })
+
+    if self.MasterUI_Refresh then
+        self:MasterUI_Refresh()
+    end
+
+    if self.LogUI_Refresh then
+        self:LogUI_Refresh()
+    end
+
+    return violation
+end
+
+function SC:ImportSharedViolationClear(violationId, clearedBy, clearedAt, clearReason)
+    local db = EnsureDatabase()
+
+    for _, violation in ipairs(db.violations) do
+        if violation.id == violationId then
+            if violation.status ~= "CLEARED" then
+                violation.status = "CLEARED"
+                violation.clearedBy = clearedBy
+                violation.clearedAt = clearedAt or time()
+                violation.clearReason = clearReason or "Cleared"
+
+                self:ImportSharedLog({
+                    id = violation.id .. ":cleared:" .. tostring(violation.clearedAt),
+                    logEntryId = violation.id .. ":cleared:" .. tostring(violation.clearedAt),
+                    runId = violation.runId,
+                    time = violation.clearedAt,
+                    kind = "VIOLATION_CLEARED",
+                    message = BuildViolationClearMessage(violation),
+                    playerKey = violation.clearedBy,
+                    actorKey = violation.clearedBy,
+                    violationId = violation.id,
+                    violationType = violation.type,
+                    violationDetail = violation.detail,
+                    violationPlayerKey = violation.playerKey,
+                    severity = violation.severity,
+                    clearedBy = violation.clearedBy,
+                    clearReason = violation.clearReason,
+                    shared = true,
+                })
             end
 
             return violation

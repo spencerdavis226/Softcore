@@ -87,7 +87,9 @@ The group section of the UI shows nearby group members as `VALID`, `FAILED`, `IN
 
 A party member's failure does not fail your character. Softcore shows group blockers and conflicts, but each character's run validity is individual.
 
-Status sync includes a lightweight snapshot of each player's active violation count and latest active violation. The Overview tab may show a synced party member as `VIOLATION (ruleName)` without importing that violation into your local Violations tab or changing your local character validity.
+Status sync includes a lightweight snapshot of each player's active violation count and latest active violation. While grouped on the same run, new party audit events are also shared into the normal Log and Violations tabs. This is not a full history merge: events are shared as they happen while grouped, and future events stop being shared after players leave party.
+
+Remote party violations can appear in your Violations tab with their original owner. They do not change your local character validity.
 
 ## Group Proposals
 
