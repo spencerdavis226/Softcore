@@ -712,6 +712,17 @@ function SC:CanPartyContinue()
     return self:GetPartyStatus() ~= "BLOCKED"
 end
 
+local function BuildViolationClearMessage(violation)
+    local violationType = tostring(violation and violation.type or "unknown")
+    local detail = violation and violation.detail
+
+    if detail and detail ~= "" then
+        return "Violation cleared: " .. violationType .. " - " .. tostring(detail)
+    end
+
+    return "Violation cleared: " .. violationType
+end
+
 function SC:ClearViolation(violationId, clearedBy, clearReason)
     local db = EnsureDatabase()
 
@@ -722,8 +733,11 @@ function SC:ClearViolation(violationId, clearedBy, clearReason)
                 violation.clearedAt = time()
                 violation.clearedBy = clearedBy or GetPlayerKey(db.character)
                 violation.clearReason = clearReason or "Cleared"
-                self:AddLog("VIOLATION_CLEARED", "Violation cleared: " .. tostring(violation.type), {
+                self:AddLog("VIOLATION_CLEARED", BuildViolationClearMessage(violation), {
                     violationId = violation.id,
+                    violationType = violation.type,
+                    violationDetail = violation.detail,
+                    severity = violation.severity,
                     clearedBy = violation.clearedBy,
                     clearReason = violation.clearReason,
                 })
