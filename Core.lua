@@ -1425,6 +1425,12 @@ function SC:HandleSlash(input)
         else
             Print("HUD is not loaded.")
         end
+    elseif command == "minimap" then
+        if self.MinimapButton_Toggle then
+            self:MinimapButton_Toggle()
+        else
+            Print("minimap button is not loaded.")
+        end
     elseif command == "rule" then
         local ruleName, value = string.match(rest or "", "^(%S+)%s+(%S+)$")
         if ruleName and value then
@@ -1487,6 +1493,10 @@ function SC:Initialize()
 
     if self.HUD_Create then
         self:HUD_Create()
+    end
+
+    if self.MinimapButton_Create then
+        self:MinimapButton_Create()
     end
 
     if self.Events_Register then

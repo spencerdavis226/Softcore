@@ -225,3 +225,110 @@ function SC:HUD_Toggle()
         self:HUD_Refresh()
     end
 end
+
+-- ── Minimap button ───────────────────────────────────────────────────────────
+
+local MINIMAP_RADIUS = 80
+
+local function GetMinimapUI()
+    SoftcoreDB = SoftcoreDB or {}
+    SoftcoreDB.ui = SoftcoreDB.ui or {}
+    return SoftcoreDB.ui
+end
+
+local function PlaceMinimapButton(button, angle)
+    local rad = math.rad(angle)
+    button:ClearAllPoints()
+    button:SetPoint("CENTER", Minimap, "CENTER",
+        math.cos(rad) * MINIMAP_RADIUS,
+        math.sin(rad) * MINIMAP_RADIUS)
+end
+
+function SC:MinimapButton_Create()
+    if self.minimapButton then return end
+
+    local ui    = GetMinimapUI()
+    local angle = ui.minimapAngle or 225
+
+    local button = CreateFrame("Button", "SoftcoreMinimapButton", Minimap)
+    button:SetSize(31, 31)
+    button:SetFrameStrata("MEDIUM")
+    button:SetFrameLevel(8)
+
+    local icon = button:CreateTexture(nil, "BACKGROUND")
+    icon:SetSize(20, 20)
+    icon:SetPoint("CENTER")
+    icon:SetTexture("Interface\\Icons\\Spell_Shadow_SoulGem")
+    icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+
+    local border = button:CreateTexture(nil, "OVERLAY")
+    border:SetSize(53, 53)
+    border:SetPoint("CENTER")
+    border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+
+    button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+    button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    button:RegisterForDrag("LeftButton")
+
+    local dragging = false
+
+    button:SetScript("OnDragStart", function()
+        dragging = true
+        button:SetScript("OnUpdate", function()
+            local mx, my = Minimap:GetCenter()
+            local scale  = UIParent:GetEffectiveScale()
+            local cx, cy = GetCursorPosition()
+            cx, cy = cx / scale, cy / scale
+            local a = math.deg(math.atan2(cy - my, cx - mx))
+            PlaceMinimapButton(button, a)
+            GetMinimapUI().minimapAngle = a
+        end)
+    end)
+
+    button:SetScript("OnDragStop", function()
+        button:SetScript("OnUpdate", nil)
+        C_Timer.After(0.05, function() dragging = false end)
+    end)
+
+    button:SetScript("OnClick", function(_, btn)
+        if dragging then return end
+        if btn == "RightButton" then
+            button:Hide()
+            GetMinimapUI().minimapHidden = true
+            DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r Minimap button hidden. Type /sc minimap to restore it.")
+        else
+            if SC.OpenMasterWindow then SC:OpenMasterWindow() end
+        end
+    end)
+
+    button:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(button, "ANCHOR_LEFT")
+        GameTooltip:SetText("Softcore", 1, 1, 1)
+        GameTooltip:AddLine("Left-click: open menu", 0.8, 0.8, 0.8)
+        GameTooltip:AddLine("Right-click: hide button", 0.8, 0.8, 0.8)
+        GameTooltip:AddLine("Drag: reposition", 0.8, 0.8, 0.8)
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    PlaceMinimapButton(button, angle)
+    if ui.minimapHidden then button:Hide() end
+
+    self.minimapButton = button
+end
+
+function SC:MinimapButton_Toggle()
+    if not self.minimapButton then
+        self:MinimapButton_Create()
+        return
+    end
+    local ui = GetMinimapUI()
+    if self.minimapButton:IsShown() then
+        self.minimapButton:Hide()
+        ui.minimapHidden = true
+        DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r Minimap button hidden. Type /sc minimap to restore it.")
+    else
+        self.minimapButton:Show()
+        ui.minimapHidden = false
+    end
+end
