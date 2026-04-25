@@ -26,6 +26,51 @@ local function Trunc(str, maxLen)
     return string.sub(str, 1, maxLen - 2) .. ".."
 end
 
+local function StyleSilentButton(button, width, height, label)
+    button:SetSize(width, height)
+    button:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 8,
+        edgeSize = 8,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    button:SetBackdropColor(0.08, 0.08, 0.08, 0.95)
+    button:SetBackdropBorderColor(0.45, 0.45, 0.45, 1)
+
+    local text = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    text:SetPoint("CENTER")
+    text:SetText(label or "")
+    button:SetFontString(text)
+    button:SetText(label or "")
+
+    button:SetScript("OnEnter", function(self)
+        if self:IsEnabled() then
+            self:SetBackdropColor(0.16, 0.16, 0.16, 0.95)
+        end
+    end)
+    button:SetScript("OnLeave", function(self)
+        if self:IsEnabled() then
+            self:SetBackdropColor(0.08, 0.08, 0.08, 0.95)
+        end
+    end)
+    button:SetScript("OnEnable", function(self)
+        self:SetAlpha(1)
+        self:SetBackdropColor(0.08, 0.08, 0.08, 0.95)
+    end)
+    button:SetScript("OnDisable", function(self)
+        self:SetAlpha(0.55)
+        self:SetBackdropColor(0.04, 0.04, 0.04, 0.95)
+    end)
+
+    return button
+end
+
+local function CreateSilentButton(parent, width, height, label)
+    return StyleSilentButton(CreateFrame("Button", nil, parent, "BackdropTemplate"), width, height, label)
+end
+
 -- ── Events tab ────────────────────────────────────────────────────────────────
 
 local function RefreshEvents(frame)
@@ -56,7 +101,19 @@ end
 
 local function RefreshViolations(frame)
     local db = Softcore.db or SoftcoreDB
-    local violations = (db and db.violations) or {}
+    local source = (db and db.violations) or {}
+    local violations = {}
+    for _, violation in ipairs(source) do
+        table.insert(violations, violation)
+    end
+    table.sort(violations, function(left, right)
+        local leftActive = left.status ~= "CLEARED"
+        local rightActive = right.status ~= "CLEARED"
+        if leftActive ~= rightActive then
+            return leftActive
+        end
+        return (left.createdAt or 0) > (right.createdAt or 0)
+    end)
     local total = #violations
     local totalPages = math.max(1, math.ceil(total / ROWS_PER_PAGE))
 
@@ -68,6 +125,7 @@ local function RefreshViolations(frame)
 
     if page > 1 then frame.vPrevBtn:Enable() else frame.vPrevBtn:Disable() end
     if page < totalPages then frame.vNextBtn:Enable() else frame.vNextBtn:Disable() end
+    frame.noViolationsText:SetShown(total == 0)
 
     for i, row in ipairs(frame.vRows) do
         local v = violations[startIdx + i - 1]
@@ -155,9 +213,15 @@ function SC:OpenLogWindow(focusTab)
     frame:SetPoint("CENTER")
     frame:SetMovable(true)
     frame:EnableMouse(true)
+    frame:EnableKeyboard(true)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+    frame:SetScript("OnKeyDown", function(self, key)
+        if key == "ESCAPE" then
+            self:Hide()
+        end
+    end)
     frame:SetBackdrop({
         bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -175,11 +239,13 @@ function SC:OpenLogWindow(focusTab)
     title:SetPoint("TOPLEFT", 18, -14)
     title:SetText("Softcore: Log")
 
+    local topCloseBtn = CreateSilentButton(frame, 24, 24, "X")
+    topCloseBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -14, -12)
+    topCloseBtn:SetScript("OnClick", function() frame:Hide() end)
+
     -- Tab buttons
-    local eventsTab = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    eventsTab:SetSize(90, 24)
+    local eventsTab = CreateSilentButton(frame, 90, 24, "Events")
     eventsTab:SetPoint("TOPLEFT", 18, -44)
-    eventsTab:SetText("Events")
     eventsTab:SetScript("OnClick", function()
         frame.activeTab = TAB_EVENTS
         frame.pendingClearId = nil
@@ -188,10 +254,8 @@ function SC:OpenLogWindow(focusTab)
     end)
     frame.eventsTab = eventsTab
 
-    local violationsTab = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    violationsTab:SetSize(90, 24)
+    local violationsTab = CreateSilentButton(frame, 90, 24, "Violations")
     violationsTab:SetPoint("LEFT", eventsTab, "RIGHT", 6, 0)
-    violationsTab:SetText("Violations")
     violationsTab:SetScript("OnClick", function()
         frame.activeTab = TAB_VIOLATIONS
         frame.vPage = 1
@@ -245,6 +309,13 @@ function SC:OpenLogWindow(focusTab)
     VHdr("Status", 216, 72)
     VHdr("Detail", 290, 340)
 
+    local noViolationsText = vPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    noViolationsText:SetPoint("TOPLEFT", vPanel, "TOPLEFT", 0, -28)
+    noViolationsText:SetWidth(682)
+    noViolationsText:SetJustifyH("LEFT")
+    noViolationsText:SetText("(no violations recorded)")
+    frame.noViolationsText = noViolationsText
+
     -- Violation rows (ROWS_PER_PAGE = 13)
     local vRows = {}
     for i = 1, ROWS_PER_PAGE do
@@ -271,10 +342,8 @@ function SC:OpenLogWindow(focusTab)
         row.statusText = Fld(216, 72)
         row.detailText = Fld(290, 310)
 
-        row.clearBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-        row.clearBtn:SetSize(56, 18)
+        row.clearBtn = CreateSilentButton(row, 56, 18, "Clear")
         row.clearBtn:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, -3)
-        row.clearBtn:SetText("Clear")
         row.clearBtn:Hide()
 
         vRows[i] = row
@@ -284,10 +353,8 @@ function SC:OpenLogWindow(focusTab)
 
     -- ── Pagination (below the panels, always child of frame) ─────────────────
     -- Panels end at y=-(76+336)=y=-412; pagination row at y=-418
-    local vPrevBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    vPrevBtn:SetSize(70, 22)
+    local vPrevBtn = CreateSilentButton(frame, 70, 22, "< Prev")
     vPrevBtn:SetPoint("TOPLEFT", frame, "TOPLEFT", 18, -418)
-    vPrevBtn:SetText("< Prev")
     vPrevBtn:SetScript("OnClick", function()
         frame.vPage = math.max(1, (frame.vPage or 1) - 1)
         self:LogUI_Refresh()
@@ -298,10 +365,8 @@ function SC:OpenLogWindow(focusTab)
     vPageText:SetPoint("TOP", frame, "TOPLEFT", 360, -422)
     frame.vPageText = vPageText
 
-    local vNextBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    vNextBtn:SetSize(70, 22)
+    local vNextBtn = CreateSilentButton(frame, 70, 22, "Next >")
     vNextBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -18, -418)
-    vNextBtn:SetText("Next >")
     vNextBtn:SetScript("OnClick", function()
         frame.vPage = (frame.vPage or 1) + 1
         self:LogUI_Refresh()
@@ -327,10 +392,8 @@ function SC:OpenLogWindow(focusTab)
     reasonBox:SetMaxLetters(200)
     frame.reasonBox = reasonBox
 
-    local confirmBtn = CreateFrame("Button", nil, reasonPanel, "UIPanelButtonTemplate")
-    confirmBtn:SetSize(80, 22)
+    local confirmBtn = CreateSilentButton(reasonPanel, 80, 22, "Confirm")
     confirmBtn:SetPoint("LEFT", reasonBox, "RIGHT", 8, 0)
-    confirmBtn:SetText("Confirm")
     confirmBtn:SetScript("OnClick", function()
         local reason = strtrim(reasonBox:GetText() or "")
         if reason == "" then
@@ -346,10 +409,8 @@ function SC:OpenLogWindow(focusTab)
         self:LogUI_Refresh()
     end)
 
-    local cancelClearBtn = CreateFrame("Button", nil, reasonPanel, "UIPanelButtonTemplate")
-    cancelClearBtn:SetSize(70, 22)
+    local cancelClearBtn = CreateSilentButton(reasonPanel, 70, 22, "Cancel")
     cancelClearBtn:SetPoint("LEFT", confirmBtn, "RIGHT", 6, 0)
-    cancelClearBtn:SetText("Cancel")
     cancelClearBtn:SetScript("OnClick", function()
         frame.pendingClearId = nil
         frame.reasonError:SetText("")
@@ -366,10 +427,8 @@ function SC:OpenLogWindow(focusTab)
     frame.reasonPanel = reasonPanel
 
     -- ── Close button ──────────────────────────────────────────────────────────
-    local closeBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    closeBtn:SetSize(80, 24)
+    local closeBtn = CreateSilentButton(frame, 80, 24, "Close")
     closeBtn:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -18, 18)
-    closeBtn:SetText("Close")
     closeBtn:SetScript("OnClick", function() frame:Hide() end)
 
     self.logFrame = frame

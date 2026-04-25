@@ -376,6 +376,10 @@ function SC:AddViolation(violationType, detail, severity, playerKey)
         severity = violation.severity,
     })
 
+    if self.LogUI_Refresh then
+        self:LogUI_Refresh()
+    end
+
     return violation
 end
 
@@ -725,6 +729,9 @@ function SC:ClearViolation(violationId, clearedBy, clearReason)
                 })
                 if self.Sync_SendProposal then
                     self:Sync_SendProposal("VIOLATION_CLEAR", violation.id)
+                end
+                if self.LogUI_Refresh then
+                    self:LogUI_Refresh()
                 end
             end
 
