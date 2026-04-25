@@ -806,18 +806,15 @@ function SC:OpenMasterWindow(focusTab)
     RestorePosition("master", frame)
     frame:SetMovable(true)
     frame:EnableMouse(true)
-    frame:EnableKeyboard(true)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", function(f)
         f:StopMovingOrSizing()
         SavePosition("master", f)
     end)
-    frame:SetScript("OnKeyDown", function(self, key)
-        if key == "ESCAPE" then
-            self:Hide()
-        end
-    end)
+    if UISpecialFrames then
+        table.insert(UISpecialFrames, "SoftcoreMasterFrame")
+    end
     frame:SetBackdrop({
         bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
