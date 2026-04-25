@@ -62,6 +62,18 @@ local function FormatTime(timestamp)
     return date("%Y-%m-%d %H:%M:%S", timestamp)
 end
 
+local function FormatElapsed(startTime)
+    if not startTime then return "" end
+    local elapsed = time() - startTime
+    if elapsed < 0 then elapsed = 0 end
+    local h = math.floor(elapsed / 3600)
+    local m = math.floor((elapsed % 3600) / 60)
+    if h > 0 then
+        return string.format("%dh %02dm", h, m)
+    end
+    return string.format("%dm", m)
+end
+
 local function Trunc(str, maxLen)
     str = tostring(str or "")
     if #str <= maxLen then return str end
@@ -363,16 +375,35 @@ end
 local function RefreshOverviewPanel(frame)
     local db = SC.db or SoftcoreDB
     local run = db and db.run or {}
+    local active = run.active
     local status = SC:GetPlayerStatus()
     local partyRows = GetPartyDisplayRows()
+    local activeViolations = #GetSortedActiveViolations()
 
-    SetLine(frame.overview.run, "Run", run.runName or "Softcore Run")
-    frame.overview.localStatus:SetText("You: " .. ColorStatus(status.participantStatus or "NOT_IN_RUN"))
-    frame.overview.partyStatus:SetText("Party: " .. ColorStatus(status.partyStatus or "INACTIVE"))
-    SetLine(frame.overview.started, "Started", FormatTime(run.startTime))
-    SetLine(frame.overview.deaths, "Deaths", run.deathCount or 0)
-    SetLine(frame.overview.violations, "Active violations", #GetSortedActiveViolations())
-    SetLine(frame.overview.runId, "Run ID", run.runId or "none")
+    frame.overview.noRunText:SetShown(not active)
+    frame.overview.goToRunBtn:SetShown(not active)
+
+    frame.overview.run:SetShown(active)
+    frame.overview.localStatus:SetShown(active)
+    frame.overview.partyStatus:SetShown(active)
+    frame.overview.elapsed:SetShown(active)
+    frame.overview.deaths:SetShown(active)
+    frame.overview.violations:SetShown(active)
+    frame.overview.runId:SetShown(active)
+
+    if active then
+        SetLine(frame.overview.run, "Run", run.runName or "Softcore Run")
+        frame.overview.localStatus:SetText("You: " .. ColorStatus(status.participantStatus or "NOT_IN_RUN"))
+        frame.overview.partyStatus:SetText("Party: " .. ColorStatus(status.partyStatus or "INACTIVE"))
+        frame.overview.elapsed:SetText("Time: " .. FormatElapsed(run.startTime) .. "  |cff6b7280(since " .. FormatTime(run.startTime) .. ")|r")
+        SetLine(frame.overview.deaths, "Deaths", run.deathCount or 0)
+
+        local violationColor = activeViolations > 0 and "|cfffbbf24" or ""
+        local violationReset = activeViolations > 0 and "|r" or ""
+        frame.overview.violations:SetText("Active violations: " .. violationColor .. activeViolations .. violationReset)
+
+        SetLine(frame.overview.runId, "Run ID", run.runId or "none")
+    end
 
     frame.overview.partyEmpty:SetShown(false)
 
@@ -837,16 +868,32 @@ function SC:OpenMasterWindow(focusTab)
     local overviewPanel = CreatePanel(frame)
     frame.panels[TAB_OVERVIEW] = overviewPanel
     frame.overview = {
+        noRunText = CreateField(overviewPanel, 0, 0, 500),
         run = CreateField(overviewPanel, 0, 0),
         localStatus = CreateField(overviewPanel, 0, -24),
         partyStatus = CreateField(overviewPanel, 0, -48),
-        started = CreateField(overviewPanel, 0, -72),
+        elapsed = CreateField(overviewPanel, 0, -72),
         deaths = CreateField(overviewPanel, 0, -96),
         violations = CreateField(overviewPanel, 0, -120),
         runId = CreateField(overviewPanel, 0, -144),
         partyRows = {},
     }
-    CreateLabel(overviewPanel, "Party", 0, -188, "GameFontNormal", 620)
+    frame.overview.noRunText:SetText("No active Softcore run.")
+    frame.overview.goToRunBtn = CreateButton(overviewPanel, "Start a Run", 110, 24)
+    frame.overview.goToRunBtn:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", 0, -28)
+    frame.overview.goToRunBtn:SetScript("OnClick", function()
+        frame.activeTab = TAB_RUN
+        SC:MasterUI_Refresh()
+    end)
+    CreateLabel(overviewPanel, "Party", 0, -188, "GameFontNormal", 200)
+    frame.overview.resyncBtn = CreateButton(overviewPanel, "Resync", 72, 20)
+    frame.overview.resyncBtn:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", 210, -185)
+    frame.overview.resyncBtn:SetScript("OnClick", function()
+        if SC.Sync_BroadcastStatus then
+            SC:Sync_BroadcastStatus("RESYNC")
+            Print("resync requested.")
+        end
+    end)
     CreateLabel(overviewPanel, "Name", 0, -210, "GameFontNormalSmall", 200)
     CreateLabel(overviewPanel, "Lvl", 260, -210, "GameFontNormalSmall", 40)
     CreateLabel(overviewPanel, "Status", 310, -210, "GameFontNormalSmall", 280)
