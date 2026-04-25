@@ -51,6 +51,15 @@ local function Trunc(str, maxLen)
     return string.sub(str, 1, maxLen - 2) .. ".."
 end
 
+local function FormatPlayerLabel(playerKey)
+    if SC.FormatPlayerLabel then
+        return SC:FormatPlayerLabel(playerKey)
+    end
+
+    local name = string.match(tostring(playerKey or "Unknown"), "^([^-]+)")
+    return name or tostring(playerKey or "Unknown")
+end
+
 local function SetLine(fontString, label, value)
     fontString:SetText(label .. ": " .. tostring(value))
 end
@@ -345,7 +354,8 @@ local function RefreshViolationsPanel(frame)
         if violation then
             row:Show()
             row.type:SetText(Trunc(violation.type or "?", 18))
-            row.detail:SetText(Trunc(violation.detail or "", 58))
+            row.owner:SetText(Trunc(FormatPlayerLabel(violation.playerKey), 14))
+            row.detail:SetText(Trunc(violation.detail or "", 44))
             row.time:SetText(FormatTime(violation.createdAt))
 
             if SC:IsViolationClearable(violation) then
@@ -387,8 +397,9 @@ local function RefreshLogPanel(frame)
         if entry then
             row:Show()
             row.time:SetText(FormatTime(entry.time))
+            row.actor:SetText(Trunc(FormatPlayerLabel(entry.actorKey or entry.playerKey), 14))
             row.kind:SetText("[" .. tostring(entry.kind or "?") .. "]")
-            row.message:SetText(Trunc(entry.message or "", 76))
+            row.message:SetText(Trunc(entry.message or "", 58))
         else
             row:Hide()
         end
@@ -678,15 +689,20 @@ function SC:OpenMasterWindow(focusTab)
     local violationsPanel = CreatePanel(frame)
     frame.panels[TAB_VIOLATIONS] = violationsPanel
     frame.violations = { rows = {} }
-    frame.violations.empty = CreateField(violationsPanel, 0, 0, 620)
+    CreateLabel(violationsPanel, "Time", 0, 0, "GameFontNormalSmall", 118)
+    CreateLabel(violationsPanel, "Owner", 122, 0, "GameFontNormalSmall", 90)
+    CreateLabel(violationsPanel, "Type", 216, 0, "GameFontNormalSmall", 108)
+    CreateLabel(violationsPanel, "Detail", 328, 0, "GameFontNormalSmall", 260)
+    frame.violations.empty = CreateField(violationsPanel, 0, -26, 620)
     frame.violations.empty:SetText("(no active violations)")
     for index = 1, 12 do
         local row = CreateFrame("Frame", nil, violationsPanel)
         row:SetSize(672, 28)
-        row:SetPoint("TOPLEFT", violationsPanel, "TOPLEFT", 0, -((index - 1) * 30))
-        row.time = CreateField(row, 0, 0, 128)
-        row.type = CreateField(row, 132, 0, 110)
-        row.detail = CreateField(row, 246, 0, 340)
+        row:SetPoint("TOPLEFT", violationsPanel, "TOPLEFT", 0, -26 - ((index - 1) * 30))
+        row.time = CreateField(row, 0, 0, 118)
+        row.owner = CreateField(row, 122, 0, 90)
+        row.type = CreateField(row, 216, 0, 108)
+        row.detail = CreateField(row, 328, 0, 260)
         row.clearBtn = CreateButton(row, "Clear", 62, 20)
         row.clearBtn:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 2)
         frame.violations.rows[index] = row
@@ -695,15 +711,20 @@ function SC:OpenMasterWindow(focusTab)
     local logPanel = CreatePanel(frame)
     frame.panels[TAB_LOG] = logPanel
     frame.log = { rows = {} }
-    frame.log.empty = CreateField(logPanel, 0, 0, 620)
+    CreateLabel(logPanel, "Time", 0, 0, "GameFontNormalSmall", 130)
+    CreateLabel(logPanel, "Actor", 134, 0, "GameFontNormalSmall", 90)
+    CreateLabel(logPanel, "Type", 228, 0, "GameFontNormalSmall", 128)
+    CreateLabel(logPanel, "Message", 360, 0, "GameFontNormalSmall", 300)
+    frame.log.empty = CreateField(logPanel, 0, -24, 620)
     frame.log.empty:SetText("(no events recorded)")
     for index = 1, LOG_ROWS do
         local row = CreateFrame("Frame", nil, logPanel)
         row:SetSize(672, 18)
-        row:SetPoint("TOPLEFT", logPanel, "TOPLEFT", 0, -((index - 1) * 18))
+        row:SetPoint("TOPLEFT", logPanel, "TOPLEFT", 0, -24 - ((index - 1) * 18))
         row.time = CreateField(row, 0, 0, 130)
-        row.kind = CreateField(row, 134, 0, 130)
-        row.message = CreateField(row, 268, 0, 390)
+        row.actor = CreateField(row, 134, 0, 90)
+        row.kind = CreateField(row, 228, 0, 128)
+        row.message = CreateField(row, 360, 0, 300)
         frame.log.rows[index] = row
     end
 

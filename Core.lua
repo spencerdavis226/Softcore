@@ -57,6 +57,11 @@ local function SplitPlayerKey(playerKey)
     return playerKey or "Unknown", GetRealmName()
 end
 
+local function FormatPlayerLabel(playerKey)
+    local name = SplitPlayerKey(playerKey)
+    return name or "Unknown"
+end
+
 local function GetPlayerKey(character)
     character = character or GetPlayerSnapshot()
     return BuildPlayerKey(character.name, character.realm)
@@ -232,6 +237,15 @@ local function EnsureDatabase()
     SoftcoreDB.runHistory = SoftcoreDB.runHistory or {}
 
     EnsureRunDefaults(SoftcoreDB.run)
+    local localPlayerKey = GetPlayerKey(SoftcoreDB.character)
+    for _, violation in ipairs(SoftcoreDB.violations) do
+        violation.playerKey = violation.playerKey or localPlayerKey
+    end
+    for _, entry in ipairs(SoftcoreDB.eventLog) do
+        entry.playerKey = entry.playerKey or localPlayerKey
+        entry.actorKey = entry.actorKey or entry.playerKey
+    end
+
     if SoftcoreDB.run.active and not SoftcoreDB.run.runId then
         SoftcoreDB.nextIds.run = SoftcoreDB.nextIds.run + 1
         SoftcoreDB.run.runId = "SC-RUN-" .. tostring(time()) .. "-" .. tostring(SoftcoreDB.nextIds.run)
@@ -306,6 +320,10 @@ function SC:GetPlayerKey()
     return GetPlayerKey(GetPlayerSnapshot())
 end
 
+function SC:FormatPlayerLabel(playerKey)
+    return FormatPlayerLabel(playerKey)
+end
+
 function SC:CreateRunId()
     return CreateStableId("run")
 end
@@ -324,6 +342,8 @@ function SC:AddLog(kind, message, extra)
         time = time(),
         kind = kind,
         message = message,
+        playerKey = GetPlayerKey(db.character),
+        actorKey = GetPlayerKey(db.character),
     }
 
     if extra then
@@ -389,7 +409,10 @@ function SC:AddViolation(violationType, detail, severity, playerKey)
         violationId = violation.id,
         violationType = violation.type,
         violationDetail = violation.detail,
+        violationPlayerKey = violation.playerKey,
         severity = violation.severity,
+        playerKey = violation.playerKey,
+        actorKey = violation.playerKey,
     })
 
     if self.LogUI_Refresh then
@@ -731,12 +754,13 @@ end
 local function BuildViolationClearMessage(violation)
     local violationType = tostring(violation and violation.type or "unknown")
     local detail = violation and violation.detail
+    local playerLabel = FormatPlayerLabel(violation and violation.playerKey)
 
     if detail and detail ~= "" then
-        return "Violation cleared: " .. violationType .. " - " .. tostring(detail)
+        return "Cleared " .. playerLabel .. "'s violation: " .. violationType .. " - " .. tostring(detail)
     end
 
-    return "Violation cleared: " .. violationType
+    return "Cleared " .. playerLabel .. "'s violation: " .. violationType
 end
 
 function SC:ClearViolation(violationId, clearedBy, clearReason)
@@ -753,7 +777,10 @@ function SC:ClearViolation(violationId, clearedBy, clearReason)
                     violationId = violation.id,
                     violationType = violation.type,
                     violationDetail = violation.detail,
+                    violationPlayerKey = violation.playerKey,
                     severity = violation.severity,
+                    playerKey = violation.clearedBy,
+                    actorKey = violation.clearedBy,
                     clearedBy = violation.clearedBy,
                     clearReason = violation.clearReason,
                 })
@@ -1076,7 +1103,7 @@ function SC:PrintLog()
     Print("recent event log:")
     for index = math.max(1, #db.eventLog - 9), #db.eventLog do
         local entry = db.eventLog[index]
-        Print(FormatTime(entry.time) .. " [" .. entry.kind .. "] " .. entry.message)
+        Print(FormatTime(entry.time) .. " [" .. entry.kind .. "] " .. FormatPlayerLabel(entry.actorKey or entry.playerKey) .. ": " .. entry.message)
     end
 end
 

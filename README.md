@@ -118,6 +118,8 @@ Violations are never deleted. Clicking **Clear** marks a violation `CLEARED`, re
 
 Log entries are shown newest-first. Violation added and cleared entries should include useful detail when available, such as the item involved in a gear-quality issue.
 
+The Log tab includes an `Actor` column for who performed or caused the event. The Violations tab includes an `Owner` column for whose character owns the violation.
+
 Rules for clearing violations:
 
 - Death violations are **never** clearable.

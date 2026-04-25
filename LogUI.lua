@@ -25,6 +25,15 @@ local function Trunc(str, maxLen)
     return string.sub(str, 1, maxLen - 2) .. ".."
 end
 
+local function FormatPlayerLabel(playerKey)
+    if SC.FormatPlayerLabel then
+        return SC:FormatPlayerLabel(playerKey)
+    end
+
+    local name = string.match(tostring(playerKey or "Unknown"), "^([^-]+)")
+    return name or tostring(playerKey or "Unknown")
+end
+
 local function RefreshEvents(frame)
     local db = Softcore.db or SoftcoreDB
     local log = (db and db.eventLog) or {}
@@ -45,8 +54,9 @@ local function RefreshEvents(frame)
         if entry then
             row:Show()
             row.timeText:SetText(FormatTime(entry.time))
+            row.actorText:SetText(Trunc(FormatPlayerLabel(entry.actorKey or entry.playerKey), 14))
             row.kindText:SetText("[" .. tostring(entry.kind or "?") .. "]")
-            row.messageText:SetText(Trunc(entry.message or "", 62))
+            row.messageText:SetText(Trunc(entry.message or "", 48))
         else
             row:Hide()
         end
@@ -92,11 +102,12 @@ local function RefreshViolations(frame)
         if violation then
             row:Show()
             row.timeText:SetText(FormatTime(violation.createdAt))
+            row.ownerText:SetText(Trunc(FormatPlayerLabel(violation.playerKey), 14))
             row.typeText:SetText(Trunc(violation.type or "?", 20))
 
             row.statusText:SetText("|cffff8888ACTIVE|r")
 
-            row.detailText:SetText(Trunc(violation.detail or "", 44))
+            row.detailText:SetText(Trunc(violation.detail or "", 34))
 
             if Softcore:IsViolationClearable(violation) then
                 local violationId = violation.id
@@ -215,7 +226,7 @@ function SC:OpenLogWindow(focusTab)
 
     local evHdr = eventsPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     evHdr:SetPoint("TOPLEFT", 0, 0)
-    evHdr:SetText("Time          [Type]  Message")
+    evHdr:SetText("Time      Actor        [Type]  Message")
     evHdr:SetJustifyH("LEFT")
 
     frame.eventsEmptyText = eventsPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -239,8 +250,9 @@ function SC:OpenLogWindow(focusTab)
         end
 
         row.timeText = Fld(0, 82)
-        row.kindText = Fld(88, 130)
-        row.messageText = Fld(222, 452)
+        row.actorText = Fld(88, 92)
+        row.kindText = Fld(184, 126)
+        row.messageText = Fld(314, 360)
         frame.eventRows[i] = row
     end
     frame.eventsPanel = eventsPanel
@@ -258,9 +270,10 @@ function SC:OpenLogWindow(focusTab)
     end
 
     VHdr("Time", 0, 82)
-    VHdr("Type", 84, 130)
-    VHdr("Status", 216, 72)
-    VHdr("Detail", 290, 340)
+    VHdr("Owner", 84, 92)
+    VHdr("Type", 180, 116)
+    VHdr("Status", 300, 72)
+    VHdr("Detail", 376, 250)
 
     local noViolationsText = vPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     noViolationsText:SetPoint("TOPLEFT", vPanel, "TOPLEFT", 0, -28)
@@ -290,9 +303,10 @@ function SC:OpenLogWindow(focusTab)
         end
 
         row.timeText = Fld(0, 82)
-        row.typeText = Fld(84, 130)
-        row.statusText = Fld(216, 72)
-        row.detailText = Fld(290, 310)
+        row.ownerText = Fld(84, 92)
+        row.typeText = Fld(180, 116)
+        row.statusText = Fld(300, 72)
+        row.detailText = Fld(376, 224)
 
         row.clearBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
         row.clearBtn:SetSize(56, 18)
