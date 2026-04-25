@@ -24,6 +24,8 @@
     "UIDropDownMenu_SetText",
     "UIDropDownMenu_Initialize",
     "UIDropDownMenu_AddButton",
-    "UIDropDownMenu_CreateInfo"
+    "UIDropDownMenu_CreateInfo",
+    "UIDropDownMenu_EnableDropDown",
+    "UIDropDownMenu_DisableDropDown"
   ]
 }
