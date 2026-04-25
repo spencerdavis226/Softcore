@@ -16,17 +16,16 @@ end
 
 function SC:PlayUISound(event)
     if not PlaySound then return end
-    local SK = _G["SOUNDKIT"]
-    if not SK then return end
+    local SK = _G["SOUNDKIT"] or {}
     local sounds = {
-        RUN_STARTED       = SK.IG_QUEST_LOG_ACCEPT,          -- quest-accept chime
-        VIOLATION         = SK.UI_ERROR_MESSAGE,              -- UI error buzz
-        DEATH             = SK.IG_QUEST_FAILED,               -- quest-failed hit
-        VIOLATION_CLEARED = SK.IG_QUEST_OBJECTIVE_COMPLETE,   -- objective ding
-        PROPOSAL_RECEIVED = SK.READY_CHECK,                   -- ready-check ping
+        RUN_STARTED       = SK.IG_QUEST_LOG_ACCEPT          or 878,
+        VIOLATION         = SK.UI_ERROR_MESSAGE              or 882,
+        DEATH             = SK.IG_QUEST_FAILED               or 851,
+        VIOLATION_CLEARED = SK.IG_QUEST_OBJECTIVE_COMPLETE   or 879,
+        PROPOSAL_RECEIVED = SK.READY_CHECK                   or 8960,
     }
     local id = sounds[event]
-    if id then PlaySound(id, "SFX") end
+    if id then PlaySound(id, "Master") end
 end
 
 local function FormatTime(timestamp)
