@@ -1110,7 +1110,7 @@ function SC:OpenMasterWindow(focusTab)
     CreateLabel(overviewPanel, "Name",  0,   -210, "GameFontNormalSmall", 190)
     CreateLabel(overviewPanel, "Lvl",   198, -210, "GameFontNormalSmall", 36)
     CreateLabel(overviewPanel, "Status",238, -210, "GameFontNormalSmall", 178)
-    CreateLabel(overviewPanel, "Total", 420, -210, "GameFontNormalSmall", 80)
+    CreateLabel(overviewPanel, "Total Violations", 420, -210, "GameFontNormalSmall", 140)
     frame.overview.partyEmpty = CreateField(overviewPanel, 0, -232, 620)
     frame.overview.partyEmpty:SetText("(no synced party members)")
     for index = 1, 8 do
@@ -1120,7 +1120,7 @@ function SC:OpenMasterWindow(focusTab)
         row.name  = CreateField(row, 0,   0, 190)
         row.level = CreateField(row, 198, 0, 36)
         row.status = CreateField(row, 238, 0, 178)
-        row.total  = CreateField(row, 420, 0, 80)
+        row.total  = CreateField(row, 420, 0, 140)
         frame.overview.partyRows[index] = row
     end
 
