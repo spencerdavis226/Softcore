@@ -91,20 +91,20 @@ The primary button at the bottom of the window is dynamic:
 
 A proposed run does not start for any player until all current party members accept. If any member declines, the proposal is cancelled for everyone. All party members must be running Softcore and synced before the run can begin. Use `/sc accept` or `/sc decline` as slash-command fallbacks.
 
-Disallowed actions create violations. Event violations, like opening a disallowed mailbox, can be reviewed and cleared in the Log GUI (`/sc violations`). State violations, like invalid equipped gear, remain active until the condition is fixed and then cleared with a reason. Compatibility blockers — unsynced party members, rule mismatches, or a level gap above the allowed maximum — block party progress but do not fail any character and are not violations.
+Disallowed actions create violations. Event violations, like opening a disallowed mailbox, can be reviewed and cleared in the Log GUI (`/sc violations`). State violations, like invalid equipped gear, remain active until the condition is fixed and then cleared. Compatibility blockers — unsynced party members, rule mismatches, or a level gap above the allowed maximum — block party progress but do not fail any character and are not violations.
 
 ## Violations and the Log GUI
 
-Use `/sc log` to open the Log GUI. The **Events** tab shows a scrollable history of recorded events. The **Violations** tab shows a paginated list of all violations with their current status.
+Use `/sc log` to open the Log GUI. The **Events** tab shows a scrollable history of recorded events. The **Violations** tab shows active violations.
 
-Violations are never deleted. Cleared violations remain in the audit log marked `CLEARED` with the reason and who cleared them.
+Violations are never deleted. Clicking **Clear** marks a violation `CLEARED`, records who cleared it, and adds an audit log entry.
 
 Rules for clearing violations:
 
 - Death violations are **never** clearable.
 - Fatal or character-fail severity violations are **never** clearable.
 - Compatibility blocker types (unsynced members, level gap, outsider grouping) are **never** clearable.
-- All other violations — including gear violations — can be cleared by entering a reason in the Log GUI.
+- All other violations — including gear violations — can be cleared with one click in the Log GUI.
 
 Gear limit tiers are:
 

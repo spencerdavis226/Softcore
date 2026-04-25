@@ -140,7 +140,6 @@ For violations:
 - mark cleared violations as cleared
 - store who cleared them
 - store when they were cleared
-- store the reason
 - add a log entry when something is cleared
 
 Death should not be clearable.
@@ -204,8 +203,7 @@ Build or improve a GUI for:
 
 - viewing events
 - viewing active violations
-- viewing cleared violations
-- clearing accidental violations with a required reason
+- clearing accidental violations while preserving audit history
 - preserving audit history
 
 ### Next: Status Dashboard

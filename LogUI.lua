@@ -1,15 +1,13 @@
 -- Log and violation review GUI.
 -- Events tab: scrollable event log (read-only).
--- Violations tab: paginated violation list with reason-gated clearing.
--- Gear violations are clearable with a reason; the player is expected to unequip the
--- offending item first. No live gear re-scan is performed at clear time (simpler and safe).
+-- Violations tab: paginated violation list with one-click clearing.
 
 local SC = Softcore
 
-local TAB_EVENTS    = "EVENTS"
+local TAB_EVENTS = "EVENTS"
 local TAB_VIOLATIONS = "VIOLATIONS"
 local ROWS_PER_PAGE = 13
-local ROW_HEIGHT    = 24
+local ROW_HEIGHT = 24
 
 local function Print(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r " .. tostring(message))
@@ -25,14 +23,6 @@ local function Trunc(str, maxLen)
     if #str <= maxLen then return str end
     return string.sub(str, 1, maxLen - 2) .. ".."
 end
-
-local function HideReasonPanel(frame)
-    if frame and frame.reasonPanel then
-        frame.reasonPanel:Hide()
-    end
-end
-
--- ── Events tab ────────────────────────────────────────────────────────────────
 
 local function RefreshEvents(frame)
     local db = Softcore.db or SoftcoreDB
@@ -58,23 +48,26 @@ local function RefreshEvents(frame)
     frame.eventsMsgFrame:ScrollToBottom()
 end
 
--- ── Violations tab ────────────────────────────────────────────────────────────
-
-local function RefreshViolations(frame)
+local function GetSortedViolations()
     local db = Softcore.db or SoftcoreDB
     local source = (db and db.violations) or {}
     local violations = {}
+
     for _, violation in ipairs(source) do
-        table.insert(violations, violation)
-    end
-    table.sort(violations, function(left, right)
-        local leftActive = left.status ~= "CLEARED"
-        local rightActive = right.status ~= "CLEARED"
-        if leftActive ~= rightActive then
-            return leftActive
+        if violation.status ~= "CLEARED" then
+            table.insert(violations, violation)
         end
+    end
+
+    table.sort(violations, function(left, right)
         return (left.createdAt or 0) > (right.createdAt or 0)
     end)
+
+    return violations
+end
+
+local function RefreshViolations(frame)
+    local violations = GetSortedViolations()
     local total = #violations
     local totalPages = math.max(1, math.ceil(total / ROWS_PER_PAGE))
 
@@ -89,50 +82,40 @@ local function RefreshViolations(frame)
     frame.noViolationsText:SetShown(total == 0)
 
     for i, row in ipairs(frame.vRows) do
-        local v = violations[startIdx + i - 1]
-        if v then
+        local violation = violations[startIdx + i - 1]
+
+        if violation then
             row:Show()
-            row.timeText:SetText(FormatTime(v.createdAt))
-            row.typeText:SetText(Trunc(v.type or "?", 20))
+            row.timeText:SetText(FormatTime(violation.createdAt))
+            row.typeText:SetText(Trunc(violation.type or "?", 20))
 
-            if v.status == "CLEARED" then
-                row.statusText:SetText("|cff888888CLEARED|r")
-            else
-                row.statusText:SetText("|cffff8888ACTIVE|r")
-            end
+            row.statusText:SetText("|cffff8888ACTIVE|r")
 
-            row.detailText:SetText(Trunc(v.detail or "", 44))
+            row.detailText:SetText(Trunc(violation.detail or "", 44))
 
-            if Softcore:IsViolationClearable(v) then
+            if Softcore:IsViolationClearable(violation) then
+                local violationId = violation.id
                 row.clearBtn:Show()
-                local vid  = v.id
-                local vtyp = v.type
                 row.clearBtn:SetScript("OnClick", function()
-                    frame.pendingClearId = vid
-                    frame.pendingClearLabel:SetText(
-                        "Clear \"" .. tostring(vtyp) .. "\" violation — enter a reason:"
-                    )
-                    frame.reasonBox:SetText("")
-                    frame.reasonError:SetText("")
-                    frame.reasonPanel:Show()
-                    frame.reasonBox:SetFocus()
+                    SC:ClearViolation(violationId, SC:GetPlayerKey())
+                    Print("violation cleared.")
+                    SC:LogUI_Refresh()
                 end)
             else
                 row.clearBtn:Hide()
+                row.clearBtn:SetScript("OnClick", nil)
             end
         else
             row:Hide()
+            row.clearBtn:SetScript("OnClick", nil)
         end
     end
 end
-
--- ── Main refresh dispatcher ───────────────────────────────────────────────────
 
 function SC:LogUI_Refresh()
     local frame = self.logFrame
     if not frame or not frame:IsShown() then return end
 
-    -- Dim the active tab button so it reads as selected
     frame.eventsTab:SetEnabled(frame.activeTab ~= TAB_EVENTS)
     frame.violationsTab:SetEnabled(frame.activeTab ~= TAB_VIOLATIONS)
 
@@ -142,7 +125,6 @@ function SC:LogUI_Refresh()
         frame.vPrevBtn:Hide()
         frame.vNextBtn:Hide()
         frame.vPageText:SetText("")
-        HideReasonPanel(frame)
         RefreshEvents(frame)
     else
         frame.eventsPanel:Hide()
@@ -153,22 +135,17 @@ function SC:LogUI_Refresh()
     end
 end
 
--- ── Window builder ────────────────────────────────────────────────────────────
-
 function SC:OpenLogWindow(focusTab)
     if self.logFrame then
         self.logFrame:Show()
         if focusTab then
             self.logFrame.activeTab = focusTab
             self.logFrame.vPage = 1
-            self.logFrame.pendingClearId = nil
-            HideReasonPanel(self.logFrame)
         end
         self:LogUI_Refresh()
         return
     end
 
-    -- Frame: 720 × 560
     local frame = CreateFrame("Frame", "SoftcoreLogFrame", UIParent, "BackdropTemplate")
     frame:SetSize(720, 560)
     frame:SetPoint("CENTER")
@@ -184,18 +161,18 @@ function SC:OpenLogWindow(focusTab)
         end
     end)
     frame:SetBackdrop({
-        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 12,
+        tile = true,
+        tileSize = 16,
+        edgeSize = 12,
         insets = { left = 3, right = 3, top = 3, bottom = 3 },
     })
     frame:SetBackdropColor(0, 0, 0, 0.92)
 
-    frame.activeTab      = focusTab or TAB_EVENTS
-    frame.vPage          = 1
-    frame.pendingClearId = nil
+    frame.activeTab = focusTab or TAB_EVENTS
+    frame.vPage = 1
 
-    -- Title
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 18, -14)
     title:SetText("Softcore: Log")
@@ -206,15 +183,12 @@ function SC:OpenLogWindow(focusTab)
     topCloseBtn:SetText("X")
     topCloseBtn:SetScript("OnClick", function() frame:Hide() end)
 
-    -- Tab buttons
     local eventsTab = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     eventsTab:SetSize(90, 24)
     eventsTab:SetPoint("TOPLEFT", 18, -44)
     eventsTab:SetText("Events")
     eventsTab:SetScript("OnClick", function()
         frame.activeTab = TAB_EVENTS
-        frame.pendingClearId = nil
-        HideReasonPanel(frame)
         self:LogUI_Refresh()
     end)
     frame.eventsTab = eventsTab
@@ -226,14 +200,10 @@ function SC:OpenLogWindow(focusTab)
     violationsTab:SetScript("OnClick", function()
         frame.activeTab = TAB_VIOLATIONS
         frame.vPage = 1
-        frame.pendingClearId = nil
-        HideReasonPanel(frame)
         self:LogUI_Refresh()
     end)
     frame.violationsTab = violationsTab
 
-    -- ── Events panel (ScrollingMessageFrame) ─────────────────────────────────
-    -- y=-76 → height 336 → bottom edge at y=-412
     local eventsPanel = CreateFrame("Frame", nil, frame)
     eventsPanel:SetSize(682, 336)
     eventsPanel:SetPoint("TOPLEFT", frame, "TOPLEFT", 18, -76)
@@ -255,15 +225,12 @@ function SC:OpenLogWindow(focusTab)
         if delta > 0 then self:ScrollUp() else self:ScrollDown() end
     end)
     frame.eventsMsgFrame = evMsgFrame
-    frame.eventsPanel    = eventsPanel
+    frame.eventsPanel = eventsPanel
 
-    -- ── Violations panel (paginated rows) ────────────────────────────────────
-    -- Same position/size as events panel
     local vPanel = CreateFrame("Frame", nil, frame)
     vPanel:SetSize(682, 336)
     vPanel:SetPoint("TOPLEFT", frame, "TOPLEFT", 18, -76)
 
-    -- Column headers
     local function VHdr(label, x, w)
         local fs = vPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
         fs:SetPoint("TOPLEFT", x, 0)
@@ -271,8 +238,9 @@ function SC:OpenLogWindow(focusTab)
         fs:SetJustifyH("LEFT")
         fs:SetText(label)
     end
-    VHdr("Time",   0,   82)
-    VHdr("Type",   84,  130)
+
+    VHdr("Time", 0, 82)
+    VHdr("Type", 84, 130)
     VHdr("Status", 216, 72)
     VHdr("Detail", 290, 340)
 
@@ -283,7 +251,6 @@ function SC:OpenLogWindow(focusTab)
     noViolationsText:SetText("(no violations recorded)")
     frame.noViolationsText = noViolationsText
 
-    -- Violation rows (ROWS_PER_PAGE = 13)
     local vRows = {}
     for i = 1, ROWS_PER_PAGE do
         local row = CreateFrame("Frame", nil, vPanel)
@@ -304,8 +271,8 @@ function SC:OpenLogWindow(focusTab)
             return fs
         end
 
-        row.timeText   = Fld(0,   82)
-        row.typeText   = Fld(84,  130)
+        row.timeText = Fld(0, 82)
+        row.typeText = Fld(84, 130)
         row.statusText = Fld(216, 72)
         row.detailText = Fld(290, 310)
 
@@ -317,11 +284,9 @@ function SC:OpenLogWindow(focusTab)
 
         vRows[i] = row
     end
-    frame.vRows         = vRows
+    frame.vRows = vRows
     frame.violationsPanel = vPanel
 
-    -- ── Pagination (below the panels, always child of frame) ─────────────────
-    -- Panels end at y=-(76+336)=y=-412; pagination row at y=-418
     local vPrevBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     vPrevBtn:SetSize(70, 22)
     vPrevBtn:SetPoint("TOPLEFT", frame, "TOPLEFT", 18, -418)
@@ -346,64 +311,6 @@ function SC:OpenLogWindow(focusTab)
     end)
     frame.vNextBtn = vNextBtn
 
-    -- ── Reason panel (shown when Clear is clicked on a violation) ─────────────
-    -- Anchored below pagination, at y=-448; height 52
-    local reasonPanel = CreateFrame("Frame", nil, frame)
-    reasonPanel:SetSize(682, 52)
-    reasonPanel:SetPoint("TOPLEFT", frame, "TOPLEFT", 18, -448)
-
-    local pendingClearLabel = reasonPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    pendingClearLabel:SetPoint("TOPLEFT", 0, 0)
-    pendingClearLabel:SetWidth(682)
-    pendingClearLabel:SetJustifyH("LEFT")
-    frame.pendingClearLabel = pendingClearLabel
-
-    local reasonBox = CreateFrame("EditBox", nil, reasonPanel, "InputBoxTemplate")
-    reasonBox:SetSize(430, 22)
-    reasonBox:SetPoint("TOPLEFT", reasonPanel, "TOPLEFT", 0, -20)
-    reasonBox:SetAutoFocus(false)
-    reasonBox:SetMaxLetters(200)
-    frame.reasonBox = reasonBox
-
-    local confirmBtn = CreateFrame("Button", nil, reasonPanel, "UIPanelButtonTemplate")
-    confirmBtn:SetSize(80, 22)
-    confirmBtn:SetPoint("LEFT", reasonBox, "RIGHT", 8, 0)
-    confirmBtn:SetText("Confirm")
-    confirmBtn:SetScript("OnClick", function()
-        local reason = strtrim(reasonBox:GetText() or "")
-        if reason == "" then
-            frame.reasonError:SetText("|cffff4444Enter a reason to clear this violation.|r")
-            return
-        end
-        if frame.pendingClearId then
-            self:ClearViolation(frame.pendingClearId, self:GetPlayerKey(), reason)
-            Print("violation cleared.")
-        end
-        frame.pendingClearId = nil
-        reasonPanel:Hide()
-        self:LogUI_Refresh()
-    end)
-
-    local cancelClearBtn = CreateFrame("Button", nil, reasonPanel, "UIPanelButtonTemplate")
-    cancelClearBtn:SetSize(70, 22)
-    cancelClearBtn:SetPoint("LEFT", confirmBtn, "RIGHT", 6, 0)
-    cancelClearBtn:SetText("Cancel")
-    cancelClearBtn:SetScript("OnClick", function()
-        frame.pendingClearId = nil
-        frame.reasonError:SetText("")
-        reasonPanel:Hide()
-    end)
-
-    local reasonError = reasonPanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    reasonError:SetPoint("TOPLEFT", reasonPanel, "TOPLEFT", 0, -46)
-    reasonError:SetWidth(682)
-    reasonError:SetJustifyH("LEFT")
-    frame.reasonError = reasonError
-
-    reasonPanel:Hide()
-    frame.reasonPanel = reasonPanel
-
-    -- ── Close button ──────────────────────────────────────────────────────────
     local closeBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     closeBtn:SetSize(80, 24)
     closeBtn:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -18, 18)
