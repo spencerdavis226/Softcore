@@ -239,11 +239,6 @@ function SC:Events_Register()
             CheckMovementRules()
         elseif event == "GROUP_ROSTER_UPDATE" then
             SC:AddLog("GROUP_ROSTER", "Group roster changed.")
-            if C_Timer and C_Timer.After then
-                C_Timer.After(2, function()
-                    Broadcast("GROUP_ROSTER_UPDATE")
-                end)
-            end
             if SC.Sync_MarkRoster then
                 SC:Sync_MarkRoster()
             end
@@ -253,7 +248,13 @@ function SC:Events_Register()
             if SC.CheckMaxLevelGap then
                 SC:CheckMaxLevelGap(true)
             end
-            Broadcast("GROUP_ROSTER_UPDATE")
+            if C_Timer and C_Timer.After then
+                C_Timer.After(2, function()
+                    Broadcast("GROUP_ROSTER_UPDATE")
+                end)
+            else
+                Broadcast("GROUP_ROSTER_UPDATE")
+            end
         elseif event == "PLAYER_ENTERING_WORLD" then
             if SC.ScanEquippedGear then
                 SC:ScanEquippedGear(true)

@@ -234,45 +234,63 @@ Do not add:
 
 ## Loose Roadmap
 
-### Current Direction: Master Menu
+### Done: Master Menu
 
-Use the master menu as the main UI surface:
+The master menu is the primary UI surface:
 
-- Overview for local/party status
-- Run for start/configuration, locked active rules, stop run, and future amendments
-- Violations for active clearable issues
-- Log for newest-first audit history
+- Overview for local/party status and run elapsed time
+- Run for starting a run, locked active rules, Modify Rules draft mode, stopping a run
+- Violations for active clearable issues with one-click Clear
+- Log for newest-first audit history with actor column
 
-Older standalone windows may remain as fallbacks during development, but the product direction is to keep the user-facing UI centralized.
+### Done: HUD
 
-### Next: Status Dashboard / HUD
+A compact always-visible HUD (`/sc hud` to toggle):
 
-Improve the Overview tab and later add a small HUD for:
+- colored light (green/yellow/red) for local run status when solo
+- hero row for party status, one member row per synced party member when grouped
+- violation hint row when active violations exist
+- left-click opens Violations tab if violations active, otherwise Overview
 
-- local character status
-- party status
-- group members
-- synced/unsynced state
-- active violations
-- failed characters
-- conflicts/blockers
+### Done: Rule Amendments
 
-The dashboard should clearly separate:
+Mid-run rule changes via a visible amendment flow in the Run tab:
 
-- individual character validity
-- party compatibility
-- violations
-- blockers/conflicts
+- Modify Rules enters a draft mode with the current ruleset as a starting point
+- changing any rule shows a summary of what will change
+- solo: Apply Changes proposes, accepts, and applies immediately; old/new values logged
+- grouped: Propose to Party sends the draft to all party members for review
+- party members see a pending amendment overlay in the Run tab with changed rules listed, and Accept/Decline buttons
+- all accept → proposer applies and broadcasts; any decline → proposer is notified and amendment is cancelled for everyone
+- Cancel Proposal available to the proposer while waiting
 
-The HUD should be minimal and glanceable, not a second full dashboard.
+### Done: Group Run Proposals
+
+Proposing a new run while grouped:
+
+- Run tab Start Run sends a proposal to all party members
+- each member sees a popup with the proposed ruleset
+- all must accept before the run begins; any decline cancels for everyone
+- PROPOSAL_CONFIRMED broadcast starts the run simultaneously
+
+### Next: Multiplayer Testing
+
+All group flows — sync, run proposals, rule amendment proposals, party audit sharing — need live testing with two or more clients.
+
+Known gaps to validate:
+
+- sync round-trip for STATUS, PARTY_LOG, PARTY_VIOLATION, PARTY_VIOLATION_CLEAR
+- run proposal accept/decline/confirm flow
+- rule amendment propose/accept/decline/cancel/apply flow
+- party member leaving mid-run behavior
+- reload UI while grouped behavior
 
 ### Next: Sync and Party Audit Robustness
 
-Improve party behavior so that:
+After multiplayer testing surfaces issues, improve:
 
 - party violations and logs clearly show which character caused them
 - active and cleared violations sync in a predictable way
-- clearing remote-visible violations has a conservative shared history model
 - players leaving/rejoining remain understandable without corrupting local state
 
 ### Later: Merge / Compatibility Flow
@@ -282,20 +300,6 @@ Support cases where players start separately but later want to group.
 If rules are compatible but run IDs differ, the addon should not silently merge them.
 
 A future flow may allow players to explicitly align or merge into a shared group run while preserving prior history.
-
-### Next: Rule Amendments
-
-Support changing rules mid-run through a visible amendment flow in the Run tab.
-
-Rule changes should be logged.
-
-Rule changes should generally apply going forward, not retroactively erase past violations.
-
-Implement this in small steps:
-
-- first: local solo draft/apply/cancel behavior
-- next: grouped proposal/review/accept/decline behavior
-- later: explicit merge/alignment flows for separate runs
 
 ### Later: Export / Session Summary
 
@@ -315,16 +319,14 @@ Possible contents:
 
 ### Later: Polish
 
-Only after core behavior is stable:
+Only after core behavior is stable and multiplayer tested:
 
 - minimap button
 - lock/unlock frame
 - compact/expanded views
-- better styling
-- better colors
+- better styling and colors
 - sound toggles and intentional addon sounds
-- slash command help
-- README cleanup
+- slash command help improvements
 - changelog
 
 ## Testing Expectations

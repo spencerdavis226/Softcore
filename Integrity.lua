@@ -2,6 +2,10 @@
 
 local SC = Softcore
 
+local function Print(message)
+    DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r " .. tostring(message))
+end
+
 local GEAR_SCAN_THROTTLE = 10
 local GEAR_VIOLATION_THROTTLE = 60
 local LEVEL_GAP_THROTTLE = 20

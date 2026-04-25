@@ -15,29 +15,25 @@ Version 0.4.0 tracks your local run, applies structured rules, syncs resilient s
 ## Slash Commands
 
 - `/softcore` or `/sc` - open the Softcore menu.
-- `/sc start` - start a new local run.
 - `/sc new` - open the Run tab.
 - `/sc status` - open the Overview tab. Use `/sc status chat` to print current run status.
 - `/sc reset confirm` - reset the local run.
 - `/sc log` - open the Log tab. Use `/sc log chat` to print to chat instead.
 - `/sc violations` - open the Violations tab.
+- `/sc hud` - toggle the compact always-visible HUD.
 - `/sc gear` - print gear rules and invalid equipped items.
 - `/sc dungeons` - print dungeon entries for the current run.
 - `/sc roster` - open the Overview tab. Use `/sc roster chat` to print tracked run participants.
-- `/sc add Player-Realm` - add a pending participant until the v0.3 join UI exists.
 - `/sc retire` - retire this character without marking it failed.
 - `/sc rules` - open the Run tab. Use `/sc rules chat` to print the current ruleset.
-- `/sc rule mailbox ALLOWED` - change a rule locally and log a prospective amendment.
 - `/sc resync` - request full run state from party members.
 - `/sc participants` - open the Overview tab.
 - `/sc run` - open the Overview tab. Use `/sc run chat` to print run metadata.
 - `/sc conflicts` - print detected sync conflicts.
 - `/sc access` - print storage and economy access rules.
 - `/sc propose` - open/propose a new group run.
-- `/sc proposal` - show the pending proposal.
 - `/sc accept` - accept the pending proposal.
 - `/sc decline` - decline the pending proposal.
-- `/sc propose-add Player-Realm` - propose a late or replacement participant.
 
 ## What It Tracks
 
@@ -114,7 +110,7 @@ Disallowed actions create violations. Event violations, like opening a disallowe
 
 Mid-run rule changes are handled as amendments. The Run tab is the intended home for this flow: locked active rules normally, a Modify Rules draft mode for changes, and logged old/new values when changes are applied. Changes apply going forward and do not erase prior deaths, violations, or audit history.
 
-For grouped runs, the next direction is to reuse the same amendment shape as a party proposal/review flow. A popup may notify players, but review should happen in the Run tab with changed values highlighted and clear Accept/Decline actions.
+When grouped, clicking **Propose to Party** sends the draft to all party members. Each member sees a pending amendment overlay in the Run tab listing the changed rules with Accept and Decline buttons. Once all members accept the proposer applies the changes and broadcasts to the group. If any member declines the amendment is cancelled and the proposer is notified. The proposer can also cancel a pending proposal before all members have responded.
 
 ## Violations and Log
 
