@@ -570,9 +570,11 @@ local function RefreshOverviewPanel(frame)
     local localKey = SC:GetPlayerKey()
     local localParticipant = run.participants and run.participants[localKey]
     local startLevel = (localParticipant and localParticipant.levelAtJoin) or run.startLevel
+    local grouped = IsInGroup()
 
     frame.overview.noRunText:SetShown(not active)
     frame.overview.goToRunBtn:SetShown(not active)
+    frame.overview.resyncBtn:SetShown(grouped)
 
     frame.overview.run:SetShown(active)
     frame.overview.localStatus:SetShown(active)
@@ -596,12 +598,12 @@ local function RefreshOverviewPanel(frame)
 
         local violationColor = activeViolations > 0 and "|cfffbbf24" or ""
         local violationReset = activeViolations > 0 and "|r" or ""
-        frame.overview.violations:SetText("Violations: " .. violationColor .. activeViolations .. violationReset)
+        frame.overview.violations:SetText("Active violations: " .. violationColor .. activeViolations .. violationReset)
 
         frame.overview.runId:SetText("|cffad8f61Run ID: " .. tostring(run.runId or "none") .. "|r")
     end
 
-    frame.overview.partyEmpty:SetShown(#partyRows == 0)
+    frame.overview.partyEmpty:SetShown(grouped and #partyRows == 0)
 
     for index = #frame.overview.partyRows + 1, math.min(#partyRows, 5) do
         frame.overview.partyRows[index] = CreateOverviewPartyRow(frame.overview.panel, index)
@@ -1291,12 +1293,12 @@ function SC:OpenMasterWindow(focusTab)
     CreateLabel(overviewPanel, "Name", 0, -222, "GameFontNormalSmall", 190)
     CreateLabel(overviewPanel, "Level (Start)", 204, -222, "GameFontNormalSmall", 100)
     CreateLabel(overviewPanel, "Status", 314, -222, "GameFontNormalSmall", 180)
-    CreateLabel(overviewPanel, "Violations", 520, -222, "GameFontNormalSmall", 120)
+    CreateLabel(overviewPanel, "Total Violations", 520, -222, "GameFontNormalSmall", 140)
 
     local columnSep = overviewPanel:CreateTexture(nil, "ARTWORK")
     columnSep:SetHeight(1)
     columnSep:SetPoint("TOPLEFT",  overviewPanel, "TOPLEFT",  0, -237)
-    columnSep:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", -20, -237)
+    columnSep:SetWidth(650)
     columnSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
 
     frame.overview.partyEmpty = CreateField(overviewPanel, 0, -252, 620)
