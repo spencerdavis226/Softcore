@@ -120,7 +120,7 @@ The Run tab should support a draft amendment mode:
 - applying changes creates an amendment, logs old/new values, and applies changes going forward
 - canceling returns to the locked active rules without changing the run
 
-For grouped runs, the same draft amendment shape should eventually become a party proposal/review flow. A popup can notify players, but the actual review should live in the Run tab with changed values highlighted and clear Accept/Decline actions.
+For grouped runs, the same draft amendment shape should become a party proposal/review flow in the Run tab, with changed values highlighted and clear Accept/Decline actions.
 
 The UI should avoid long dropdown labels that run into columns or overlap.
 
@@ -269,7 +269,7 @@ Mid-run rule changes via a visible amendment flow in the Run tab:
 Proposing a new run while grouped:
 
 - Run tab Start Run sends a proposal to all party members
-- each member sees a popup with the proposed ruleset
+- each member reviews the proposed ruleset in the Run tab
 - all must accept before the run begins; any decline cancels for everyone
 - PROPOSAL_CONFIRMED broadcast starts the run simultaneously
 

@@ -998,33 +998,11 @@ local function RefreshLogPanel(frame)
 end
 
 local function ConfirmStopRun()
-    if not StaticPopupDialogs or not StaticPopup_Show then
-        SC:ResetRun()
-        if SC.masterFrame then
-            SC.masterFrame.activeTab = TAB_RUN
-            SC:MasterUI_Refresh()
-        end
-        return
+    SC:ResetRun()
+    if SC.masterFrame then
+        SC.masterFrame.activeTab = TAB_RUN
+        SC:MasterUI_Refresh()
     end
-
-    StaticPopupDialogs["SOFTCORE_STOP_RUN"] = StaticPopupDialogs["SOFTCORE_STOP_RUN"] or {
-        text = "Stop this Softcore run?\n\nThis archives the current local run data and returns this character to inactive state.",
-        button1 = "Stop Run",
-        button2 = "Cancel",
-        OnAccept = function()
-            SC:ResetRun()
-            if SC.masterFrame then
-                SC.masterFrame.activeTab = TAB_RUN
-                SC:MasterUI_Refresh()
-            end
-        end,
-        timeout = 0,
-        whileDead = true,
-        hideOnEscape = true,
-        preferredIndex = 3,
-    }
-
-    StaticPopup_Show("SOFTCORE_STOP_RUN")
 end
 
 function SC:ConfirmStopRun()

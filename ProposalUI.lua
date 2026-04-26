@@ -1,4 +1,4 @@
--- Proposal state, popup, and slash fallbacks for group run governance.
+-- Proposal state and slash fallbacks for group run governance.
 
 local SC = Softcore
 
@@ -709,31 +709,6 @@ function SC:ShowPendingProposal()
         Print("proposal: " .. proposal.runName .. " from " .. tostring(proposal.proposedBy))
         Print(ProposalSummary(proposal))
     end
-end
-
-function SC:ShowProposalPopup(proposal)
-    if not StaticPopupDialogs then
-        Print("proposal received: " .. proposal.runName .. ". Use /sc accept or /sc decline.")
-        return
-    end
-
-    StaticPopupDialogs["SOFTCORE_RUN_PROPOSAL"] = {
-        text = "Softcore proposal:\n%s\n\n%s",
-        button1 = "Accept",
-        button2 = "Decline",
-        OnAccept = function()
-            SC:AcceptPendingProposal()
-        end,
-        OnCancel = function()
-            SC:DeclinePendingProposal()
-        end,
-        timeout = 0,
-        whileDead = true,
-        hideOnEscape = true,
-        preferredIndex = 3,
-    }
-
-    StaticPopup_Show("SOFTCORE_RUN_PROPOSAL", proposal.runName, "From: " .. tostring(proposal.proposedBy) .. "\n\n" .. ProposalSummary(proposal))
 end
 
 function SC:ProposeRunFromSlash()
