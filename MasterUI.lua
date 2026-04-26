@@ -457,7 +457,7 @@ end
 local function GetPendingRunProposal()
     if SC.GetPendingProposal then
         local proposal = SC:GetPendingProposal()
-        if proposal and proposal.status == "PENDING" then
+        if proposal and (proposal.status == "PENDING" or proposal.status == "ACCEPTED") then
             return proposal
         end
     end
@@ -761,6 +761,7 @@ local function HideAllRunControls(frame)
     frame.start.stopBtn:Hide()
     frame.start.modifyBtn:Hide()
     if frame.start.syncBtn then frame.start.syncBtn:Hide() end
+    if frame.start.inviteBtn then frame.start.inviteBtn:Hide() end
     frame.start.applyChangesBtn:Hide()
     frame.start.cancelChangesBtn:Hide()
     if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:Hide() end
@@ -801,6 +802,10 @@ local function AnchorRunFooterButtons(frame)
         start.syncBtn:ClearAllPoints()
         start.syncBtn:SetPoint("LEFT", start.modifyBtn, "RIGHT", 8, 0)
     end
+    if start.inviteBtn and start.inviteBtn:IsShown() then
+        start.inviteBtn:ClearAllPoints()
+        start.inviteBtn:SetPoint("LEFT", start.syncBtn, "RIGHT", 8, 0)
+    end
     if start.applyChangesBtn:IsShown() and start.applyChangesBtn ~= first then
         start.applyChangesBtn:ClearAllPoints()
         start.applyChangesBtn:SetPoint("LEFT", first, "RIGHT", 8, 0)
@@ -837,6 +842,7 @@ local function RefreshRunPanel(frame)
     local pendingProposal = GetPendingRunProposal()
     if pendingProposal then
         local isProposer = pendingProposal.proposedBy == SC:GetPlayerKey()
+        local acceptedLocally = pendingProposal.status == "ACCEPTED" and not isProposer
         local proposer = FormatPlayerLabel(pendingProposal.proposedBy)
         CopyRulesInto(frame.start.selectedRules, pendingProposal.ruleset)
         frame.start.groupingDropdown:SetShown(true)
@@ -851,12 +857,24 @@ local function RefreshRunPanel(frame)
         if isProposer then
             if pendingProposal.proposalType == "SYNC_RUN" then
                 frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your run sync proposal...|r")
+            elseif pendingProposal.proposalType == "ADD_PARTICIPANT" then
+                frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your run invite...|r")
             else
                 frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your run proposal...|r")
+            end
+        elseif acceptedLocally then
+            if pendingProposal.proposalType == "SYNC_RUN" then
+                frame.start.activeText:SetText("|cfffbbf24Accepted run sync from " .. proposer .. ".|r Waiting for party confirmation.")
+            elseif pendingProposal.proposalType == "ADD_PARTICIPANT" then
+                frame.start.activeText:SetText("|cfffbbf24Accepted party run invite from " .. proposer .. ".|r Waiting for party confirmation.")
+            else
+                frame.start.activeText:SetText("|cfffbbf24Accepted run proposal from " .. proposer .. ".|r Waiting for party confirmation.")
             end
         else
             if pendingProposal.proposalType == "SYNC_RUN" then
                 frame.start.activeText:SetText("|cffffd100Run sync proposal from " .. proposer .. ".|r Review the matching rules below, then Accept or Decline.")
+            elseif pendingProposal.proposalType == "ADD_PARTICIPANT" then
+                frame.start.activeText:SetText("|cffffd100Party run invite from " .. proposer .. ".|r Review the rules below, then Accept or Decline.")
             else
                 frame.start.activeText:SetText("|cffffd100Run proposal from " .. proposer .. ".|r Review the proposed rules below, then Accept or Decline.")
             end
@@ -865,10 +883,11 @@ local function RefreshRunPanel(frame)
         frame.start.stopBtn:Hide()
         frame.start.modifyBtn:Hide()
         if frame.start.syncBtn then frame.start.syncBtn:Hide() end
+        if frame.start.inviteBtn then frame.start.inviteBtn:Hide() end
         frame.start.applyChangesBtn:Hide()
         frame.start.cancelChangesBtn:Hide()
-        frame.start.proposalAcceptBtn:SetShown(not isProposer)
-        frame.start.proposalDeclineBtn:SetShown(not isProposer)
+        frame.start.proposalAcceptBtn:SetShown((not isProposer) and not acceptedLocally)
+        frame.start.proposalDeclineBtn:SetShown((not isProposer) and not acceptedLocally)
         frame.start.proposalCancelBtn:SetShown(isProposer)
         frame.start.proposalAcceptBtn:SetScript("OnClick", function()
             if SC.AcceptPendingProposal then SC:AcceptPendingProposal() end
@@ -879,7 +898,7 @@ local function RefreshRunPanel(frame)
             SC:MasterUI_Refresh()
         end)
         frame.start.proposalCancelBtn:SetScript("OnClick", function()
-            if SC.DeclinePendingProposal then SC:DeclinePendingProposal() end
+            if SC.CancelPendingProposal then SC:CancelPendingProposal() end
             SC:MasterUI_Refresh()
         end)
         if frame.start.RefreshControls then frame.start:RefreshControls() end
@@ -909,6 +928,9 @@ local function RefreshRunPanel(frame)
     frame.start.modifyBtn:SetShown(active and not modifying)
     if frame.start.syncBtn then
         frame.start.syncBtn:SetShown(active and not modifying and IsInGroup())
+    end
+    if frame.start.inviteBtn then
+        frame.start.inviteBtn:SetShown(active and not modifying and IsInGroup())
     end
     frame.start.applyChangesBtn:SetShown(modifying)
     frame.start.cancelChangesBtn:SetShown(modifying)
@@ -1346,6 +1368,16 @@ function SC:OpenMasterWindow(focusTab)
             SC:CreateRunSyncProposal()
         else
             Print("run sync proposals are not loaded.")
+        end
+        SC:MasterUI_Refresh()
+    end)
+    frame.start.inviteBtn = CreateButton(startPanel, "Invite Party", 100, 24)
+    frame.start.inviteBtn:SetPoint("LEFT", frame.start.syncBtn, "RIGHT", 8, 0)
+    frame.start.inviteBtn:SetScript("OnClick", function()
+        if SC.CreateRunInviteProposal then
+            SC:CreateRunInviteProposal()
+        else
+            Print("party run invites are not loaded.")
         end
         SC:MasterUI_Refresh()
     end)
