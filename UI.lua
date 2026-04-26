@@ -3,6 +3,7 @@
 -- Drag to reposition.  /sc hud to toggle visibility.
 
 local SC = Softcore
+local LOGO_TEXTURE = "Interface\\AddOns\\Softcore\\Assets\\SoftcoreLogo"
 
 local function SavePosition(key, frame)
     SoftcoreDB = SoftcoreDB or {}
@@ -256,10 +257,10 @@ function SC:MinimapButton_Create()
     button:SetFrameLevel(8)
 
     local icon = button:CreateTexture(nil, "BACKGROUND")
-    icon:SetSize(20, 20)
+    icon:SetSize(24, 24)
     icon:SetPoint("CENTER")
-    icon:SetTexture("Interface\\Icons\\Spell_Shadow_SoulGem")
-    icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    icon:SetTexture(LOGO_TEXTURE)
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
     local border = button:CreateTexture(nil, "OVERLAY")
     border:SetSize(53, 53)

@@ -30,6 +30,7 @@ local PANEL_HEIGHT = 500
 local BODY_TEXT = { r = 0.94, g = 0.86, b = 0.68 }
 local MUTED_TEXT = { r = 0.68, g = 0.56, b = 0.38 }
 local GOLD_TEXT = { r = 1.00, g = 0.82, b = 0.20 }
+local LOGO_TEXTURE = "Interface\\AddOns\\Softcore\\Assets\\SoftcoreLogo"
 
 local GROUPING_OPTIONS = {
     { text = "Group", value = "SYNCED_GROUP_ALLOWED" },
@@ -157,8 +158,7 @@ end
 
 local function ApplyParchmentBackdrop(frame)
     local parchmentFill = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
-    parchmentFill:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -12)
-    parchmentFill:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 12)
+    parchmentFill:SetAllPoints(frame)
     parchmentFill:SetColorTexture(0.12, 0.075, 0.035, 0.98)
 
     frame:SetBackdrop({
@@ -877,12 +877,6 @@ function SC:OpenMasterWindow(focusTab)
     end
     ApplyParchmentBackdrop(frame)
 
-    local headerBg = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
-    headerBg:SetPoint("TOPLEFT",  frame, "TOPLEFT",  18, -16)
-    headerBg:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -18, -16)
-    headerBg:SetHeight(48)
-    headerBg:SetColorTexture(0.20, 0.11, 0.045, 0.92)
-
     local headerSep = frame:CreateTexture(nil, "ARTWORK")
     headerSep:SetHeight(1)
     headerSep:SetPoint("TOPLEFT",  frame, "TOPLEFT",  22, -64)
@@ -897,8 +891,14 @@ function SC:OpenMasterWindow(focusTab)
     frame.activeTab = NormalizeTab(focusTab)
     frame.panels = {}
 
+    local logo = frame:CreateTexture(nil, "ARTWORK")
+    logo:SetSize(34, 34)
+    logo:SetPoint("TOPLEFT", frame, "TOPLEFT", 28, -17)
+    logo:SetTexture(LOGO_TEXTURE)
+    logo:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 28, -23)
+    title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 8, -5)
     title:SetText("|cffffd700Softcore|r")
 
     local subtitle = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -956,7 +956,7 @@ function SC:OpenMasterWindow(focusTab)
 
     table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Core Rules", 0, -72, 300))
     table.insert(frame.start.controls, CreateLabel(startPanel, "Death is permanent. A death fails this character only.", 0, -102, "GameFontHighlightSmall", 320))
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Mode", 0, -138, "GameFontNormalSmall", 80))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Mode", 0, -138, "GameFontNormalSmall", 70))
     frame.start.groupingDropdown = CreateDropdown(startPanel, "SoftcoreMasterGroupingDropdown", GROUPING_OPTIONS, frame.start.selectedRules.groupingMode, function(value)
         frame.start.selectedRules.groupingMode = value
         if SC.ApplyGroupingMode then
@@ -964,7 +964,7 @@ function SC:OpenMasterWindow(focusTab)
         end
         SC:MasterUI_Refresh()
     end, 140)
-    frame.start.groupingDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 92, -130)
+    frame.start.groupingDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 82, -130)
 
     table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Economy and Storage", 0, -188, 300))
     local y = -218
@@ -983,12 +983,12 @@ function SC:OpenMasterWindow(focusTab)
     end
 
     table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Gear and Items", 360, -168, 300))
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Gear limit", 360, -198, "GameFontNormalSmall", 80))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Gear limit", 360, -198, "GameFontNormalSmall", 82))
     frame.start.gearDropdown = CreateDropdown(startPanel, "SoftcoreMasterGearDropdown", GEAR_OPTIONS, frame.start.selectedRules.gearQuality, function(value)
         frame.start.selectedRules.gearQuality = value
         SC:MasterUI_Refresh()
     end, 145)
-    frame.start.gearDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 462, -190)
+    frame.start.gearDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 452, -190)
     frame.start.heirloomCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Heirlooms", key = "heirlooms" }, 360, -232)
     table.insert(frame.start.controls, frame.start.heirloomCheck)
     frame.start.consumablesCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Consumables", key = "consumables" }, 360, -262)
@@ -1070,7 +1070,7 @@ function SC:OpenMasterWindow(focusTab)
     end
 
     frame.start.primaryBtn = CreateButton(startPanel, "Start Run", 120, 24)
-    frame.start.primaryBtn:SetPoint("BOTTOMLEFT", startPanel, "BOTTOMLEFT", 0, 0)
+    frame.start.primaryBtn:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 30, 18)
     frame.start.primaryBtn:SetScript("OnClick", function()
         local ruleset = SC:CopyTable(frame.start.selectedRules)
         if SC.ApplyGroupingMode then
