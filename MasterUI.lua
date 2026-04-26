@@ -26,7 +26,6 @@ local TAB_ACHIEVEMENTS = "ACHIEVEMENTS"
 
 local DISALLOWED_OUTCOME = "WARNING"
 local LOG_ROWS = 22
-local ACHIEVEMENT_ROWS = 16
 local PANEL_WIDTH = 710
 local PANEL_HEIGHT = 500
 local BODY_TEXT = { r = 0.94, g = 0.86, b = 0.68 }
@@ -1023,17 +1022,61 @@ local function RefreshLogPanel(frame)
     end
 end
 
+local function CreateAchievementRow(parent, index)
+    local row = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    row:SetSize(650, 74)
+    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -((index - 1) * 82))
+    row:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = false, edgeSize = 12,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    row:SetBackdropColor(0.11, 0.075, 0.035, 0.92)
+    row:SetBackdropBorderColor(0.58, 0.42, 0.18, 0.72)
+
+    row.medal = CreateFrame("Frame", nil, row, "BackdropTemplate")
+    row.medal:SetSize(46, 46)
+    row.medal:SetPoint("TOPLEFT", row, "TOPLEFT", 12, -12)
+    row.medal:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = false, edgeSize = 10,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 },
+    })
+    row.medal:SetBackdropColor(0.25, 0.18, 0.08, 1)
+    row.medal:SetBackdropBorderColor(0.76, 0.58, 0.18, 1)
+    row.icon = row.medal:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    row.icon:SetPoint("CENTER", row.medal, "CENTER", 0, 0)
+    row.icon:SetText("*")
+
+    row.name = CreateField(row, 70, -10, 250)
+    row.name:SetFontObject(GameFontNormal)
+    row.meta = CreateField(row, 326, -12, 130)
+    row.meta:SetJustifyH("RIGHT")
+    row.date = CreateField(row, 464, -12, 170)
+    row.date:SetJustifyH("RIGHT")
+    row.description = CreateField(row, 70, -32, 414)
+    row.description:SetFontObject(GameFontHighlightSmall)
+    row.progress = CreateFrame("StatusBar", nil, row)
+    row.progress:SetSize(210, 10)
+    row.progress:SetPoint("TOPLEFT", row, "TOPLEFT", 70, -56)
+    row.progress:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    row.progress:SetMinMaxValues(0, 1)
+    row.progressBg = row.progress:CreateTexture(nil, "BACKGROUND")
+    row.progressBg:SetAllPoints(row.progress)
+    row.progressBg:SetColorTexture(0.05, 0.04, 0.025, 0.95)
+    row.progressText = CreateField(row, 292, -52, 330)
+    row.progressText:SetFontObject(GameFontHighlightSmall)
+
+    return row
+end
+
 local function RefreshAchievementsPanel(frame)
     if not frame.achievements then return end
 
     local rows = SC.GetAchievementRows and SC:GetAchievementRows() or {}
     local earnedCount = 0
-    local page = frame.achievements.page or 1
-    local pageCount = math.max(1, math.ceil(#rows / ACHIEVEMENT_ROWS))
-    if page > pageCount then page = pageCount end
-    if page < 1 then page = 1 end
-    frame.achievements.page = page
-    local offset = (page - 1) * ACHIEVEMENT_ROWS
 
     for _, row in ipairs(rows) do
         if row.earned then
@@ -1042,9 +1085,6 @@ local function RefreshAchievementsPanel(frame)
     end
 
     frame.achievements.summary:SetText("Earned: " .. tostring(earnedCount) .. " / " .. tostring(#rows))
-    frame.achievements.pageText:SetText("Page " .. tostring(page) .. " / " .. tostring(pageCount))
-    frame.achievements.prevBtn:SetEnabled(page > 1)
-    frame.achievements.nextBtn:SetEnabled(page < pageCount)
 
     if #rows == 0 then
         frame.achievements.empty:Show()
@@ -1052,19 +1092,43 @@ local function RefreshAchievementsPanel(frame)
         frame.achievements.empty:Hide()
     end
 
+    for index = #frame.achievements.rows + 1, #rows do
+        frame.achievements.rows[index] = CreateAchievementRow(frame.achievements.content, index)
+    end
+
+    frame.achievements.content:SetHeight(math.max(408, #rows * 82))
+
     for index, rowFrame in ipairs(frame.achievements.rows) do
-        local achievement = rows[offset + index]
+        local achievement = rows[index]
         if achievement then
             rowFrame:Show()
-            rowFrame.icon:SetText(achievement.earned and "|cff22c55e*|r" or "|cff6b7280-|r")
-            rowFrame.name:SetText((achievement.earned and "|cff4ade80" or "|cffffd100") .. tostring(achievement.name or "?") .. "|r")
-            rowFrame.scope:SetText(achievement.scope == "ACCOUNT" and "Account" or "Character")
-            rowFrame.category:SetText(tostring(achievement.category or ""))
-            rowFrame.description:SetText(Trunc(achievement.description or "", 58))
+            rowFrame.icon:SetText(achievement.earned and "|cffffd100*|r" or "|cff6b7280?|r")
+            rowFrame.name:SetText((achievement.earned and "|cffffd100" or "|cffad8f61") .. tostring(achievement.name or "?") .. "|r")
+            rowFrame.meta:SetText("|cffad8f61" .. tostring(achievement.category or "") .. " - " .. (achievement.scope == "ACCOUNT" and "Account" or "Character") .. "|r")
+            rowFrame.description:SetText(Trunc(achievement.description or "", 72))
             if achievement.earnedAt then
-                rowFrame.date:SetText(FormatTime(achievement.earnedAt))
+                rowFrame.date:SetText("|cff4ade80" .. FormatTime(achievement.earnedAt) .. "|r")
+                rowFrame.progress:SetValue(1)
+                rowFrame.progress:SetStatusBarColor(0.86, 0.62, 0.16, 1)
+                rowFrame.progressText:SetText("|cff4ade80Complete|r")
+                rowFrame:SetBackdropColor(0.18, 0.12, 0.045, 0.96)
+                rowFrame:SetBackdropBorderColor(0.86, 0.62, 0.16, 0.92)
+                rowFrame.medal:SetBackdropColor(0.42, 0.30, 0.07, 1)
+                rowFrame.medal:SetBackdropBorderColor(1.0, 0.82, 0.20, 1)
             else
+                local progressValue = tonumber(achievement.progressValue or 0) or 0
                 rowFrame.date:SetText("|cff9ca3afLocked|r")
+                rowFrame.progress:SetValue(progressValue)
+                if progressValue > 0 then
+                    rowFrame.progress:SetStatusBarColor(0.22, 0.56, 0.88, 1)
+                else
+                    rowFrame.progress:SetStatusBarColor(0.34, 0.28, 0.18, 1)
+                end
+                rowFrame.progressText:SetText("|cffd6c29a" .. tostring(achievement.progressText or "Not earned") .. "|r")
+                rowFrame:SetBackdropColor(0.10, 0.075, 0.04, 0.9)
+                rowFrame:SetBackdropBorderColor(0.46, 0.36, 0.18, 0.62)
+                rowFrame.medal:SetBackdropColor(0.13, 0.12, 0.10, 1)
+                rowFrame.medal:SetBackdropBorderColor(0.42, 0.36, 0.26, 0.9)
             end
         else
             rowFrame:Hide()
@@ -1191,7 +1255,7 @@ function SC:OpenMasterWindow(focusTab)
     local runTab = AddTab("runTab", "Run", TAB_RUN, overviewTab)
     local violationsTab = AddTab("violationsTab", "Violations", TAB_VIOLATIONS, runTab)
     local logTab = AddTab("logTab", "Log", TAB_LOG, violationsTab)
-    AddTab("achievementsTab", "Achieve", TAB_ACHIEVEMENTS, logTab)
+    AddTab("achievementsTab", "Achievements", TAB_ACHIEVEMENTS, logTab)
 
     local startPanel = CreatePanel(frame)
     startPanel:SetHeight(470)
@@ -1638,50 +1702,14 @@ function SC:OpenMasterWindow(focusTab)
     CreateSectionHeader(achievementsPanel, "Achievements", 0, 0, 650)
     frame.achievements.summary = CreateField(achievementsPanel, 0, -34, 250)
     frame.achievements.summary:SetText("Earned: 0 / 0")
-    frame.achievements.prevBtn = CreateButton(achievementsPanel, "<", 28, 22)
-    frame.achievements.prevBtn:SetPoint("TOPLEFT", achievementsPanel, "TOPLEFT", 500, -28)
-    frame.achievements.prevBtn:SetScript("OnClick", function()
-        frame.achievements.page = math.max(1, (frame.achievements.page or 1) - 1)
-        SC:MasterUI_Refresh()
-    end)
-    frame.achievements.pageText = CreateField(achievementsPanel, 534, -33, 82)
-    frame.achievements.pageText:SetText("Page 1 / 1")
-    frame.achievements.nextBtn = CreateButton(achievementsPanel, ">", 28, 22)
-    frame.achievements.nextBtn:SetPoint("LEFT", frame.achievements.pageText, "RIGHT", 6, 0)
-    frame.achievements.nextBtn:SetScript("OnClick", function()
-        frame.achievements.page = (frame.achievements.page or 1) + 1
-        SC:MasterUI_Refresh()
-    end)
-    frame.achievements.empty = CreateField(achievementsPanel, 0, -66, 620)
+    frame.achievements.empty = CreateField(achievementsPanel, 0, -72, 620)
     frame.achievements.empty:SetText("No achievements are loaded.")
-    CreateLabel(achievementsPanel, "Status", 0, -64, "GameFontNormalSmall", 48)
-    CreateLabel(achievementsPanel, "Achievement", 54, -64, "GameFontNormalSmall", 170)
-    CreateLabel(achievementsPanel, "Scope", 230, -64, "GameFontNormalSmall", 78)
-    CreateLabel(achievementsPanel, "Category", 318, -64, "GameFontNormalSmall", 92)
-    CreateLabel(achievementsPanel, "Requirement", 420, -64, "GameFontNormalSmall", 190)
-    CreateLabel(achievementsPanel, "Earned", 612, -64, "GameFontNormalSmall", 90)
-    local achSep = achievementsPanel:CreateTexture(nil, "ARTWORK")
-    achSep:SetHeight(1)
-    achSep:SetPoint("TOPLEFT", achievementsPanel, "TOPLEFT", 0, -80)
-    achSep:SetPoint("TOPRIGHT", achievementsPanel, "TOPRIGHT", -20, -80)
-    achSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
-    for index = 1, ACHIEVEMENT_ROWS do
-        local row = CreateFrame("Frame", nil, achievementsPanel)
-        row:SetSize(690, 24)
-        row:SetPoint("TOPLEFT", achievementsPanel, "TOPLEFT", 0, -92 - ((index - 1) * 25))
-        if index % 2 == 0 then
-            local rowBg = row:CreateTexture(nil, "BACKGROUND")
-            rowBg:SetAllPoints(row)
-            rowBg:SetColorTexture(0.82, 0.58, 0.22, 0.08)
-        end
-        row.icon = CreateField(row, 0, 0, 48)
-        row.name = CreateField(row, 54, 0, 170)
-        row.scope = CreateField(row, 230, 0, 78)
-        row.category = CreateField(row, 318, 0, 92)
-        row.description = CreateField(row, 420, 0, 190)
-        row.date = CreateField(row, 612, 0, 90)
-        frame.achievements.rows[index] = row
-    end
+    frame.achievements.scroll = CreateFrame("ScrollFrame", "SoftcoreAchievementsScrollFrame", achievementsPanel, "UIPanelScrollFrameTemplate")
+    frame.achievements.scroll:SetPoint("TOPLEFT", achievementsPanel, "TOPLEFT", 0, -64)
+    frame.achievements.scroll:SetSize(674, 408)
+    frame.achievements.content = CreateFrame("Frame", nil, frame.achievements.scroll)
+    frame.achievements.content:SetSize(650, 408)
+    frame.achievements.scroll:SetScrollChild(frame.achievements.content)
 
     self.masterFrame = frame
     self:MasterUI_Refresh()

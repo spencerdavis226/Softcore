@@ -156,13 +156,16 @@ local function CanEarnMaxRunAchievement(eligibility)
     return true
 end
 
-local function AddDefinition(result, id, scope, category, name, description)
+local function AddDefinition(result, id, scope, category, name, description, progressKind, target, ruleName)
     table.insert(result, {
         id = id,
         scope = scope,
         category = category,
         name = name,
         description = description,
+        progressKind = progressKind,
+        target = target,
+        ruleName = ruleName,
     })
 end
 
@@ -170,23 +173,112 @@ function SC:GetAchievementDefinitions()
     local result = {}
     local maxLevel = GetMaxLevel()
 
-    AddDefinition(result, "acct_first_run", "ACCOUNT", "Account", "First Steps", "Start your first Softcore run on this account.")
-    AddDefinition(result, "acct_first_max_level", "ACCOUNT", "Account", "First Survivor", "Reach max level on an eligible Softcore character.")
-    AddDefinition(result, "char_first_run", "CHARACTER", "Character", "Into the Ledger", "Start a Softcore run on this character.")
+    AddDefinition(result, "acct_first_run", "ACCOUNT", "Account", "First Steps", "Start your first Softcore run on this account.", "BINARY")
+    AddDefinition(result, "acct_first_max_level", "ACCOUNT", "Account", "First Survivor", "Reach max level on an eligible Softcore character.", "MAX_LEVEL")
+    AddDefinition(result, "char_first_run", "CHARACTER", "Character", "Into the Ledger", "Start a Softcore run on this character.", "BINARY")
 
     for level = 10, maxLevel, 10 do
-        AddDefinition(result, "char_level_" .. tostring(level), "CHARACTER", "Leveling", "Still Breathing: " .. tostring(level), "Reach level " .. tostring(level) .. " during an active Softcore run.")
+        AddDefinition(result, "char_level_" .. tostring(level), "CHARACTER", "Leveling", "Still Breathing: " .. tostring(level), "Reach level " .. tostring(level) .. " during an active Softcore run.", "LEVEL", level)
     end
 
-    AddDefinition(result, "char_max_level", "CHARACTER", "Max Level", "Softcore Champion", "Reach max level after starting the run at level 10 or below.")
-    AddDefinition(result, "char_clean_max_level", "CHARACTER", "Max Level", "Clean Finish", "Reach max level on an eligible run without any local violations.")
-    AddDefinition(result, "char_ironman_max_level", "CHARACTER", "Max Level", "Iron Will", "Reach max level on an eligible run that started with the Ironman preset.")
+    AddDefinition(result, "char_max_level", "CHARACTER", "Max Level", "Softcore Champion", "Reach max level after starting the run at level 10 or below.", "MAX_LEVEL")
+    AddDefinition(result, "char_clean_max_level", "CHARACTER", "Max Level", "Clean Finish", "Reach max level on an eligible run without any local violations.", "CLEAN_MAX")
+    AddDefinition(result, "char_ironman_max_level", "CHARACTER", "Max Level", "Iron Will", "Reach max level on an eligible run that started with the Ironman preset.", "IRONMAN_MAX")
 
     for _, spec in ipairs(RESTRICTION_RULES) do
-        AddDefinition(result, "char_max_" .. spec.id, "CHARACTER", "Rules", spec.name, spec.description or ("Reach max level with " .. spec.label .. " disallowed from run start through max level."))
+        AddDefinition(result, "char_max_" .. spec.id, "CHARACTER", "Rules", spec.name, spec.description or ("Reach max level with " .. spec.label .. " disallowed from run start through max level."), "RULE_MAX", nil, spec.rule)
     end
 
     return result
+end
+
+local function BuildProgress(definition, earned)
+    if earned then
+        return 1, "Complete"
+    end
+
+    local db = SC.db or SoftcoreDB
+    local currentLevel = tonumber(db and db.character and db.character.level or 0) or 0
+    local maxLevel = GetMaxLevel()
+    local eligibility = CurrentEligibility()
+
+    if definition.progressKind == "BINARY" then
+        return 0, "Not earned"
+    end
+
+    if definition.progressKind == "LEVEL" then
+        local target = tonumber(definition.target or 0) or 0
+        if target <= 0 then return 0, "Not earned" end
+        if not eligibility or not eligibility.createdAtRunStart then
+            return 0, "Start an active run"
+        end
+        if eligibility.failed then
+            return 0, "Failed this run"
+        end
+        if target < (tonumber(eligibility.startLevel or 0) or 0) then
+            return 0, "Started above target"
+        end
+        return math.min(currentLevel / target, 1), "Level " .. tostring(currentLevel) .. " / " .. tostring(target)
+    end
+
+    if not eligibility or not eligibility.createdAtRunStart then
+        return 0, "Start an eligible run"
+    end
+
+    if eligibility.failed then
+        return 0, "Failed this run"
+    end
+
+    if definition.progressKind == "MAX_LEVEL" then
+        if not eligibility.startedAtOrBelow10 then
+            return 0, "Started above level 10"
+        end
+        return math.min(currentLevel / maxLevel, 1), "Level " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
+    end
+
+    if definition.progressKind == "CLEAN_MAX" then
+        if not eligibility.startedAtOrBelow10 then
+            return 0, "Started above level 10"
+        end
+        if eligibility.hadViolation then
+            return 0, "Violation recorded"
+        end
+        return math.min(currentLevel / maxLevel, 1), "Clean run: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
+    end
+
+    if definition.progressKind == "IRONMAN_MAX" then
+        if not eligibility.startedAtOrBelow10 then
+            return 0, "Started above level 10"
+        end
+        if eligibility.initialPreset ~= "IRONMAN" or not IsIronmanRules(eligibility.initialRules) then
+            return 0, "Not an Ironman start"
+        end
+        if eligibility.anyRuleChanged then
+            return 0, "Rules changed"
+        end
+        return math.min(currentLevel / maxLevel, 1), "Ironman: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
+    end
+
+    if definition.progressKind == "RULE_MAX" then
+        if not eligibility.startedAtOrBelow10 then
+            return 0, "Started above level 10"
+        end
+        if eligibility.ruleChanges and eligibility.ruleChanges[definition.ruleName] then
+            return 0, "Rule changed"
+        end
+        if eligibility.ruleViolations and eligibility.ruleViolations[definition.ruleName] then
+            return 0, "Rule violated"
+        end
+        if not eligibility.initialRules or not IsDisallowed(eligibility.initialRules[definition.ruleName]) then
+            return 0, "Not restricted at start"
+        end
+        if not IsDisallowed(db and db.run and db.run.ruleset and db.run.ruleset[definition.ruleName]) then
+            return 0, "Restriction removed"
+        end
+        return math.min(currentLevel / maxLevel, 1), "Eligible: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
+    end
+
+    return 0, "Not earned"
 end
 
 function SC:GetAchievementRows()
@@ -196,6 +288,7 @@ function SC:GetAchievementRows()
 
     for _, definition in ipairs(self:GetAchievementDefinitions()) do
         local earned = definition.scope == "ACCOUNT" and accountEarned[definition.id] or charEarned[definition.id]
+        local progressValue, progressText = BuildProgress(definition, earned)
         table.insert(rows, {
             id = definition.id,
             scope = definition.scope,
@@ -204,6 +297,8 @@ function SC:GetAchievementRows()
             description = definition.description,
             earned = earned ~= nil,
             earnedAt = earned and earned.earnedAt or nil,
+            progressValue = progressValue,
+            progressText = progressText,
         })
     end
 
