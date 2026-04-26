@@ -325,6 +325,7 @@ local function CreateAllowCheckbox(parent, rules, spec, x, y)
     checkbox.label:SetJustifyH("LEFT")
     checkbox.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
     checkbox.label:SetText(spec.label)
+    checkbox.ruleKey = spec.key
     checkbox:SetChecked(not IsDisallowed(rules[spec.key]))
     checkbox:SetScript("OnClick", function(self)
         SetDisallowedRule(rules, spec.key, self:GetChecked())
@@ -404,20 +405,6 @@ local function CountRuleChanges(changes)
     return count
 end
 
-local function FormatRuleChangeSummary(previousRules, changes)
-    if CountRuleChanges(changes) == 0 then
-        return "No rule changes selected."
-    end
-
-    local parts = {}
-    for _, ruleName in ipairs(EDITABLE_RULE_ORDER) do
-        if changes[ruleName] ~= nil then
-            table.insert(parts, ruleName .. ": " .. tostring(previousRules[ruleName]) .. " -> " .. tostring(changes[ruleName]))
-        end
-    end
-
-    return Trunc(table.concat(parts, "  |  "), 118)
-end
 
 local RULE_DISPLAY_NAMES = {
     groupingMode   = "Grouping Mode",
@@ -529,7 +516,7 @@ local function GetPartyDisplayRows()
     local localName = db and db.character and db.character.name or FormatPlayerLabel(localKey)
     local localParticipant = participants[localKey]
     table.insert(displayRows, {
-        name = (localName or "You") .. " *",
+        name = localName or "You",
         level = db and db.character and db.character.level,
         startLevel = localParticipant and localParticipant.levelAtJoin,
         status = localStatus.participantStatus or "NOT_IN_RUN",
@@ -903,7 +890,6 @@ local function HideAllRunControls(frame)
     frame.start.modifyBtn:Hide()
     frame.start.applyChangesBtn:Hide()
     frame.start.cancelChangesBtn:Hide()
-    frame.start.changeSummary:Hide()
 end
 
 local function AnchorRunFooterButtons(frame)
@@ -1001,7 +987,6 @@ local function RefreshRunPanel(frame)
     frame.start.modifyBtn:SetShown(active and not modifying)
     frame.start.applyChangesBtn:SetShown(modifying)
     frame.start.cancelChangesBtn:SetShown(modifying)
-    frame.start.changeSummary:SetShown(modifying)
     SetRunSetupEnabled(frame, (not active) or modifying)
 
     if active then
@@ -1022,11 +1007,6 @@ local function RefreshRunPanel(frame)
         frame.start:RefreshControls()
     end
     AnchorRunFooterButtons(frame)
-
-    if modifying then
-        local changes = BuildRuleChanges(frame.start.draftBaseRules or {}, frame.start.selectedRules or {})
-        frame.start.changeSummary:SetText(FormatRuleChangeSummary(frame.start.draftBaseRules or {}, changes))
-    end
 end
 
 local function RefreshViolationsPanel(frame)
@@ -1122,6 +1102,10 @@ local function ConfirmStopRun()
     StaticPopup_Show("SOFTCORE_STOP_RUN")
 end
 
+function SC:ConfirmStopRun()
+    ConfirmStopRun()
+end
+
 function SC:MasterUI_Refresh()
     local frame = self.masterFrame
     if not frame or not frame:IsShown() then return end
@@ -1144,6 +1128,14 @@ function SC:MasterUI_Refresh()
 
     if SC.HUD_Refresh then
         SC:HUD_Refresh()
+    end
+end
+
+function SC:ToggleMasterWindow()
+    if self.masterFrame and self.masterFrame:IsShown() then
+        self.masterFrame:Hide()
+    else
+        self:OpenMasterWindow()
     end
 end
 
@@ -1177,11 +1169,6 @@ function SC:OpenMasterWindow(focusTab)
     headerSep:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -22, -64)
     headerSep:SetColorTexture(0.78, 0.55, 0.20, 0.75)
 
-    local tabSep = frame:CreateTexture(nil, "ARTWORK")
-    tabSep:SetHeight(1)
-    tabSep:SetPoint("TOPLEFT",  frame, "TOPLEFT",  22, -92)
-    tabSep:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -22, -92)
-    tabSep:SetColorTexture(0.78, 0.55, 0.20, 0.55)
     frame.activeTab = NormalizeTab(focusTab)
     frame.panels = {}
 
@@ -1192,7 +1179,7 @@ function SC:OpenMasterWindow(focusTab)
     logo:SetTexCoord(0, 1, 0, 1)
 
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 10, -4)
+    title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 10, -10)
     title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
     title:SetText("|cffffd700Softcore|r")
 
@@ -1274,6 +1261,13 @@ function SC:OpenMasterWindow(focusTab)
     for _, spec in ipairs(MOVEMENT_RULES) do
         local checkbox = CreateAllowCheckbox(startPanel, frame.start.selectedRules, spec, 360, y)
         table.insert(frame.start.controls, checkbox)
+        if spec.key == "flying" then
+            local hint = startPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            hint:SetPoint("LEFT", checkbox.label, "LEFT", 124, 0)
+            hint:SetTextColor(MUTED_TEXT.r * 0.7, MUTED_TEXT.g * 0.7, MUTED_TEXT.b * 0.7)
+            hint:SetText("incl. druid flight form")
+            table.insert(frame.start.controls, hint)
+        end
         y = y - 30
     end
 
@@ -1301,7 +1295,8 @@ function SC:OpenMasterWindow(focusTab)
         SC:MasterUI_Refresh()
     end)
     table.insert(frame.start.controls, frame.start.maxGapCheck)
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Max gap", 388, -374, "GameFontNormalSmall", 70))
+    frame.start.maxGapLabel = CreateLabel(startPanel, "Max gap", 388, -374, "GameFontNormalSmall", 70)
+    table.insert(frame.start.controls, frame.start.maxGapLabel)
     frame.start.maxGapBox = CreateFrame("EditBox", nil, startPanel, "InputBoxTemplate")
     frame.start.maxGapBox:SetSize(42, 22)
     frame.start.maxGapBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 460, -368)
@@ -1334,16 +1329,42 @@ function SC:OpenMasterWindow(focusTab)
         if isSolo then
             self.selectedRules.maxLevelGap = "ALLOWED"
         end
+        local canEdit = not IsActiveRun() or self.isModifyingRules
         self.maxGapCheck:SetChecked(not isSolo and self.selectedRules.maxLevelGap ~= "ALLOWED")
-        self.maxGapCheck:SetEnabled(not isSolo)
-        self.maxGapCheck.label:SetFontObject(isSolo and GameFontDisableSmall or GameFontNormalSmall)
-        if isSolo then
-            self.maxGapCheck.label:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
+        self.maxGapCheck:SetEnabled(canEdit and not isSolo)
+        local locked = not canEdit or isSolo
+        self.maxGapCheck.label:SetFontObject(locked and GameFontDisableSmall or GameFontNormalSmall)
+        if locked then
+            SetFontStringRGB(self.maxGapCheck.label, MUTED_TEXT)
+        elseif self.isModifyingRules and self.draftBaseRules then
+            local baseVal = self.draftBaseRules.maxLevelGap
+            local curVal = self.selectedRules.maxLevelGap
+            if tostring(baseVal) ~= tostring(curVal) then
+                local checked = IsCheckedRuleValue("maxLevelGap", curVal)
+                SetFontStringRGB(self.maxGapCheck.label, checked == false and RED_TEXT or GREEN_TEXT)
+            else
+                SetFontStringRGB(self.maxGapCheck.label, BODY_TEXT)
+            end
         else
-            self.maxGapCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+            SetFontStringRGB(self.maxGapCheck.label, BODY_TEXT)
         end
-        if isSolo then self.maxGapBox:Disable() end
+        if not canEdit or isSolo then self.maxGapBox:Disable() end
         self.maxGapBox:SetText(tostring(self.selectedRules.maxLevelGapValue or 3))
+        if self.maxGapLabel then
+            if locked then
+                SetFontStringRGB(self.maxGapLabel, MUTED_TEXT)
+            elseif self.isModifyingRules and self.draftBaseRules then
+                local baseVal = self.draftBaseRules.maxLevelGapValue
+                local curVal  = self.selectedRules.maxLevelGapValue
+                if tostring(baseVal) ~= tostring(curVal) then
+                    SetFontStringRGB(self.maxGapLabel, GREEN_TEXT)
+                else
+                    SetFontStringRGB(self.maxGapLabel, BODY_TEXT)
+                end
+            else
+                SetFontStringRGB(self.maxGapLabel, BODY_TEXT)
+            end
+        end
 
         for _, checkbox in ipairs(self.controls) do
             if checkbox.label and checkbox.GetChecked and checkbox ~= self.maxGapCheck then
@@ -1353,6 +1374,18 @@ function SC:OpenMasterWindow(focusTab)
                 end
                 for _, spec in ipairs(MOVEMENT_RULES) do
                     if text == spec.label then checkbox:SetChecked(not IsDisallowed(self.selectedRules[spec.key])) end
+                end
+                if self.isModifyingRules and self.draftBaseRules and checkbox.ruleKey then
+                    local baseVal = self.draftBaseRules[checkbox.ruleKey]
+                    local curVal = self.selectedRules[checkbox.ruleKey]
+                    if tostring(baseVal) ~= tostring(curVal) then
+                        local checked = IsCheckedRuleValue(checkbox.ruleKey, curVal)
+                        SetFontStringRGB(checkbox.label, checked == false and RED_TEXT or GREEN_TEXT)
+                    else
+                        SetFontStringRGB(checkbox.label, BODY_TEXT)
+                    end
+                else
+                    SetFontStringRGB(checkbox.label, BODY_TEXT)
                 end
             end
         end
@@ -1443,7 +1476,6 @@ function SC:OpenMasterWindow(focusTab)
         frame.start.draftBaseRules = nil
         SC:MasterUI_Refresh()
     end)
-    frame.start.changeSummary = CreateField(startPanel, 0, -404, 640)
 
     -- Amendment proposal overlay (replaces rule controls when a pending amendment exists)
     local amendPanel = CreateFrame("Frame", nil, startPanel, "BackdropTemplate")
