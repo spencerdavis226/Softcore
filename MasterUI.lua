@@ -25,15 +25,17 @@ local TAB_LOG = "LOG"
 
 local DISALLOWED_OUTCOME = "WARNING"
 local LOG_ROWS = 22
+local PANEL_WIDTH = 710
+local PANEL_HEIGHT = 500
 
 local GROUPING_OPTIONS = {
-    { text = "Grouping Allowed", value = "SYNCED_GROUP_ALLOWED" },
+    { text = "Group", value = "SYNCED_GROUP_ALLOWED" },
     { text = "Solo Only", value = "SOLO_SELF_FOUND" },
 }
 
 local GEAR_OPTIONS = {
     { text = "Any gear", value = "ALLOWED" },
-    { text = "White/grey only", value = "WHITE_GRAY_ONLY" },
+    { text = "White/gray only", value = "WHITE_GRAY_ONLY" },
     { text = "Green or lower", value = "GREEN_OR_LOWER" },
     { text = "Blue or lower", value = "BLUE_OR_LOWER" },
 }
@@ -48,8 +50,8 @@ local ECONOMY_RULES = {
 }
 
 local MOVEMENT_RULES = {
-    { label = "Allow mounts", key = "mounts" },
-    { label = "Allow Flying Mounts (incl. Druid form)", key = "flying" },
+    { label = "Allow Mounts", key = "mounts" },
+    { label = "Allow Flying Mounts", key = "flying" },
 }
 
 local EDITABLE_RULE_ORDER = {
@@ -69,8 +71,6 @@ local EDITABLE_RULE_ORDER = {
     "dungeonRepeat",
     "consumables",
     "instancedPvP",
-    "maxDeaths",
-    "maxDeathsValue",
 }
 
 local function Print(message)
@@ -147,15 +147,48 @@ end
 
 local function CreatePanel(parent)
     local panel = CreateFrame("Frame", nil, parent)
-    panel:SetSize(672, 420)
-    panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 24, -92)
+    panel:SetSize(PANEL_WIDTH, PANEL_HEIGHT)
+    panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 24, -102)
     return panel
+end
+
+local function ApplyParchmentBackdrop(frame)
+    frame:SetBackdrop({
+        bgFile   = "Interface\\QuestFrame\\QuestBG",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border",
+        tile = false, tileSize = 256, edgeSize = 32,
+        insets = { left = 11, right = 12, top = 12, bottom = 11 },
+    })
+    frame:SetBackdropColor(1, 1, 1, 1)
+    frame:SetBackdropBorderColor(0.72, 0.56, 0.22, 1)
+end
+
+local function CreateDivider(parent, x, y, width)
+    local divider = parent:CreateTexture(nil, "ARTWORK")
+    divider:SetHeight(1)
+    divider:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    divider:SetWidth(width or PANEL_WIDTH)
+    divider:SetColorTexture(0.56, 0.36, 0.12, 0.45)
+    return divider
+end
+
+local function CreateSectionHeader(parent, text, x, y, width)
+    local header = CreateFrame("Frame", nil, parent)
+    header:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    header:SetSize(width or 260, 22)
+    local fs = header:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    fs:SetPoint("TOPLEFT", header, "TOPLEFT", 0, 0)
+    fs:SetWidth(width or 260)
+    fs:SetJustifyH("LEFT")
+    fs:SetText("|cffffd100" .. text .. "|r")
+    CreateDivider(header, 0, -18, width or 260)
+    return header
 end
 
 local function CreateField(parent, x, y, width)
     local fs = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     fs:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
-    fs:SetWidth(width or 620)
+    fs:SetWidth(width or (PANEL_WIDTH - 40))
     fs:SetJustifyH("LEFT")
     fs:SetText("")
     return fs
@@ -268,7 +301,7 @@ local function ApplyStartPreset(frame, preset)
     SetDisallowedRule(rules, "consumables", preset ~= "IRONMAN")
     SetDisallowedRule(rules, "instancedPvP", false)
     rules.maxDeaths = false
-    rules.maxDeathsValue = 1
+    rules.maxDeathsValue = rules.maxDeathsValue or 3
 
     if SC.ApplyGroupingMode then
         SC:ApplyGroupingMode(rules)
@@ -338,7 +371,7 @@ local RULE_DISPLAY_NAMES = {
     warbandBank    = "Warband Bank",
     guildBank      = "Guild Bank",
     mounts         = "Mounts",
-    flying         = "Flying Mounts (incl. Druid form)",
+    flying         = "Flying Mounts",
     gearQuality    = "Gear Limit",
     heirlooms      = "Heirlooms",
     maxLevelGap    = "Level Gap Enforcement",
@@ -346,8 +379,6 @@ local RULE_DISPLAY_NAMES = {
     dungeonRepeat  = "Repeated Dungeons",
     consumables    = "Consumables",
     instancedPvP   = "Instanced PvP",
-    maxDeaths      = "Death Limit",
-    maxDeathsValue = "Max Deaths",
 }
 
 local function FriendlyRuleValue(ruleName, value)
@@ -359,8 +390,11 @@ local function FriendlyRuleValue(ruleName, value)
     if ruleName == "gearQuality" then
         return GetOptionText(GEAR_OPTIONS, value)
     end
-    if ruleName == "maxLevelGapValue" then
+    if ruleName == "maxLevelGapValue" or ruleName == "maxDeathsValue" then
         return tostring(value)
+    end
+    if ruleName == "maxDeaths" then
+        return value and "enabled" or "disabled"
     end
     if value == "ALLOWED" or value == "LOG_ONLY" then return "allowed" end
     return "disallowed"
@@ -482,7 +516,7 @@ local function RefreshOverviewPanel(frame)
         frame.overview.localStatus:SetText("You: " .. ColorStatus(status.participantStatus or "NOT_IN_RUN"))
         frame.overview.partyStatus:SetText("Party: " .. ColorStatus(status.partyStatus or "INACTIVE"))
         frame.overview.elapsed:SetText("Time: " .. FormatElapsed(run.startTime) .. "  |cff6b7280(since " .. FormatTime(run.startTime) .. ")|r")
-        SetLine(frame.overview.deaths, "Deaths", run.deathCount or 0)
+        SetLine(frame.overview.deaths, "Deaths", tostring(run.deathCount or 0) .. " (permanent)")
 
         local violationColor = activeViolations > 0 and "|cfffbbf24" or ""
         local violationReset = activeViolations > 0 and "|r" or ""
@@ -491,7 +525,7 @@ local function RefreshOverviewPanel(frame)
         SetLine(frame.overview.runId, "Run ID", run.runId or "none")
     end
 
-    frame.overview.partyEmpty:SetShown(false)
+    frame.overview.partyEmpty:SetShown(#partyRows == 0)
 
     for index, row in ipairs(frame.overview.partyRows) do
         local display = partyRows[index]
@@ -542,10 +576,10 @@ local function RefreshAmendmentPanel(frame, amendment, isProposer)
     local localShortName = string.match(tostring(amendment.proposedBy or "?"), "^([^-]+)")
 
     if isProposer then
-        panel.title:SetText("|cfffbbf24Pending rule amendment|r — waiting for party")
+        panel.title:SetText("|cfffbbf24Pending Rule Amendment|r - waiting for party")
         panel.proposer:SetText("You proposed this amendment.")
     else
-        panel.title:SetText("|cfffbbf24Pending rule amendment|r")
+        panel.title:SetText("|cfffbbf24Pending Rule Amendment|r")
         panel.proposer:SetText("Proposed by: " .. (localShortName or "?"))
     end
     panel.reason:SetText("Reason: " .. Trunc(amendment.reason or "", 90))
@@ -559,7 +593,7 @@ local function RefreshAmendmentPanel(frame, amendment, isProposer)
                 local newVal = amendment.newRules[ruleName]
                 local label = RULE_DISPLAY_NAMES[ruleName] or ruleName
                 panel.changeLines[changeCount]:SetText(
-                    "• " .. label .. ": " .. FriendlyRuleValue(ruleName, oldVal) .. " → " .. FriendlyRuleValue(ruleName, newVal)
+                    "- " .. label .. ": " .. FriendlyRuleValue(ruleName, oldVal) .. " -> " .. FriendlyRuleValue(ruleName, newVal)
                 )
             end
         end
@@ -613,7 +647,6 @@ local function HideAllRunControls(frame)
     frame.start.groupingDropdown:Hide()
     frame.start.gearDropdown:Hide()
     frame.start.maxGapBox:Hide()
-    frame.start.maxDeathsBox:Hide()
     frame.start.primaryBtn:Hide()
     frame.start.stopBtn:Hide()
     frame.start.modifyBtn:Hide()
@@ -652,7 +685,6 @@ local function RefreshRunPanel(frame)
     frame.start.groupingDropdown:SetShown(true)
     frame.start.gearDropdown:SetShown(true)
     frame.start.maxGapBox:SetShown(true)
-    frame.start.maxDeathsBox:SetShown(true)
     frame.start.casualBtn:SetShown(not active)
     frame.start.ironmanBtn:SetShown(not active)
     for _, control in ipairs(frame.start.controls) do
@@ -670,7 +702,7 @@ local function RefreshRunPanel(frame)
         if modifying then
             if IsInGroup() then
                 frame.start.applyChangesBtn:SetText("Propose to Party")
-                frame.start.activeText:SetText("Draft rule amendment — will be sent to all party members for approval.")
+                frame.start.activeText:SetText("Draft rule amendment. This will be sent to all party members for approval.")
             else
                 frame.start.applyChangesBtn:SetText("Apply Changes")
                 frame.start.activeText:SetText("Draft rule amendment. Changes apply going forward and will be logged.")
@@ -701,7 +733,7 @@ local function RefreshViolationsPanel(frame)
         if violation then
             row:Show()
             row.type:SetText(Trunc(violation.type or "?", 18))
-            row.owner:SetText(Trunc(FormatPlayerLabel(violation.playerKey), 14))
+            row.owner:SetText(Trunc(FormatPlayerLabel(violation.playerKey), 16))
             row.detail:SetText(Trunc(violation.detail or "", 44))
             row.time:SetText(FormatTime(violation.createdAt))
 
@@ -744,9 +776,9 @@ local function RefreshLogPanel(frame)
         if entry then
             row:Show()
             row.time:SetText(FormatTime(entry.time))
-            row.actor:SetText(Trunc(FormatPlayerLabel(entry.actorKey or entry.playerKey), 14))
-            row.kind:SetText("[" .. tostring(entry.kind or "?") .. "]")
-            row.message:SetText(Trunc(entry.message or "", 58))
+            row.actor:SetText(Trunc(FormatPlayerLabel(entry.actorKey or entry.playerKey), 16))
+            row.kind:SetText(tostring(entry.kind or "?"))
+            row.message:SetText(Trunc(entry.message or "", 52))
         else
             row:Hide()
         end
@@ -817,7 +849,7 @@ function SC:OpenMasterWindow(focusTab)
     end
 
     local frame = CreateFrame("Frame", "SoftcoreMasterFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(720, 600)
+    frame:SetSize(760, 650)
     RestorePosition("master", frame)
     frame:SetMovable(true)
     frame:EnableMouse(true)
@@ -830,37 +862,35 @@ function SC:OpenMasterWindow(focusTab)
     if UISpecialFrames then
         table.insert(UISpecialFrames, "SoftcoreMasterFrame")
     end
-    frame:SetBackdrop({
-        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 32,
-        insets = { left = 11, right = 11, top = 11, bottom = 11 },
-    })
-    frame:SetBackdropColor(0, 0, 0, 0.92)
+    ApplyParchmentBackdrop(frame)
 
     local headerBg = frame:CreateTexture(nil, "BACKGROUND", nil, 2)
-    headerBg:SetPoint("TOPLEFT",  frame, "TOPLEFT",  13, -13)
-    headerBg:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -13, -13)
-    headerBg:SetHeight(38)
-    headerBg:SetColorTexture(0.03, 0.03, 0.07, 0.92)
+    headerBg:SetPoint("TOPLEFT",  frame, "TOPLEFT",  18, -16)
+    headerBg:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -18, -16)
+    headerBg:SetHeight(48)
+    headerBg:SetColorTexture(0.18, 0.08, 0.02, 0.28)
 
     local headerSep = frame:CreateTexture(nil, "ARTWORK")
     headerSep:SetHeight(1)
-    headerSep:SetPoint("TOPLEFT",  frame, "TOPLEFT",  13, -51)
-    headerSep:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -13, -51)
-    headerSep:SetColorTexture(0.48, 0.38, 0.12, 0.9)
+    headerSep:SetPoint("TOPLEFT",  frame, "TOPLEFT",  22, -64)
+    headerSep:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -22, -64)
+    headerSep:SetColorTexture(0.57, 0.38, 0.12, 0.75)
 
     local tabSep = frame:CreateTexture(nil, "ARTWORK")
     tabSep:SetHeight(1)
-    tabSep:SetPoint("TOPLEFT",  frame, "TOPLEFT",  13, -78)
-    tabSep:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -13, -78)
-    tabSep:SetColorTexture(0.22, 0.22, 0.22, 0.8)
+    tabSep:SetPoint("TOPLEFT",  frame, "TOPLEFT",  22, -92)
+    tabSep:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -22, -92)
+    tabSep:SetColorTexture(0.57, 0.38, 0.12, 0.55)
     frame.activeTab = NormalizeTab(focusTab)
     frame.panels = {}
 
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 20, -16)
+    title:SetPoint("TOPLEFT", 28, -23)
     title:SetText("|cffffd700Softcore|r")
+
+    local subtitle = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    subtitle:SetPoint("LEFT", title, "RIGHT", 12, -1)
+    subtitle:SetText("|cff6f4b1fHardcore-style run ledger|r")
 
     local closeBtn = CreateFrame("Button", "SoftcoreMasterCloseButton", frame, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 4, 4)
@@ -871,7 +901,7 @@ function SC:OpenMasterWindow(focusTab)
         if relativeTo then
             tab:SetPoint("LEFT", relativeTo, "RIGHT", 6, 0)
         else
-            tab:SetPoint("TOPLEFT", frame, "TOPLEFT", 18, -52)
+            tab:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -66)
         end
         tab:SetScript("OnClick", function()
             frame.activeTab = tabName
@@ -894,7 +924,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.selectedRules.instanceWithUnsyncedPlayers = "ALLOWED"
     frame.start.selectedRules.unsyncedMembers = "ALLOWED"
     frame.start.inactiveText = CreateField(startPanel, 0, 0, 620)
-    frame.start.inactiveText:SetText("No active Softcore run.")
+    frame.start.inactiveText:SetText("Choose a ruleset, review the rules, then start your run.")
     frame.start.activeText = CreateField(startPanel, 0, 0, 620)
     frame.start.activeText:SetText("Active run rules are locked. Future rule changes will use a visible amendment flow.")
 
@@ -910,34 +940,9 @@ function SC:OpenMasterWindow(focusTab)
         ApplyStartPreset(frame, "IRONMAN")
     end)
 
-    table.insert(frame.start.controls, CreateLabel(startPanel, "|cffffd700Core|r", 0, -72, "GameFontNormal"))
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Death is permanent for each character.", 0, -98, "GameFontHighlightSmall", 300))
-
-    frame.start.maxDeathsCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
-    frame.start.maxDeathsCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -120)
-    frame.start.maxDeathsCheck.label = frame.start.maxDeathsCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.start.maxDeathsCheck.label:SetPoint("LEFT", frame.start.maxDeathsCheck, "RIGHT", 2, 0)
-    frame.start.maxDeathsCheck.label:SetText("Limit deaths per character")
-    frame.start.maxDeathsCheck:SetScript("OnClick", function(self)
-        frame.start.selectedRules.maxDeaths = self:GetChecked() and true or false
-        SC:MasterUI_Refresh()
-    end)
-    table.insert(frame.start.controls, frame.start.maxDeathsCheck)
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Max deaths", 28, -154, "GameFontNormalSmall", 80))
-    frame.start.maxDeathsBox = CreateFrame("EditBox", nil, startPanel, "InputBoxTemplate")
-    frame.start.maxDeathsBox:SetSize(42, 22)
-    frame.start.maxDeathsBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 112, -148)
-    frame.start.maxDeathsBox:SetAutoFocus(false)
-    frame.start.maxDeathsBox:SetNumeric(true)
-    frame.start.maxDeathsBox:SetScript("OnTextChanged", function(self)
-        local value = tonumber(self:GetText())
-        if value then frame.start.selectedRules.maxDeathsValue = value end
-    end)
-    frame.start.maxDeathsBox:SetScript("OnEditFocusLost", function()
-        SC:MasterUI_Refresh()
-    end)
-
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Grouping", 0, -188, "GameFontNormalSmall", 80))
+    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Core Rules", 0, -72, 300))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Death is permanent. A death fails this character only.", 0, -102, "GameFontHighlightSmall", 320))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Mode", 0, -138, "GameFontNormalSmall", 80))
     frame.start.groupingDropdown = CreateDropdown(startPanel, "SoftcoreMasterGroupingDropdown", GROUPING_OPTIONS, frame.start.selectedRules.groupingMode, function(value)
         frame.start.selectedRules.groupingMode = value
         if SC.ApplyGroupingMode then
@@ -945,51 +950,51 @@ function SC:OpenMasterWindow(focusTab)
         end
         SC:MasterUI_Refresh()
     end, 140)
-    frame.start.groupingDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 92, -180)
+    frame.start.groupingDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 92, -130)
 
-    table.insert(frame.start.controls, CreateLabel(startPanel, "|cffffd700Economy / Storage|r", 0, -228, "GameFontNormal"))
-    local y = -254
+    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Economy and Storage", 0, -188, 300))
+    local y = -218
     for _, spec in ipairs(ECONOMY_RULES) do
         local checkbox = CreateAllowCheckbox(startPanel, frame.start.selectedRules, spec, 0, y)
         table.insert(frame.start.controls, checkbox)
         y = y - 30
     end
 
-    table.insert(frame.start.controls, CreateLabel(startPanel, "|cffffd700Movement|r", 350, -72, "GameFontNormal"))
-    y = -98
+    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Movement", 360, -72, 300))
+    y = -102
     for _, spec in ipairs(MOVEMENT_RULES) do
-        local checkbox = CreateAllowCheckbox(startPanel, frame.start.selectedRules, spec, 350, y)
+        local checkbox = CreateAllowCheckbox(startPanel, frame.start.selectedRules, spec, 360, y)
         table.insert(frame.start.controls, checkbox)
         y = y - 30
     end
 
-    table.insert(frame.start.controls, CreateLabel(startPanel, "|cffffd700Gear / Items|r", 350, -168, "GameFontNormal"))
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Gear limit", 350, -196, "GameFontNormalSmall", 80))
+    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Gear and Items", 360, -168, 300))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Gear limit", 360, -198, "GameFontNormalSmall", 80))
     frame.start.gearDropdown = CreateDropdown(startPanel, "SoftcoreMasterGearDropdown", GEAR_OPTIONS, frame.start.selectedRules.gearQuality, function(value)
         frame.start.selectedRules.gearQuality = value
         SC:MasterUI_Refresh()
     end, 145)
-    frame.start.gearDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 452, -188)
-    frame.start.heirloomCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow heirlooms", key = "heirlooms" }, 350, -232)
+    frame.start.gearDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 462, -190)
+    frame.start.heirloomCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Heirlooms", key = "heirlooms" }, 360, -232)
     table.insert(frame.start.controls, frame.start.heirloomCheck)
-    frame.start.consumablesCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow consumables (potions, flasks, food)", key = "consumables" }, 350, -262)
+    frame.start.consumablesCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Consumables", key = "consumables" }, 360, -262)
     table.insert(frame.start.controls, frame.start.consumablesCheck)
 
-    table.insert(frame.start.controls, CreateLabel(startPanel, "|cffffd700Group / Dungeon|r", 350, -308, "GameFontNormal"))
+    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Group and Dungeon", 360, -308, 300))
     frame.start.maxGapCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
-    frame.start.maxGapCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 350, -334)
+    frame.start.maxGapCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 360, -338)
     frame.start.maxGapCheck.label = frame.start.maxGapCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.start.maxGapCheck.label:SetPoint("LEFT", frame.start.maxGapCheck, "RIGHT", 2, 0)
-    frame.start.maxGapCheck.label:SetText("Enforce max level gap")
+    frame.start.maxGapCheck.label:SetText("Enforce Level Gap")
     frame.start.maxGapCheck:SetScript("OnClick", function(self)
         frame.start.selectedRules.maxLevelGap = self:GetChecked() and DISALLOWED_OUTCOME or "ALLOWED"
         SC:MasterUI_Refresh()
     end)
     table.insert(frame.start.controls, frame.start.maxGapCheck)
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Max gap", 378, -370, "GameFontNormalSmall", 70))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Max gap", 388, -374, "GameFontNormalSmall", 70))
     frame.start.maxGapBox = CreateFrame("EditBox", nil, startPanel, "InputBoxTemplate")
     frame.start.maxGapBox:SetSize(42, 22)
-    frame.start.maxGapBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 450, -364)
+    frame.start.maxGapBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 460, -368)
     frame.start.maxGapBox:SetAutoFocus(false)
     frame.start.maxGapBox:SetNumeric(true)
     frame.start.maxGapBox:SetScript("OnTextChanged", function(self)
@@ -1001,9 +1006,9 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.maxGapBox:SetScript("OnEditFocusLost", function()
         SC:MasterUI_Refresh()
     end)
-    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow repeated dungeons", key = "dungeonRepeat" }, 350, -400)
+    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Repeated Dungeons", key = "dungeonRepeat" }, 360, -406)
     table.insert(frame.start.controls, frame.start.dungeonRepeatCheck)
-    frame.start.instancedPvPCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow instanced PvP (BGs & arenas)", key = "instancedPvP" }, 350, -430)
+    frame.start.instancedPvPCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 360, -436)
     table.insert(frame.start.controls, frame.start.instancedPvPCheck)
 
     function frame.start:RefreshControls()
@@ -1040,15 +1045,8 @@ function SC:OpenMasterWindow(focusTab)
         self.dungeonRepeatCheck:SetChecked(not IsDisallowed(self.selectedRules.dungeonRepeat))
         self.consumablesCheck:SetChecked(not IsDisallowed(self.selectedRules.consumables))
         self.instancedPvPCheck:SetChecked(not IsDisallowed(self.selectedRules.instancedPvP))
-
-        local deathLimitOn = self.selectedRules.maxDeaths == true
-        self.maxDeathsCheck:SetChecked(deathLimitOn)
-        self.maxDeathsBox:SetText(tostring(self.selectedRules.maxDeathsValue or 3))
-        if deathLimitOn then
-            self.maxDeathsBox:Enable()
-        else
-            self.maxDeathsBox:Disable()
-        end
+        self.selectedRules.maxDeaths = false
+        self.selectedRules.maxDeathsValue = self.selectedRules.maxDeathsValue or 3
     end
 
     frame.start.primaryBtn = CreateButton(startPanel, "Start Run", 120, 24)
@@ -1168,95 +1166,91 @@ function SC:OpenMasterWindow(focusTab)
 
     local overviewPanel = CreatePanel(frame)
     frame.panels[TAB_OVERVIEW] = overviewPanel
+    CreateSectionHeader(overviewPanel, "Run Status", 0, 0, 300)
     frame.overview = {
-        noRunText = CreateField(overviewPanel, 0, 0, 500),
-        run = CreateField(overviewPanel, 0, 0),
-        localStatus = CreateField(overviewPanel, 0, -24),
-        partyStatus = CreateField(overviewPanel, 0, -48),
-        elapsed = CreateField(overviewPanel, 0, -72),
-        deaths = CreateField(overviewPanel, 0, -96),
-        violations = CreateField(overviewPanel, 0, -120),
-        runId = CreateField(overviewPanel, 0, -144),
+        noRunText = CreateField(overviewPanel, 0, -34, 500),
+        run = CreateField(overviewPanel, 0, -34),
+        localStatus = CreateField(overviewPanel, 0, -58),
+        partyStatus = CreateField(overviewPanel, 0, -82),
+        elapsed = CreateField(overviewPanel, 0, -106),
+        deaths = CreateField(overviewPanel, 360, -58, 220),
+        violations = CreateField(overviewPanel, 360, -82, 220),
+        runId = CreateField(overviewPanel, 0, -132, 650),
         partyRows = {},
     }
-    frame.overview.noRunText:SetText("No active Softcore run.")
+    frame.overview.noRunText:SetText("No active run. Start a Softcore run to begin tracking deaths, violations, and party status.")
     frame.overview.goToRunBtn = CreateButton(overviewPanel, "Start a Run", 110, 24)
-    frame.overview.goToRunBtn:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", 0, -28)
+    frame.overview.goToRunBtn:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", 0, -68)
     frame.overview.goToRunBtn:SetScript("OnClick", function()
         frame.activeTab = TAB_RUN
         SC:MasterUI_Refresh()
     end)
-    local partySep = overviewPanel:CreateTexture(nil, "ARTWORK")
-    partySep:SetHeight(1)
-    partySep:SetPoint("TOPLEFT",  overviewPanel, "TOPLEFT",  0, -172)
-    partySep:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", 0, -172)
-    partySep:SetColorTexture(0.3, 0.3, 0.3, 0.6)
-
-    CreateLabel(overviewPanel, "|cffffd700Party|r", 0, -188, "GameFontNormal", 200)
+    CreateSectionHeader(overviewPanel, "Party", 0, -176, 650)
     frame.overview.resyncBtn = CreateButton(overviewPanel, "Resync", 72, 20)
-    frame.overview.resyncBtn:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", 210, -185)
+    frame.overview.resyncBtn:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", -20, -174)
     frame.overview.resyncBtn:SetScript("OnClick", function()
         if SC.Sync_BroadcastStatus then
             SC:Sync_BroadcastStatus("RESYNC")
             Print("resync requested.")
         end
     end)
-    CreateLabel(overviewPanel, "Name",  0,   -210, "GameFontNormalSmall", 190)
-    CreateLabel(overviewPanel, "Lvl",   198, -210, "GameFontNormalSmall", 36)
-    CreateLabel(overviewPanel, "Status",238, -210, "GameFontNormalSmall", 178)
-    CreateLabel(overviewPanel, "Total Violations", 420, -210, "GameFontNormalSmall", 140)
+    CreateLabel(overviewPanel, "Name",  0,   -214, "GameFontNormalSmall", 190)
+    CreateLabel(overviewPanel, "Level", 198, -214, "GameFontNormalSmall", 44)
+    CreateLabel(overviewPanel, "Status",252, -214, "GameFontNormalSmall", 190)
+    CreateLabel(overviewPanel, "Violations", 460, -214, "GameFontNormalSmall", 140)
 
     local columnSep = overviewPanel:CreateTexture(nil, "ARTWORK")
     columnSep:SetHeight(1)
-    columnSep:SetPoint("TOPLEFT",  overviewPanel, "TOPLEFT",  0, -223)
-    columnSep:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", 0, -223)
-    columnSep:SetColorTexture(0.25, 0.25, 0.25, 0.6)
+    columnSep:SetPoint("TOPLEFT",  overviewPanel, "TOPLEFT",  0, -229)
+    columnSep:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", -20, -229)
+    columnSep:SetColorTexture(0.56, 0.36, 0.12, 0.45)
 
-    frame.overview.partyEmpty = CreateField(overviewPanel, 0, -232, 620)
-    frame.overview.partyEmpty:SetText("(no synced party members)")
+    frame.overview.partyEmpty = CreateField(overviewPanel, 0, -242, 620)
+    frame.overview.partyEmpty:SetText("No synced party members.")
     for index = 1, 8 do
         local row = CreateFrame("Frame", nil, overviewPanel)
-        row:SetSize(620, 22)
-        row:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", 0, -256 - ((index - 1) * 24))
+        row:SetSize(690, 22)
+        row:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", 0, -260 - ((index - 1) * 24))
         if index % 2 == 0 then
             local rowBg = row:CreateTexture(nil, "BACKGROUND")
             rowBg:SetAllPoints(row)
-            rowBg:SetColorTexture(1, 1, 1, 0.04)
+            rowBg:SetColorTexture(0.40, 0.20, 0.06, 0.08)
         end
         row.name  = CreateField(row, 0,   0, 190)
-        row.level = CreateField(row, 198, 0, 36)
-        row.status = CreateField(row, 238, 0, 178)
-        row.total  = CreateField(row, 420, 0, 140)
+        row.level = CreateField(row, 198, 0, 44)
+        row.status = CreateField(row, 252, 0, 190)
+        row.total  = CreateField(row, 460, 0, 140)
         frame.overview.partyRows[index] = row
     end
 
     local violationsPanel = CreatePanel(frame)
     frame.panels[TAB_VIOLATIONS] = violationsPanel
     frame.violations = { rows = {} }
-    CreateLabel(violationsPanel, "Time", 0, 0, "GameFontNormalSmall", 118)
-    CreateLabel(violationsPanel, "Owner", 122, 0, "GameFontNormalSmall", 90)
-    CreateLabel(violationsPanel, "Type", 216, 0, "GameFontNormalSmall", 108)
-    CreateLabel(violationsPanel, "Detail", 328, 0, "GameFontNormalSmall", 260)
+    CreateSectionHeader(violationsPanel, "Active Violations", 0, 0, 650)
+    CreateLabel(violationsPanel, "Time", 0, -38, "GameFontNormalSmall", 118)
+    CreateLabel(violationsPanel, "Character", 122, -38, "GameFontNormalSmall", 110)
+    CreateLabel(violationsPanel, "Issue", 238, -38, "GameFontNormalSmall", 108)
+    CreateLabel(violationsPanel, "Details", 352, -38, "GameFontNormalSmall", 260)
     local violColSep = violationsPanel:CreateTexture(nil, "ARTWORK")
     violColSep:SetHeight(1)
-    violColSep:SetPoint("TOPLEFT",  violationsPanel, "TOPLEFT",  0, -16)
-    violColSep:SetPoint("TOPRIGHT", violationsPanel, "TOPRIGHT", 0, -16)
-    violColSep:SetColorTexture(0.25, 0.25, 0.25, 0.6)
-    frame.violations.empty = CreateField(violationsPanel, 0, -26, 620)
-    frame.violations.empty:SetText("(no active violations)")
+    violColSep:SetPoint("TOPLEFT",  violationsPanel, "TOPLEFT",  0, -53)
+    violColSep:SetPoint("TOPRIGHT", violationsPanel, "TOPRIGHT", -20, -53)
+    violColSep:SetColorTexture(0.56, 0.36, 0.12, 0.45)
+    frame.violations.empty = CreateField(violationsPanel, 0, -66, 620)
+    frame.violations.empty:SetText("No active violations.")
     for index = 1, 12 do
         local row = CreateFrame("Frame", nil, violationsPanel)
-        row:SetSize(672, 28)
-        row:SetPoint("TOPLEFT", violationsPanel, "TOPLEFT", 0, -26 - ((index - 1) * 30))
+        row:SetSize(690, 28)
+        row:SetPoint("TOPLEFT", violationsPanel, "TOPLEFT", 0, -66 - ((index - 1) * 30))
         if index % 2 == 0 then
             local rowBg = row:CreateTexture(nil, "BACKGROUND")
             rowBg:SetAllPoints(row)
-            rowBg:SetColorTexture(1, 1, 1, 0.04)
+            rowBg:SetColorTexture(0.40, 0.20, 0.06, 0.08)
         end
         row.time = CreateField(row, 0, 0, 118)
-        row.owner = CreateField(row, 122, 0, 90)
-        row.type = CreateField(row, 216, 0, 108)
-        row.detail = CreateField(row, 328, 0, 260)
+        row.owner = CreateField(row, 122, 0, 110)
+        row.type = CreateField(row, 238, 0, 108)
+        row.detail = CreateField(row, 352, 0, 260)
         row.clearBtn = CreateButton(row, "Clear", 62, 20)
         row.clearBtn:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 2)
         frame.violations.rows[index] = row
@@ -1265,30 +1259,31 @@ function SC:OpenMasterWindow(focusTab)
     local logPanel = CreatePanel(frame)
     frame.panels[TAB_LOG] = logPanel
     frame.log = { rows = {} }
-    CreateLabel(logPanel, "Time", 0, 0, "GameFontNormalSmall", 130)
-    CreateLabel(logPanel, "Actor", 134, 0, "GameFontNormalSmall", 90)
-    CreateLabel(logPanel, "Type", 228, 0, "GameFontNormalSmall", 128)
-    CreateLabel(logPanel, "Message", 360, 0, "GameFontNormalSmall", 300)
+    CreateSectionHeader(logPanel, "Audit Log", 0, 0, 650)
+    CreateLabel(logPanel, "Time", 0, -38, "GameFontNormalSmall", 130)
+    CreateLabel(logPanel, "Actor", 134, -38, "GameFontNormalSmall", 100)
+    CreateLabel(logPanel, "Event", 242, -38, "GameFontNormalSmall", 128)
+    CreateLabel(logPanel, "Message", 378, -38, "GameFontNormalSmall", 300)
     local logColSep = logPanel:CreateTexture(nil, "ARTWORK")
     logColSep:SetHeight(1)
-    logColSep:SetPoint("TOPLEFT",  logPanel, "TOPLEFT",  0, -16)
-    logColSep:SetPoint("TOPRIGHT", logPanel, "TOPRIGHT", 0, -16)
-    logColSep:SetColorTexture(0.25, 0.25, 0.25, 0.6)
-    frame.log.empty = CreateField(logPanel, 0, -24, 620)
-    frame.log.empty:SetText("(no events recorded)")
+    logColSep:SetPoint("TOPLEFT",  logPanel, "TOPLEFT",  0, -53)
+    logColSep:SetPoint("TOPRIGHT", logPanel, "TOPRIGHT", -20, -53)
+    logColSep:SetColorTexture(0.56, 0.36, 0.12, 0.45)
+    frame.log.empty = CreateField(logPanel, 0, -66, 620)
+    frame.log.empty:SetText("No events recorded.")
     for index = 1, LOG_ROWS do
         local row = CreateFrame("Frame", nil, logPanel)
-        row:SetSize(672, 18)
-        row:SetPoint("TOPLEFT", logPanel, "TOPLEFT", 0, -24 - ((index - 1) * 18))
+        row:SetSize(690, 18)
+        row:SetPoint("TOPLEFT", logPanel, "TOPLEFT", 0, -66 - ((index - 1) * 18))
         if index % 2 == 0 then
             local rowBg = row:CreateTexture(nil, "BACKGROUND")
             rowBg:SetAllPoints(row)
-            rowBg:SetColorTexture(1, 1, 1, 0.04)
+            rowBg:SetColorTexture(0.40, 0.20, 0.06, 0.08)
         end
         row.time = CreateField(row, 0, 0, 130)
-        row.actor = CreateField(row, 134, 0, 90)
-        row.kind = CreateField(row, 228, 0, 128)
-        row.message = CreateField(row, 360, 0, 300)
+        row.actor = CreateField(row, 134, 0, 100)
+        row.kind = CreateField(row, 242, 0, 128)
+        row.message = CreateField(row, 378, 0, 300)
         frame.log.rows[index] = row
     end
 

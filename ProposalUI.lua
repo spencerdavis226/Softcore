@@ -28,6 +28,10 @@ local RULE_KEYS = {
     "maxLevelGapValue",
     "dungeonRepeat",
     "instanceWithUnsyncedPlayers",
+    "consumables",
+    "instancedPvP",
+    "maxDeaths",
+    "maxDeathsValue",
 }
 
 local function FriendlyGroupingMode(value)
@@ -145,7 +149,7 @@ function SC:DeserializePartialRules(serialized)
                 rules[key] = true
             elseif value == "false" then
                 rules[key] = false
-            elseif key == "maxLevelGapValue" and tonumber(value) then
+            elseif (key == "maxLevelGapValue" or key == "maxDeathsValue") and tonumber(value) then
                 rules[key] = tonumber(value)
             else
                 rules[key] = value
@@ -167,7 +171,7 @@ function SC:DeserializeRuleset(serialized)
                 ruleset[key] = true
             elseif value == "false" then
                 ruleset[key] = false
-            elseif tonumber(value) and key == "maxLevelGapValue" then
+            elseif tonumber(value) and (key == "maxLevelGapValue" or key == "maxDeathsValue") then
                 ruleset[key] = tonumber(value)
             else
                 ruleset[key] = value
@@ -201,7 +205,7 @@ function SC:ComputeRulesetHash(ruleset)
 end
 
 local function ProposalSummary(proposal)
-    return "Death: Permanent per character"
+    return "Death: Permanent"
         .. "\nGrouping: " .. FriendlyGroupingMode(proposal.ruleset.groupingMode)
         .. "\nAH: " .. FriendlyAllowed(proposal.ruleset.auctionHouse)
         .. "  Mail: " .. FriendlyAllowed(proposal.ruleset.mailbox)
