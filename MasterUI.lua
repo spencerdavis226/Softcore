@@ -547,7 +547,7 @@ end
 local function CreateOverviewPartyRow(parent, index)
     local row = CreateFrame("Frame", nil, parent)
     row:SetSize(690, 24)
-    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -268 - ((index - 1) * 28))
+    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -252 - ((index - 1) * 28))
     if index % 2 == 0 then
         local rowBg = row:CreateTexture(nil, "BACKGROUND")
         rowBg:SetAllPoints(row)
@@ -1281,7 +1281,7 @@ function SC:OpenMasterWindow(focusTab)
     end)
     CreateSectionHeader(overviewPanel, "Party Ledger", 0, -184, 650)
     frame.overview.resyncBtn = CreateButton(overviewPanel, "Resync", 72, 20)
-    frame.overview.resyncBtn:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", -20, -182)
+    frame.overview.resyncBtn:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", -24, -181)
     frame.overview.resyncBtn:SetScript("OnClick", function()
         if SC.Sync_BroadcastStatus then
             SC:Sync_BroadcastStatus("RESYNC")
@@ -1365,10 +1365,6 @@ function SC:OpenMasterWindow(focusTab)
         row.message = CreateField(row, 378, 0, 300)
         frame.log.rows[index] = row
     end
-
-    local bottomClose = CreateButton(frame, "Close", 80, 24)
-    bottomClose:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -18, 18)
-    bottomClose:SetScript("OnClick", function() frame:Hide() end)
 
     self.masterFrame = frame
     self:MasterUI_Refresh()
