@@ -354,8 +354,11 @@ local actionCamOriginals = nil
 -- for a short window when zoom changes on its own (focus animation or mouse wheel).
 local actionCamZoomLastSample = nil
 local actionCamZoomSuppressUntil = 0
-local ACTION_CAM_ZOOM_MOVE_THRESHOLD = 0.11
-local ACTION_CAM_ZOOM_SUPPRESS_SEC = 1.45
+-- Require a real step change between ticks; ActionCam / pitch can jitter below this.
+local ACTION_CAM_ZOOM_MOVE_THRESHOLD = 0.28
+-- Only arm backoff when zoom is still meaningfully wrong (avoid endless re-arm near target).
+local ACTION_CAM_ZOOM_SUPPRESS_MIN_ERR = 0.95
+local ACTION_CAM_ZOOM_SUPPRESS_SEC = 0.85
 
 local function IsNpcInteractionZoomPause()
     return (GossipFrame and GossipFrame:IsShown())
@@ -515,11 +518,20 @@ function SC:EnforceActionCamSettings()
         local now = GetTime()
         local current = GetCameraZoom and GetCameraZoom() or target
 
+        local focusZoomBlend = (ruleset.actionCamInteractFocus ~= false) or (ruleset.actionCamEnemyFocus ~= false)
+        if not focusZoomBlend then
+            actionCamZoomSuppressUntil = 0
+        end
+
         if IsNpcInteractionZoomPause() then
             actionCamZoomLastSample = current
         elseif now < actionCamZoomSuppressUntil then
             actionCamZoomLastSample = current
-        elseif actionCamZoomLastSample and math.abs(current - actionCamZoomLastSample) > ACTION_CAM_ZOOM_MOVE_THRESHOLD then
+        elseif focusZoomBlend
+            and actionCamZoomLastSample
+            and math.abs(current - actionCamZoomLastSample) > ACTION_CAM_ZOOM_MOVE_THRESHOLD
+            and math.abs(current - target) > ACTION_CAM_ZOOM_SUPPRESS_MIN_ERR
+        then
             actionCamZoomSuppressUntil = now + ACTION_CAM_ZOOM_SUPPRESS_SEC
             actionCamZoomLastSample = current
         else
