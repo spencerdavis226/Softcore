@@ -1,4 +1,4 @@
--- Master menu for the main Softcore UI.
+﻿-- Master menu for the main Softcore UI.
 
 local SC = Softcore
 
@@ -747,134 +747,6 @@ local function RefreshAmendmentPanel(frame, amendment, isProposer)
     end
 end
 
-local function RenderRuleDiffRows(panel, currentRules, proposedRules)
-    local rowCount = 0
-    for _, ruleName in ipairs(EDITABLE_RULE_ORDER) do
-        local proposed = proposedRules and proposedRules[ruleName]
-        if proposed ~= nil then
-            local current = currentRules and currentRules[ruleName]
-            local label = RULE_DISPLAY_NAMES[ruleName] or ruleName
-            local changed = currentRules and tostring(current) ~= tostring(proposed)
-            rowCount = rowCount + 1
-            if rowCount <= #panel.ruleRows then
-                local row = panel.ruleRows[rowCount]
-                local checked = IsCheckedRuleValue(ruleName, proposed)
-                row:Show()
-                row.check:SetShown(checked ~= nil)
-                row.check:SetChecked(checked == true)
-                row.check:Disable()
-                row.label:SetText(label)
-                row.value:SetText(FriendlyRuleValue(ruleName, proposed))
-                SetFontStringRGB(row.label, BODY_TEXT)
-                SetFontStringRGB(row.value, GOLD_TEXT)
-                SetFontStringRGB(row.previous, MUTED_TEXT)
-                if changed then
-                    local changeColor = checked == false and RED_TEXT or GREEN_TEXT
-                    if checked == nil then
-                        changeColor = GOLD_TEXT
-                    end
-                    SetFontStringRGB(row.label, changeColor)
-                    SetFontStringRGB(row.value, changeColor)
-                    row.previous:SetText("was " .. FriendlyRuleValue(ruleName, current))
-                else
-                    row.previous:SetText("")
-                end
-            end
-        end
-    end
-
-    for i = rowCount + 1, #panel.ruleRows do
-        panel.ruleRows[i]:Hide()
-    end
-
-    if rowCount > #panel.ruleRows then
-        panel.more:SetText("|cffad8f61+" .. tostring(rowCount - #panel.ruleRows) .. " more rules in proposal.|r")
-    else
-        panel.more:SetText("")
-    end
-end
-
-local function RefreshRunProposalPanel(frame, proposal)
-    local panel = frame.start.proposalPanel
-    local proposer = FormatPlayerLabel(proposal.proposedBy)
-    local isProposer = proposal.proposedBy == SC:GetPlayerKey()
-    local db = SC.db or SoftcoreDB
-    local currentRules = db and db.run and db.run.active and db.run.ruleset or nil
-
-    panel.title:SetText("|cffffd100Run Proposal|r")
-    if proposal.proposalType == "ADD_PARTICIPANT" then
-        panel.subtitle:SetText("Invitation to join " .. tostring(proposal.runName or "Softcore Run") .. " from " .. proposer .. ".")
-    else
-        panel.subtitle:SetText("Proposed by " .. proposer .. " for " .. tostring(proposal.runName or "Softcore Run") .. ".")
-    end
-    panel.runId:SetText("|cffad8f61Run ID: " .. tostring(proposal.runId or "?") .. "|r")
-    panel.rulesTitle:SetText("Proposed Rules")
-
-    RenderRuleDiffRows(panel, currentRules, proposal.ruleset)
-
-    panel.waitText:SetShown(isProposer)
-    panel.acceptBtn:SetShown(not isProposer)
-    panel.declineBtn:SetShown(not isProposer)
-    panel.acceptBtn:SetText("Accept")
-    panel.declineBtn:SetText("Decline")
-
-    panel.acceptBtn:SetScript("OnClick", function()
-        if SC.AcceptPendingProposal then
-            SC:AcceptPendingProposal()
-        end
-        SC:MasterUI_Refresh()
-    end)
-    panel.declineBtn:SetScript("OnClick", function()
-        if SC.DeclinePendingProposal then
-            SC:DeclinePendingProposal()
-        end
-        SC:MasterUI_Refresh()
-    end)
-end
-
-local function RefreshRulesConflictPanel(frame, conflict)
-    local panel = frame.start.proposalPanel
-    local db = SC.db or SoftcoreDB
-    local currentRules = db and db.run and db.run.ruleset or nil
-    local remoteLabel = FormatPlayerLabel(conflict.playerKey)
-
-    panel.title:SetText("|cffffd100Rules Conflict|r")
-    panel.subtitle:SetText("Synced rules from " .. remoteLabel .. " differ from this run.")
-    panel.runId:SetText("|cffad8f61Review the highlighted differences before accepting or keeping your local rules.|r")
-    panel.rulesTitle:SetText("Synced Rules")
-
-    RenderRuleDiffRows(panel, currentRules, conflict.remoteRuleset)
-
-    panel.waitText:Hide()
-    panel.acceptBtn:Show()
-    panel.declineBtn:Show()
-    panel.acceptBtn:SetText("Accept")
-    panel.declineBtn:SetText("Decline")
-
-    panel.acceptBtn:SetScript("OnClick", function()
-        local changes = BuildRuleChanges(currentRules or {}, conflict.remoteRuleset or {})
-        if CountRuleChanges(changes) > 0 and SC.ProposeRuleAmendment then
-            local reason = "Accepted synced rules from " .. remoteLabel .. "."
-            local amendment = SC:ProposeRuleAmendment(changes, reason)
-            if amendment and not IsInGroup() and SC.AcceptRuleAmendment and SC.ApplyRuleAmendment then
-                SC:AcceptRuleAmendment(amendment.id)
-                SC:ApplyRuleAmendment(amendment.id)
-            end
-        elseif SC.AddLog then
-            SC:AddLog("RULE_CONFLICT_ACCEPTED", "Accepted synced rules from " .. remoteLabel .. ", but no rule differences were found.")
-        end
-        conflict.dismissed = true
-        SC:MasterUI_Refresh()
-    end)
-
-    panel.declineBtn:SetScript("OnClick", function()
-        conflict.dismissed = true
-        if SC.AddLog then
-            SC:AddLog("RULE_CONFLICT_DECLINED", "Kept local rules instead of synced rules from " .. remoteLabel .. ".")
-        end
-        SC:MasterUI_Refresh()
-    end)
-end
 
 local function HideAllRunControls(frame)
     frame.start.inactiveText:Hide()
@@ -890,6 +762,9 @@ local function HideAllRunControls(frame)
     frame.start.modifyBtn:Hide()
     frame.start.applyChangesBtn:Hide()
     frame.start.cancelChangesBtn:Hide()
+    if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:Hide() end
+    if frame.start.proposalDeclineBtn then frame.start.proposalDeclineBtn:Hide() end
+    if frame.start.proposalCancelBtn then frame.start.proposalCancelBtn:Hide() end
 end
 
 local function AnchorRunFooterButtons(frame)
@@ -902,6 +777,10 @@ local function AnchorRunFooterButtons(frame)
         first = start.stopBtn
     elseif start.applyChangesBtn:IsShown() then
         first = start.applyChangesBtn
+    elseif start.proposalAcceptBtn and start.proposalAcceptBtn:IsShown() then
+        first = start.proposalAcceptBtn
+    elseif start.proposalCancelBtn and start.proposalCancelBtn:IsShown() then
+        first = start.proposalCancelBtn
     end
 
     if not first then return end
@@ -925,6 +804,10 @@ local function AnchorRunFooterButtons(frame)
         start.cancelChangesBtn:ClearAllPoints()
         start.cancelChangesBtn:SetPoint("LEFT", start.applyChangesBtn, "RIGHT", 8, 0)
     end
+    if start.proposalDeclineBtn and start.proposalDeclineBtn:IsShown() then
+        start.proposalDeclineBtn:ClearAllPoints()
+        start.proposalDeclineBtn:SetPoint("LEFT", first, "RIGHT", 8, 0)
+    end
 end
 
 local function RefreshRunPanel(frame)
@@ -936,7 +819,6 @@ local function RefreshRunPanel(frame)
     local pendingAmendment = GetPendingAmendment()
     if pendingAmendment and frame.start.amendmentPanel then
         HideAllRunControls(frame)
-        if frame.start.proposalPanel then frame.start.proposalPanel:Hide() end
         local localKey = SC:GetPlayerKey()
         frame.start.amendmentPanel:Show()
         RefreshAmendmentPanel(frame, pendingAmendment, pendingAmendment.proposedBy == localKey)
@@ -946,23 +828,49 @@ local function RefreshRunPanel(frame)
         frame.start.amendmentPanel:Hide()
     end
 
+    -- Pending run proposal: show normal controls (read-only) with Accept/Decline/Cancel buttons
     local pendingProposal = GetPendingRunProposal()
-    if pendingProposal and frame.start.proposalPanel then
-        HideAllRunControls(frame)
-        frame.start.proposalPanel:Show()
-        RefreshRunProposalPanel(frame, pendingProposal)
+    if pendingProposal then
+        local isProposer = pendingProposal.proposedBy == SC:GetPlayerKey()
+        local proposer = FormatPlayerLabel(pendingProposal.proposedBy)
+        CopyRulesInto(frame.start.selectedRules, pendingProposal.ruleset)
+        frame.start.groupingDropdown:SetShown(true)
+        frame.start.gearDropdown:SetShown(true)
+        frame.start.maxGapBox:SetShown(true)
+        frame.start.casualBtn:SetShown(false)
+        frame.start.ironmanBtn:SetShown(false)
+        for _, control in ipairs(frame.start.controls) do control:SetShown(true) end
+        SetRunSetupEnabled(frame, false)
+        frame.start.inactiveText:SetShown(false)
+        frame.start.activeText:SetShown(true)
+        if isProposer then
+            frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your run proposal...|r")
+        else
+            frame.start.activeText:SetText("|cffffd100Run proposal from " .. proposer .. ".|r Review the proposed rules below, then Accept or Decline.")
+        end
+        frame.start.primaryBtn:Hide()
+        frame.start.stopBtn:Hide()
+        frame.start.modifyBtn:Hide()
+        frame.start.applyChangesBtn:Hide()
+        frame.start.cancelChangesBtn:Hide()
+        frame.start.proposalAcceptBtn:SetShown(not isProposer)
+        frame.start.proposalDeclineBtn:SetShown(not isProposer)
+        frame.start.proposalCancelBtn:SetShown(isProposer)
+        frame.start.proposalAcceptBtn:SetScript("OnClick", function()
+            if SC.AcceptPendingProposal then SC:AcceptPendingProposal() end
+            SC:MasterUI_Refresh()
+        end)
+        frame.start.proposalDeclineBtn:SetScript("OnClick", function()
+            if SC.DeclinePendingProposal then SC:DeclinePendingProposal() end
+            SC:MasterUI_Refresh()
+        end)
+        frame.start.proposalCancelBtn:SetScript("OnClick", function()
+            if SC.DeclinePendingProposal then SC:DeclinePendingProposal() end
+            SC:MasterUI_Refresh()
+        end)
+        if frame.start.RefreshControls then frame.start:RefreshControls() end
+        AnchorRunFooterButtons(frame)
         return
-    end
-
-    local pendingConflict = GetPendingRulesConflict()
-    if pendingConflict and frame.start.proposalPanel then
-        HideAllRunControls(frame)
-        frame.start.proposalPanel:Show()
-        RefreshRulesConflictPanel(frame, pendingConflict)
-        return
-    end
-    if frame.start.proposalPanel then
-        frame.start.proposalPanel:Hide()
     end
 
     frame.start.inactiveText:SetShown(not active)
@@ -1476,6 +1384,12 @@ function SC:OpenMasterWindow(focusTab)
         frame.start.draftBaseRules = nil
         SC:MasterUI_Refresh()
     end)
+    frame.start.proposalAcceptBtn = CreateButton(startPanel, "Accept", 90, 24)
+    frame.start.proposalDeclineBtn = CreateButton(startPanel, "Decline", 90, 24)
+    frame.start.proposalCancelBtn = CreateButton(startPanel, "Cancel Proposal", 120, 24)
+    frame.start.proposalAcceptBtn:Hide()
+    frame.start.proposalDeclineBtn:Hide()
+    frame.start.proposalCancelBtn:Hide()
 
     -- Amendment proposal overlay (replaces rule controls when a pending amendment exists)
     local amendPanel = CreateFrame("Frame", nil, startPanel, "BackdropTemplate")
@@ -1511,61 +1425,7 @@ function SC:OpenMasterWindow(focusTab)
 
     frame.start.amendmentPanel = amendPanel
 
-    local proposalPanel = CreateFrame("Frame", nil, startPanel, "BackdropTemplate")
-    proposalPanel:SetSize(650, 392)
-    proposalPanel:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, 0)
-    proposalPanel:EnableMouse(true)
-    proposalPanel:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = false, edgeSize = 12,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 },
-    })
-    proposalPanel:SetBackdropColor(0.08, 0.045, 0.02, 0.94)
-    proposalPanel:SetBackdropBorderColor(0.72, 0.49, 0.18, 0.80)
-    proposalPanel:Hide()
 
-    proposalPanel.title = CreateField(proposalPanel, 14, -14, 620)
-    proposalPanel.title:SetFontObject(GameFontNormalLarge)
-    proposalPanel.title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
-    proposalPanel.subtitle = CreateField(proposalPanel, 14, -42, 620)
-    proposalPanel.runId = CreateField(proposalPanel, 14, -64, 620)
-    CreateDivider(proposalPanel, 14, -88, 620)
-    proposalPanel.rulesTitle = CreateLabel(proposalPanel, "Proposed Rules", 14, -106, "GameFontNormal", 180)
-    proposalPanel.ruleRows = {}
-    for i = 1, 18 do
-        local row = CreateFrame("Frame", nil, proposalPanel)
-        local column = i > 9 and 1 or 0
-        local rowIndex = ((i - 1) % 9) + 1
-        row:SetSize(300, 26)
-        row:SetPoint("TOPLEFT", proposalPanel, "TOPLEFT", 18 + (column * 310), -132 - ((rowIndex - 1) * 28))
-        row.check = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
-        row.check:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 2)
-        row.check:SetSize(22, 22)
-        row.label = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.label:SetPoint("LEFT", row.check, "RIGHT", 2, 0)
-        row.label:SetWidth(150)
-        row.label:SetJustifyH("LEFT")
-        row.value = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        row.value:SetPoint("LEFT", row.label, "RIGHT", 8, 0)
-        row.value:SetWidth(80)
-        row.value:SetJustifyH("LEFT")
-        row.previous = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        row.previous:SetPoint("TOPLEFT", row.label, "BOTTOMLEFT", 0, 2)
-        row.previous:SetWidth(250)
-        row.previous:SetJustifyH("LEFT")
-        proposalPanel.ruleRows[i] = row
-    end
-    proposalPanel.more = CreateField(proposalPanel, 24, -350, 610)
-    proposalPanel.waitText = CreateField(proposalPanel, 14, -999, 610)
-    proposalPanel.waitText:SetPoint("BOTTOMLEFT", proposalPanel, "BOTTOMLEFT", 14, 44)
-    proposalPanel.waitText:SetText("|cffad8f61Waiting for party members to accept...|r")
-    proposalPanel.acceptBtn = CreateButton(proposalPanel, "Accept", 90, 24)
-    proposalPanel.declineBtn = CreateButton(proposalPanel, "Decline", 90, 24)
-    proposalPanel.acceptBtn:SetPoint("BOTTOMLEFT", proposalPanel, "BOTTOMLEFT", 14, 14)
-    proposalPanel.declineBtn:SetPoint("LEFT", proposalPanel.acceptBtn, "RIGHT", 8, 0)
-
-    frame.start.proposalPanel = proposalPanel
 
     local overviewPanel = CreatePanel(frame)
     frame.panels[TAB_OVERVIEW] = overviewPanel
