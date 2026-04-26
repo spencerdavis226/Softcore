@@ -451,6 +451,16 @@ local function GetPendingAmendment()
     return nil
 end
 
+local function GetPendingRunProposal()
+    if SC.GetPendingProposal then
+        local proposal = SC:GetPendingProposal()
+        if proposal and proposal.status == "PENDING" then
+            return proposal
+        end
+    end
+    return nil
+end
+
 local function GetSortedActiveViolations()
     local db = SC.db or SoftcoreDB
     local source = (db and db.violations) or {}
@@ -724,6 +734,66 @@ local function RefreshAmendmentPanel(frame, amendment, isProposer)
     end
 end
 
+local function RefreshRunProposalPanel(frame, proposal)
+    local panel = frame.start.proposalPanel
+    local proposer = FormatPlayerLabel(proposal.proposedBy)
+    local isProposer = proposal.proposedBy == SC:GetPlayerKey()
+    local db = SC.db or SoftcoreDB
+    local currentRules = db and db.run and db.run.active and db.run.ruleset or nil
+
+    panel.title:SetText("|cffffd100Run Proposal|r")
+    if proposal.proposalType == "ADD_PARTICIPANT" then
+        panel.subtitle:SetText("Invitation to join " .. tostring(proposal.runName or "Softcore Run") .. " from " .. proposer .. ".")
+    else
+        panel.subtitle:SetText("Proposed by " .. proposer .. " for " .. tostring(proposal.runName or "Softcore Run") .. ".")
+    end
+    panel.runId:SetText("|cffad8f61Run ID: " .. tostring(proposal.runId or "?") .. "|r")
+
+    local lineCount = 0
+    for _, ruleName in ipairs(EDITABLE_RULE_ORDER) do
+        local proposed = proposal.ruleset and proposal.ruleset[ruleName]
+        if proposed ~= nil then
+            local current = currentRules and currentRules[ruleName]
+            local label = RULE_DISPLAY_NAMES[ruleName] or ruleName
+            lineCount = lineCount + 1
+            if lineCount <= 10 then
+                if currentRules and tostring(current) ~= tostring(proposed) then
+                    panel.ruleLines[lineCount]:SetText(label .. ": " .. FriendlyRuleValue(ruleName, current) .. " -> |cffffd100" .. FriendlyRuleValue(ruleName, proposed) .. "|r")
+                else
+                    panel.ruleLines[lineCount]:SetText(label .. ": |cffffd100" .. FriendlyRuleValue(ruleName, proposed) .. "|r")
+                end
+            end
+        end
+    end
+
+    for i = lineCount + 1, 10 do
+        panel.ruleLines[i]:SetText("")
+    end
+
+    if lineCount > 10 then
+        panel.more:SetText("|cffad8f61+" .. tostring(lineCount - 10) .. " more rules in proposal.|r")
+    else
+        panel.more:SetText("")
+    end
+
+    panel.waitText:SetShown(isProposer)
+    panel.acceptBtn:SetShown(not isProposer)
+    panel.declineBtn:SetShown(not isProposer)
+
+    panel.acceptBtn:SetScript("OnClick", function()
+        if SC.AcceptPendingProposal then
+            SC:AcceptPendingProposal()
+        end
+        SC:MasterUI_Refresh()
+    end)
+    panel.declineBtn:SetScript("OnClick", function()
+        if SC.DeclinePendingProposal then
+            SC:DeclinePendingProposal()
+        end
+        SC:MasterUI_Refresh()
+    end)
+end
+
 local function HideAllRunControls(frame)
     frame.start.inactiveText:Hide()
     frame.start.activeText:Hide()
@@ -750,6 +820,7 @@ local function RefreshRunPanel(frame)
     local pendingAmendment = GetPendingAmendment()
     if pendingAmendment and frame.start.amendmentPanel then
         HideAllRunControls(frame)
+        if frame.start.proposalPanel then frame.start.proposalPanel:Hide() end
         local localKey = SC:GetPlayerKey()
         frame.start.amendmentPanel:Show()
         RefreshAmendmentPanel(frame, pendingAmendment, pendingAmendment.proposedBy == localKey)
@@ -757,6 +828,17 @@ local function RefreshRunPanel(frame)
     end
     if frame.start.amendmentPanel then
         frame.start.amendmentPanel:Hide()
+    end
+
+    local pendingProposal = GetPendingRunProposal()
+    if pendingProposal and frame.start.proposalPanel then
+        HideAllRunControls(frame)
+        frame.start.proposalPanel:Show()
+        RefreshRunProposalPanel(frame, pendingProposal)
+        return
+    end
+    if frame.start.proposalPanel then
+        frame.start.proposalPanel:Hide()
     end
 
     frame.start.inactiveText:SetShown(not active)
@@ -981,7 +1063,7 @@ function SC:OpenMasterWindow(focusTab)
     subtitle:SetText("Hardcore-style run ledger for group accountability")
 
     local closeBtn = CreateFrame("Button", "SoftcoreMasterCloseButton", frame, "UIPanelCloseButton")
-    closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 4, 4)
+    closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -5, -5)
     closeBtn:SetScript("OnClick", function() frame:Hide() end)
 
     local function AddTab(fieldName, label, tabName, relativeTo)
@@ -1257,6 +1339,42 @@ function SC:OpenMasterWindow(focusTab)
     amendPanel.waitText:SetText("|cfffbbf24Waiting for party members to accept...|r")
 
     frame.start.amendmentPanel = amendPanel
+
+    local proposalPanel = CreateFrame("Frame", nil, startPanel, "BackdropTemplate")
+    proposalPanel:SetSize(650, 360)
+    proposalPanel:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, 0)
+    proposalPanel:EnableMouse(true)
+    proposalPanel:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = false, edgeSize = 12,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+    proposalPanel:SetBackdropColor(0.08, 0.045, 0.02, 0.94)
+    proposalPanel:SetBackdropBorderColor(0.72, 0.49, 0.18, 0.80)
+    proposalPanel:Hide()
+
+    proposalPanel.title = CreateField(proposalPanel, 14, -14, 620)
+    proposalPanel.title:SetFontObject(GameFontNormalLarge)
+    proposalPanel.title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
+    proposalPanel.subtitle = CreateField(proposalPanel, 14, -42, 620)
+    proposalPanel.runId = CreateField(proposalPanel, 14, -64, 620)
+    CreateDivider(proposalPanel, 14, -88, 620)
+    CreateLabel(proposalPanel, "Proposed Rules", 14, -106, "GameFontNormal", 180)
+    proposalPanel.ruleLines = {}
+    for i = 1, 10 do
+        proposalPanel.ruleLines[i] = CreateField(proposalPanel, 24, -132 - ((i - 1) * 18), 610)
+    end
+    proposalPanel.more = CreateField(proposalPanel, 24, -316, 610)
+    proposalPanel.waitText = CreateField(proposalPanel, 14, -999, 610)
+    proposalPanel.waitText:SetPoint("BOTTOMLEFT", proposalPanel, "BOTTOMLEFT", 14, 44)
+    proposalPanel.waitText:SetText("|cffad8f61Waiting for party members to accept...|r")
+    proposalPanel.acceptBtn = CreateButton(proposalPanel, "Accept", 90, 24)
+    proposalPanel.declineBtn = CreateButton(proposalPanel, "Decline", 90, 24)
+    proposalPanel.acceptBtn:SetPoint("BOTTOMLEFT", proposalPanel, "BOTTOMLEFT", 14, 14)
+    proposalPanel.declineBtn:SetPoint("LEFT", proposalPanel.acceptBtn, "RIGHT", 8, 0)
+
+    frame.start.proposalPanel = proposalPanel
 
     local overviewPanel = CreatePanel(frame)
     frame.panels[TAB_OVERVIEW] = overviewPanel

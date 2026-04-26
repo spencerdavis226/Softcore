@@ -309,11 +309,11 @@ function SC:ReceiveRunProposal(payload, proposerKey)
     local computedHash = self:ComputeRulesetHash(ruleset)
 
     if payload.addonVersion and payload.addonVersion ~= self.version then
-        Print("proposal from " .. proposerKey .. " uses addon version " .. tostring(payload.addonVersion) .. "; you are on " .. tostring(self.version) .. ".")
+        self:AddLog("PROPOSAL_VERSION_MISMATCH", "Proposal from " .. proposerKey .. " uses addon version " .. tostring(payload.addonVersion) .. "; local version is " .. tostring(self.version) .. ".")
     end
 
     if payload.proposalRulesetHash and payload.proposalRulesetHash ~= computedHash then
-        Print("proposal ruleset hash mismatch detected. Use /sc conflicts if the proposal looks wrong.")
+        self:AddLog("PROPOSAL_HASH_MISMATCH", "Proposal ruleset hash mismatch detected for " .. tostring(proposerKey) .. ".")
     end
 
     local proposal = {
@@ -340,13 +340,13 @@ function SC:ReceiveRunProposal(payload, proposerKey)
         return
     end
 
-    if db.run and db.run.active and proposal.proposalType == "RUN" then
-        Print("received a run proposal, but you already have an active run. Use /sc proposal to review.")
-    end
-
     self:StoreProposal(proposal)
     if self.PlayUISound then self:PlayUISound("PROPOSAL_RECEIVED") end
-    self:ShowProposalPopup(proposal)
+    if self.OpenMasterWindow then
+        self:OpenMasterWindow("RUN")
+    else
+        Print("proposal received: " .. proposal.runName .. ". Use /sc proposal to review.")
+    end
 end
 
 function SC:AcceptPendingProposal()
@@ -567,9 +567,12 @@ function SC:ShowPendingProposal()
         return
     end
 
-    Print("proposal: " .. proposal.runName .. " from " .. tostring(proposal.proposedBy))
-    Print(ProposalSummary(proposal))
-    self:ShowProposalPopup(proposal)
+    if self.OpenMasterWindow then
+        self:OpenMasterWindow("RUN")
+    else
+        Print("proposal: " .. proposal.runName .. " from " .. tostring(proposal.proposedBy))
+        Print(ProposalSummary(proposal))
+    end
 end
 
 function SC:ShowProposalPopup(proposal)
