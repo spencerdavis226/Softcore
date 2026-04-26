@@ -1102,6 +1102,11 @@ function SC:StartRun(runOptions)
     if self.ScanEquippedGear then
         self:ScanEquippedGear(true)
     end
+    if db.run.ruleset and db.run.ruleset.firstPersonOnly ~= "ALLOWED" and db.run.ruleset.firstPersonOnly ~= nil and db.run.ruleset.firstPersonOnly ~= false then
+        if self.SnapCameraToFirstPerson then
+            self:SnapCameraToFirstPerson()
+        end
+    end
     self:RefreshParticipantsFromRoster()
     self:PlayUISound("RUN_STARTED")
     Print("run started.")

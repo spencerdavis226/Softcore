@@ -78,6 +78,7 @@ local EDITABLE_RULE_ORDER = {
     "dungeonRepeat",
     "consumables",
     "instancedPvP",
+    "firstPersonOnly",
 }
 
 local function Print(message)
@@ -311,7 +312,7 @@ local function IsCheckedRuleValue(ruleName, value)
     if ruleName == "groupingMode" or ruleName == "gearQuality" or ruleName == "maxLevelGapValue" then
         return nil
     end
-    if ruleName == "maxLevelGap" then
+    if ruleName == "maxLevelGap" or ruleName == "firstPersonOnly" then
         return value ~= "ALLOWED"
     end
     return not IsDisallowed(value)
@@ -360,6 +361,7 @@ local function ApplyStartPreset(frame, preset)
 
     SetDisallowedRule(rules, "consumables", preset ~= "IRONMAN")
     SetDisallowedRule(rules, "instancedPvP", false)
+    rules.firstPersonOnly = "ALLOWED"
     rules.maxDeaths = false
     rules.maxDeathsValue = rules.maxDeathsValue or 3
     rules.achievementPreset = preset
@@ -426,6 +428,7 @@ local RULE_DISPLAY_NAMES = {
     dungeonRepeat  = "Repeated Dungeons",
     consumables    = "Consumables",
     instancedPvP   = "Instanced PvP",
+    firstPersonOnly = "First Person Camera",
 }
 
 local function FriendlyRuleValue(ruleName, value)
@@ -1375,6 +1378,21 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.instancedPvPCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 360, -436)
     table.insert(frame.start.controls, frame.start.instancedPvPCheck)
 
+    frame.start.firstPersonCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
+    frame.start.firstPersonCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 360, -468)
+    frame.start.firstPersonCheck.label = frame.start.firstPersonCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.start.firstPersonCheck.label:SetPoint("LEFT", frame.start.firstPersonCheck, "RIGHT", 2, 0)
+    frame.start.firstPersonCheck.label:SetWidth(230)
+    frame.start.firstPersonCheck.label:SetJustifyH("LEFT")
+    frame.start.firstPersonCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+    frame.start.firstPersonCheck.label:SetText("Enforce First Person Camera")
+    frame.start.firstPersonCheck.ruleKey = "firstPersonOnly"
+    frame.start.firstPersonCheck:SetScript("OnClick", function(btn)
+        frame.start.selectedRules.firstPersonOnly = btn:GetChecked() and DISALLOWED_OUTCOME or "ALLOWED"
+        SC:MasterUI_Refresh()
+    end)
+    table.insert(frame.start.controls, frame.start.firstPersonCheck)
+
     function frame.start:RefreshControls()
         if SC.ApplyGroupingMode then
             SC:ApplyGroupingMode(self.selectedRules)
@@ -1452,6 +1470,7 @@ function SC:OpenMasterWindow(focusTab)
         self.dungeonRepeatCheck:SetChecked(not IsDisallowed(self.selectedRules.dungeonRepeat))
         self.consumablesCheck:SetChecked(not IsDisallowed(self.selectedRules.consumables))
         self.instancedPvPCheck:SetChecked(not IsDisallowed(self.selectedRules.instancedPvP))
+        self.firstPersonCheck:SetChecked(IsDisallowed(self.selectedRules.firstPersonOnly))
         self.selectedRules.maxDeaths = false
         self.selectedRules.maxDeathsValue = self.selectedRules.maxDeathsValue or 3
     end

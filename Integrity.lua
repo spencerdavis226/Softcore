@@ -312,6 +312,36 @@ function SC:PrintGearStatus()
     end
 end
 
+local function IsFirstPersonEnforced()
+    if not IsRunActive() then return false end
+    local db = GetDB()
+    local rule = db and db.run and db.run.ruleset and db.run.ruleset.firstPersonOnly
+    return rule ~= nil and rule ~= "ALLOWED" and rule ~= false
+end
+
+function SC:SnapCameraToFirstPerson()
+    local zoom = GetCameraZoom and GetCameraZoom() or 0
+    if zoom > 0 then
+        CameraZoomIn(zoom + 1)
+    end
+end
+
+do
+    local elapsed = 0
+    local frame = CreateFrame("Frame")
+    frame:SetScript("OnUpdate", function(_, dt)
+        elapsed = elapsed + dt
+        if elapsed < 0.2 then return end
+        elapsed = 0
+        if IsFirstPersonEnforced() then
+            local zoom = GetCameraZoom and GetCameraZoom() or 0
+            if zoom > 0 then
+                CameraZoomIn(zoom + 1)
+            end
+        end
+    end)
+end
+
 function SC:PrintDungeons()
     local db = GetDB()
     if not db or not db.run or not db.run.dungeonOrder or #db.run.dungeonOrder == 0 then
