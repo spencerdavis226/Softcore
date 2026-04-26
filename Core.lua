@@ -7,7 +7,7 @@ Softcore = Softcore or {}
 local SC = Softcore
 
 SC.name = "Softcore"
-SC.version = "0.3.2"
+SC.version = "0.5.0"
 SC.maxLogEntries = 30
 
 local function Print(message)
@@ -1289,34 +1289,12 @@ function SC:PrintLog()
 end
 
 function SC:PrintHelp()
-    Print("/sc - open the Softcore menu")
-    Print("/sc status - open the Overview tab")
-    Print("/sc start - start a local run")
-    Print("/sc status chat - print current run status")
-    Print("/sc reset confirm - reset the local run")
-    Print("/sc log - open the Log tab")
-    Print("/sc log chat - print recent events to chat")
-    Print("/sc violations - open the Violations tab")
-    Print("/sc gear - print gear rules and invalid equipped items")
-    Print("/sc dungeons - print dungeon entries for this run")
-    Print("/sc roster - open the Overview tab")
-    Print("/sc participants - open the Overview tab")
-    Print("/sc add Player-Realm - add a pending participant")
-    Print("/sc retire - retire this character without failing")
-    Print("/sc rules - open the Run tab")
-    Print("/sc rules chat - print current ruleset")
-    Print("/sc rule ruleName value - change a rule locally")
-    Print("/sc run - open the Overview tab")
-    Print("/sc conflicts - print sync conflicts")
-    Print("/sc resync - request full state from party")
-    Print("/sc minimap - show or hide the minimap button")
-    Print("/sc access - print storage and economy access rules")
-    Print("/sc new - open the Run tab")
-    Print("/sc proposal - show the pending proposal")
-    Print("/sc accept - accept the pending proposal")
-    Print("/sc decline - decline the pending proposal")
-    Print("/sc propose - propose a new run to your party")
-    Print("/sc propose-add Player-Realm - propose adding a participant")
+    Print("Softcore commands:")
+    Print("  /sc menu          open the menu")
+    Print("  /sc minimap       toggle minimap button")
+    Print("  /sc hud           toggle status HUD")
+    Print("  /sc resync        re-sync state with party")
+    Print("  /sc reset         stop the current run")
 end
 
 function SC:HandleSlash(input)
@@ -1324,7 +1302,9 @@ function SC:HandleSlash(input)
     local command, rest = string.match(text, "^(%S*)%s*(.-)$")
     command = string.lower(command or "")
 
-    if command == "" or command == "menu" then
+    if command == "" or command == "help" then
+        self:PrintHelp()
+    elseif command == "menu" then
         if self.OpenMasterWindow then
             self:OpenMasterWindow()
         else
@@ -1348,10 +1328,10 @@ function SC:HandleSlash(input)
             self:PrintStatus()
         end
     elseif command == "reset" then
-        if string.lower(rest or "") == "confirm" then
-            self:ResetRun()
+        if self.ConfirmStopRun then
+            self:ConfirmStopRun()
         else
-            Print("reset requires confirmation. Type /sc reset confirm to wipe the local active run state.")
+            self:ResetRun()
         end
     elseif command == "log" then
         local sub = string.lower(strtrim(rest or ""))

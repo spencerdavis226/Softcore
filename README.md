@@ -2,7 +2,7 @@
 
 Softcore is a lightweight Retail World of Warcraft addon for hardcore-style leveling accountability with friends.
 
-Version 0.4.0 tracks your local run, applies structured rules, syncs resilient status, includes a simple group run proposal flow, and provides a master menu for run setup, status, logs, and violation review.
+Version 0.5.0 tracks your local run, applies structured rules, syncs party status in real time, includes a group run proposal and amendment flow, and provides a master menu for run setup, status, logs, and violation review.
 
 ## Setup
 
@@ -10,136 +10,110 @@ Version 0.4.0 tracks your local run, applies structured rules, syncs resilient s
    `World of Warcraft/_retail_/Interface/AddOns/`
 2. Enable `Softcore` on the character select addon screen.
 3. Log in or run `/reload`.
-4. Use `/sc status` to confirm the addon loaded.
+4. Use `/sc` to confirm the addon loaded.
 
 ## Slash Commands
 
-- `/softcore` or `/sc` - open the Softcore menu.
-- `/sc new` - open the Run tab.
-- `/sc status` - open the Overview tab. Use `/sc status chat` to print current run status.
-- `/sc reset confirm` - reset the local run.
-- `/sc log` - open the Log tab. Use `/sc log chat` to print to chat instead.
-- `/sc violations` - open the Violations tab.
-- `/sc hud` - toggle the compact always-visible HUD.
-- `/sc gear` - print gear rules and invalid equipped items.
-- `/sc dungeons` - print dungeon entries for the current run.
-- `/sc roster` - open the Overview tab. Use `/sc roster chat` to print tracked run participants.
-- `/sc retire` - retire this character without marking it failed.
-- `/sc rules` - open the Run tab. Use `/sc rules chat` to print the current ruleset.
-- `/sc resync` - request full run state from party members.
-- `/sc participants` - open the Overview tab.
-- `/sc run` - open the Overview tab. Use `/sc run chat` to print run metadata.
-- `/sc conflicts` - print detected sync conflicts.
-- `/sc access` - print storage and economy access rules.
-- `/sc propose` - open/propose a new group run.
-- `/sc accept` - accept the pending proposal.
-- `/sc decline` - decline the pending proposal.
+Type `/sc` in-game to see the full help list. Common commands:
 
-## What It Tracks
+| Command | What it does |
+|---|---|
+| `/sc` | Show help |
+| `/sc menu` | Open the Softcore menu |
+| `/sc reset` | Stop the current run (shows confirmation) |
+| `/sc hud` | Toggle the compact status HUD |
+| `/sc minimap` | Toggle the minimap button |
+| `/sc resync` | Re-request full state from party members |
 
-- Character name, realm, class, level, and zone.
-- Run start time.
-- Active, inactive, valid, and failed state.
-- Death count and violation count.
-- Run participants and participant status.
-- Party status: `VALID`, `BLOCKED`, `CONFLICT`, `UNSYNCED`, `VIOLATION`, or `INACTIVE`.
-- Structured ruleset values and prospective rule amendments.
-- Storage/economy access openings for bank, Warband bank, guild bank, void storage, crafting orders, and vendors.
-- Equipped gear quality and heirloom checks.
-- Party level-gap checks and dungeon repeat tracking.
-- Leaderless governance for active-party-majority style runs.
-- Sync metadata for run, ruleset, addon version, sender sequence, and conflict detection.
-- Recent local event log.
-- Level changes and zone changes.
-- Violations for disallowed trade, mail, auction house, storage, movement, gear, or dungeon actions.
-- Death is always permanent for the character that died.
+Additional commands for inspecting state in chat:
 
-## Softcore Menu
+| Command | What it does |
+|---|---|
+| `/sc status` | Open the Overview tab (or `/sc status chat` to print) |
+| `/sc rules` | Open the Run tab (or `/sc rules chat` to print) |
+| `/sc log` | Open the Log tab (or `/sc log chat` to print) |
+| `/sc violations` | Open the Violations tab |
+| `/sc gear` | Print gear rules and any invalid equipped items |
+| `/sc dungeons` | Print dungeon entries for the current run |
+| `/sc retire` | Retire this character without marking it failed |
+| `/sc accept` | Accept a pending group run proposal |
+| `/sc decline` | Decline a pending group run proposal |
 
-Use `/sc` to open the main menu.
+## The Menu
 
-Tabs are:
+Use `/sc menu` or click the minimap button to open the main menu. Four tabs:
 
-- **Overview** for local status and party/participant state.
-- **Run** for starting a run, reviewing locked active rules, and stopping a run.
-- **Violations** for active clearable issues.
-- **Log** for recent audit history, newest entries first.
+- **Overview** — your current run status and party member states
+- **Run** — start a run, review active rules, stop a run, or propose rule amendments
+- **Violations** — active issues with a one-click clear where allowed
+- **Log** — full audit history, newest first
 
-When no run is active, the menu opens toward starting/configuring a run. When a run is active, the menu opens toward the current run overview.
+When no run is active, the menu opens to the Run tab for setup. When a run is active, it opens to Overview.
 
-The long-term UI direction is one primary master menu plus a small optional HUD for quick local/party status. Older standalone windows may remain during development as fallbacks, but new UI work should generally move into the master menu.
+## The HUD
+
+A small always-visible overlay that shows when a run is active. Each row is a colored dot + name:
+
+- **Green** — Active / Valid
+- **Yellow** — Blocked, Conflict, or Violation
+- **Red** — Failed
+- **Grey** — Unsynced or Inactive
+
+When solo it shows `Run Status`. When in a party it shows `Party Status` plus each group member. Active violations are shown below the list. Click the HUD to open the menu (or the Violations tab if you have active violations).
+
+Use `/sc hud` to hide or restore it.
+
+## Starting a Run
+
+Open the menu and go to the **Run** tab. Configure your rules:
+
+- **Grouping mode** — `Group` (party-synced) or `Solo Only`
+- **Economy & Storage** — auction house, mail, bank, guild bank, void storage, etc.
+- **Movement** — flying mounts
+- **Gear** — allowed quality tier and heirloom rules
+- **Group rules** — dungeon repeats, enforce level gap between party members
+
+Solo runs start immediately. Group runs send a proposal to your current party — all members must accept before the run begins.
 
 ## Group Sync
 
-Softcore uses Blizzard addon messages with the `SOFTCORE` prefix.
+Softcore uses Blizzard addon messages (`SOFTCORE` prefix) to sync status across your group. All members must have the addon installed and enabled.
 
-Status sync is sent only to the current group channel:
+Party member states shown in the Overview and HUD:
 
-- `PARTY`
-- `RAID`
-- `INSTANCE_CHAT`
+- `VALID` — in the run, no issues
+- `BLOCKED` — compatibility blocker (unsynced member, level gap, rule mismatch)
+- `CONFLICT` — conflicting run data detected
+- `UNSYNCED` — no recent status received from this player
+- `VIOLATION` — active uncleared violation
+- `FAILED` — character has died (permanent)
+- `INACTIVE` — not in a run
 
-The group section of the UI shows nearby group members as `VALID`, `FAILED`, `INACTIVE`, `BLOCKED`, `CONFLICT`, or `UNSYNCED`. `UNSYNCED` means Softcore has not received a recent status update from that character.
+A party member's death or failure does **not** fail your character. Softcore tracks each character individually.
 
-A party member's failure does not fail your character. Softcore shows group blockers and conflicts, but each character's run validity is individual.
+Use `/sc resync` if your party status looks wrong.
 
-Status sync includes a lightweight snapshot of each player's active violation count and latest active violation. While grouped on the same run, new party audit events are also shared into the normal Log and Violations tabs. This is not a full history merge: events are shared as they happen while grouped, and future events stop being shared after players leave party.
+## Rule Amendments
 
-Remote party violations can appear in your Violations tab with their original owner. They do not change your local character validity.
+Mid-run rule changes go through an amendment proposal. In the **Run** tab, click **Modify Rules** to enter draft mode. Changed rules highlight in green or red. Click **Propose to Party** to send the draft to your group — each member gets an Accept/Decline overlay. Once all accept, changes apply and are logged. If anyone declines, the amendment is cancelled.
 
-## Group Proposals
+## Violations
 
-Use `/sc new` or the Run tab to configure and start a run. The Run tab is organized around simple rule sections such as economy/storage, movement, gear/items, and group/dungeon rules. Most rules are simple allowed/disallowed checkboxes.
+Disallowed actions create violations. Event violations (e.g. opening a disallowed mailbox) can be reviewed and cleared from the Violations tab. State violations (e.g. invalid equipped gear) stay active until the condition is resolved.
 
-Death is permanent per character.
+Rules for clearing:
+- Death violations are **never** clearable
+- Fatal/character-fail violations are **never** clearable
+- All other violations can be cleared with one click
 
-Grouping mode has two choices:
+## What It Tracks
 
-- `Group` requires party members to be synced with matching Softcore rules. Unsynced members block group progress but do not fail anyone.
-- `Solo` does not auto-add group members as valid run participants. Grouping can create a local violation according to the solo/self-found grouping rule.
-
-The primary run action is:
-
-- solo: start immediately
-- grouped: send a compatible run proposal to the current party when proposal handling is available
-- active run: show locked rule values and a confirmed Stop Run action
-
-A proposed run does not start for any player until all current party members accept. If any member declines, the proposal is cancelled for everyone. All party members must be running Softcore and synced before the run can begin. Use `/sc accept` or `/sc decline` as slash-command fallbacks.
-
-Disallowed actions create violations. Event violations, like opening a disallowed mailbox, can be reviewed and cleared from the Violations tab (`/sc violations`). State violations, like invalid equipped gear, remain active until the condition is fixed and then cleared. Compatibility blockers — unsynced party members, rule mismatches, or a level gap above the allowed maximum — block party progress but do not fail any character and are not violations.
-
-Mid-run rule changes are handled as amendments. The Run tab is the intended home for this flow: locked active rules normally, a Modify Rules draft mode for changes, and logged old/new values when changes are applied. Changes apply going forward and do not erase prior deaths, violations, or audit history.
-
-When grouped, clicking **Propose to Party** sends the draft to all party members. Each member sees a pending amendment overlay in the Run tab listing the changed rules with Accept and Decline buttons. Once all members accept the proposer applies the changes and broadcasts to the group. If any member declines the amendment is cancelled and the proposer is notified. The proposer can also cancel a pending proposal before all members have responded.
-
-## Violations and Log
-
-Use `/sc log` to open the Log tab in the Softcore menu. Use `/sc violations` to open the active Violations tab.
-
-Violations are never deleted. Clicking **Clear** marks a violation `CLEARED`, records who cleared it, and adds an audit log entry. Clearing is intentionally one click for now; the audit trail is preserved instead of requiring a typed reason.
-
-Log entries are shown newest-first. Violation added and cleared entries should include useful detail when available, such as the item involved in a gear-quality issue.
-
-The Log tab includes an `Actor` column for who performed or caused the event. The Violations tab includes an `Owner` column for whose character owns the violation.
-
-Rules for clearing violations:
-
-- Death violations are **never** clearable.
-- Fatal or character-fail severity violations are **never** clearable.
-- Compatibility blocker types (unsynced members, level gap, outsider grouping) are **never** clearable.
-- All other violations — including gear violations — can be cleared with one click in the Violations tab.
-
-Gear limit tiers are:
-
-- `Any gear`
-- `White/gray only`
-- `Green or lower`
-- `Blue or lower`
-
-For late or replacement joins, use `/sc propose-add Player-Realm`. Failed characters remain failed; a replacement character is tracked separately by `Player-Realm`.
-
-Future sync work should make party-visible violations and log entries clearly identify which character caused or cleared them, while preserving the rule that remote state does not silently overwrite local character validity.
-
-Intentional addon sounds are postponed until the core behavior is stable. Default WoW UI sounds are fine.
-
-No combat automation, combat recommendations, protected action buttons, or external libraries are used.
+- Character name, realm, class, level, and zone
+- Run start time, active/inactive/failed state
+- Death count and active violation count
+- Run participants and each participant's status
+- Party level-gap checks and dungeon repeat tracking
+- Storage and economy access events (bank, Warband bank, guild bank, void storage, crafting orders, vendors)
+- Equipped gear quality and heirloom checks
+- Recent local event log
+- Sync metadata, sequence numbers, and conflict detection
