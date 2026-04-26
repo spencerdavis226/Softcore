@@ -158,13 +158,17 @@ local function ApplyParchmentBackdrop(frame)
     parchmentFill:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 12)
     parchmentFill:SetColorTexture(0.78, 0.60, 0.34, 0.98)
 
+    local parchment = frame:CreateTexture(nil, "BACKGROUND", nil, -7)
+    parchment:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -12)
+    parchment:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 12)
+    parchment:SetTexture("Interface\\QuestFrame\\QuestBG")
+    parchment:SetTexCoord(0, 1, 0, 1)
+
     frame:SetBackdrop({
-        bgFile   = "Interface\\QuestFrame\\QuestBG",
         edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border",
-        tile = true, tileSize = 256, edgeSize = 32,
+        tile = false, edgeSize = 32,
         insets = { left = 11, right = 12, top = 12, bottom = 11 },
     })
-    frame:SetBackdropColor(0.95, 0.82, 0.55, 0.96)
     frame:SetBackdropBorderColor(0.72, 0.56, 0.22, 1)
 end
 
