@@ -157,15 +157,13 @@ local function CreatePanel(parent)
 end
 
 local function ApplyParchmentBackdrop(frame)
-    local parchmentFill = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
-    parchmentFill:SetAllPoints(frame)
-    parchmentFill:SetColorTexture(0.12, 0.075, 0.035, 0.98)
-
     frame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border",
         tile = false, edgeSize = 32,
         insets = { left = 11, right = 12, top = 12, bottom = 11 },
     })
+    frame:SetBackdropColor(0.12, 0.075, 0.035, 0.98)
     frame:SetBackdropBorderColor(0.72, 0.56, 0.22, 1)
 end
 
