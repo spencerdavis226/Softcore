@@ -3,7 +3,7 @@
 -- Drag to reposition.  /sc hud to toggle visibility.
 
 local SC = Softcore
-local LOGO_TEXTURE = "Interface\\AddOns\\Softcore\\Assets\\SoftcoreLogo"
+local MINIMAP_LOGO_TEXTURE = "Interface\\AddOns\\Softcore\\Assets\\SoftcoreLogoMinimap"
 
 local function SavePosition(key, frame)
     SoftcoreDB = SoftcoreDB or {}
@@ -229,7 +229,7 @@ end
 
 -- ── Minimap button ───────────────────────────────────────────────────────────
 
-local MINIMAP_RADIUS = 80
+local MINIMAP_RADIUS = 82
 
 local function GetMinimapUI()
     SoftcoreDB = SoftcoreDB or {}
@@ -257,14 +257,14 @@ function SC:MinimapButton_Create()
     button:SetFrameLevel(8)
 
     local icon = button:CreateTexture(nil, "BACKGROUND")
-    icon:SetSize(24, 24)
-    icon:SetPoint("CENTER")
-    icon:SetTexture(LOGO_TEXTURE)
+    icon:SetSize(20, 20)
+    icon:SetPoint("TOPLEFT", button, "TOPLEFT", 7, -6)
+    icon:SetTexture(MINIMAP_LOGO_TEXTURE)
     icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
     local border = button:CreateTexture(nil, "OVERLAY")
     border:SetSize(53, 53)
-    border:SetPoint("CENTER")
+    border:SetPoint("TOPLEFT", button, "TOPLEFT", 0, 0)
     border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 
     button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
