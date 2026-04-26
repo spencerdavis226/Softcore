@@ -144,6 +144,7 @@ local function CreateDefaultRuleset()
         actionCamDynamicPitch = true,
         actionCamEnemyFocus = true,
         actionCamInteractFocus = true,
+        actionCamHeadMovementStrength = 0.5,
         maxDeaths = false,
         maxDeathsValue = 3,
     }

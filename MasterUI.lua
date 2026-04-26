@@ -84,6 +84,7 @@ local EDITABLE_RULE_ORDER = {
     "actionCamDynamicPitch",
     "actionCamEnemyFocus",
     "actionCamInteractFocus",
+    "actionCamHeadMovementStrength",
 }
 
 local function Print(message)
@@ -320,6 +321,9 @@ local function IsCheckedRuleValue(ruleName, value)
     if ruleName == "maxLevelGap" or ruleName == "firstPersonOnly" or ruleName == "actionCam" then
         return value ~= "ALLOWED"
     end
+    if ruleName == "actionCamDynamicPitch" or ruleName == "actionCamEnemyFocus" or ruleName == "actionCamInteractFocus" then
+        return value ~= false
+    end
     return not IsDisallowed(value)
 end
 
@@ -368,6 +372,11 @@ local function ApplyStartPreset(frame, preset)
     SetDisallowedRule(rules, "instancedPvP", false)
     rules.firstPersonOnly = "ALLOWED"
     rules.actionCam = "ALLOWED"
+    rules.actionCamShoulderOffset = 1.5
+    rules.actionCamDynamicPitch = true
+    rules.actionCamEnemyFocus = true
+    rules.actionCamInteractFocus = true
+    rules.actionCamHeadMovementStrength = 0.5
     rules.maxDeaths = false
     rules.maxDeathsValue = rules.maxDeathsValue or 3
     rules.achievementPreset = preset
@@ -436,6 +445,11 @@ local RULE_DISPLAY_NAMES = {
     instancedPvP   = "Instanced PvP",
     firstPersonOnly = "First Person Camera",
     actionCam      = "ActionCam",
+    actionCamShoulderOffset = "ActionCam shoulder offset",
+    actionCamDynamicPitch = "ActionCam dynamic pitch",
+    actionCamEnemyFocus = "ActionCam focus on enemies",
+    actionCamInteractFocus = "ActionCam focus on interact",
+    actionCamHeadMovementStrength = "ActionCam head motion",
 }
 
 local function FriendlyRuleValue(ruleName, value)
@@ -449,6 +463,12 @@ local function FriendlyRuleValue(ruleName, value)
     end
     if ruleName == "maxLevelGapValue" or ruleName == "maxDeathsValue" then
         return tostring(value)
+    end
+    if ruleName == "actionCamShoulderOffset" or ruleName == "actionCamHeadMovementStrength" then
+        return tostring(value)
+    end
+    if ruleName == "actionCamDynamicPitch" or ruleName == "actionCamEnemyFocus" or ruleName == "actionCamInteractFocus" then
+        return value and "on" or "off"
     end
     if ruleName == "maxDeaths" then
         return value and "enabled" or "disabled"
@@ -1216,7 +1236,7 @@ function SC:OpenMasterWindow(focusTab)
     end
 
     local frame = CreateFrame("Frame", "SoftcoreMasterFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(760, 650)
+    frame:SetSize(760, 750)
     RestorePosition("master", frame)
     frame:SetMovable(true)
     frame:EnableMouse(true)
@@ -1282,7 +1302,7 @@ function SC:OpenMasterWindow(focusTab)
     AddTab("achievementsTab", "Achievements", TAB_ACHIEVEMENTS, logTab, 110)
 
     local startPanel = CreatePanel(frame)
-    startPanel:SetHeight(490)
+    startPanel:SetHeight(600)
     frame.panels[TAB_RUN] = startPanel
     frame.start = { controls = {}, selectedRules = SC:GetDefaultRuleset(), selectedPreset = "CASUAL" }
     frame.start.selectedRules.dungeonRepeat = "ALLOWED"
@@ -1416,6 +1436,88 @@ function SC:OpenMasterWindow(focusTab)
     end)
     table.insert(frame.start.controls, frame.start.actionCamCheck)
 
+    table.insert(frame.start.controls, CreateLabel(startPanel, "ActionCam tuning (when enforced)", 0, -482, "GameFontHighlightSmall", 300))
+    frame.start.actionCamShoulderLabel = CreateLabel(startPanel, "Shoulder", 0, -502, "GameFontNormalSmall", 54)
+    table.insert(frame.start.controls, frame.start.actionCamShoulderLabel)
+    frame.start.actionCamShoulderBox = CreateFrame("EditBox", nil, startPanel, "InputBoxTemplate")
+    frame.start.actionCamShoulderBox:SetSize(40, 22)
+    frame.start.actionCamShoulderBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 58, -498)
+    frame.start.actionCamShoulderBox:SetAutoFocus(false)
+    frame.start.actionCamShoulderBox:SetScript("OnTextChanged", function(self)
+        local n = tonumber(self:GetText())
+        if n then
+            frame.start.selectedRules.actionCamShoulderOffset = n
+        end
+    end)
+    frame.start.actionCamShoulderBox:SetScript("OnEditFocusLost", function()
+        SC:MasterUI_Refresh()
+    end)
+    table.insert(frame.start.controls, frame.start.actionCamShoulderBox)
+
+    frame.start.actionCamPitchCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
+    frame.start.actionCamPitchCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -528)
+    frame.start.actionCamPitchCheck.label = frame.start.actionCamPitchCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.start.actionCamPitchCheck.label:SetPoint("LEFT", frame.start.actionCamPitchCheck, "RIGHT", 2, 0)
+    frame.start.actionCamPitchCheck.label:SetWidth(200)
+    frame.start.actionCamPitchCheck.label:SetJustifyH("LEFT")
+    frame.start.actionCamPitchCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+    frame.start.actionCamPitchCheck.label:SetText("Dynamic pitch")
+    frame.start.actionCamPitchCheck.ruleKey = "actionCamDynamicPitch"
+    frame.start.actionCamPitchCheck:SetScript("OnClick", function(btn)
+        frame.start.selectedRules.actionCamDynamicPitch = btn:GetChecked() and true or false
+        SC:MasterUI_Refresh()
+    end)
+    table.insert(frame.start.controls, frame.start.actionCamPitchCheck)
+
+    frame.start.actionCamEnemyFocusCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
+    frame.start.actionCamEnemyFocusCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -558)
+    frame.start.actionCamEnemyFocusCheck.label = frame.start.actionCamEnemyFocusCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.start.actionCamEnemyFocusCheck.label:SetPoint("LEFT", frame.start.actionCamEnemyFocusCheck, "RIGHT", 2, 0)
+    frame.start.actionCamEnemyFocusCheck.label:SetWidth(200)
+    frame.start.actionCamEnemyFocusCheck.label:SetJustifyH("LEFT")
+    frame.start.actionCamEnemyFocusCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+    frame.start.actionCamEnemyFocusCheck.label:SetText("Focus enemies")
+    frame.start.actionCamEnemyFocusCheck.ruleKey = "actionCamEnemyFocus"
+    frame.start.actionCamEnemyFocusCheck:SetScript("OnClick", function(btn)
+        frame.start.selectedRules.actionCamEnemyFocus = btn:GetChecked() and true or false
+        SC:MasterUI_Refresh()
+    end)
+    table.insert(frame.start.controls, frame.start.actionCamEnemyFocusCheck)
+
+    frame.start.actionCamInteractFocusCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
+    frame.start.actionCamInteractFocusCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -588)
+    frame.start.actionCamInteractFocusCheck.label = frame.start.actionCamInteractFocusCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.start.actionCamInteractFocusCheck.label:SetPoint("LEFT", frame.start.actionCamInteractFocusCheck, "RIGHT", 2, 0)
+    frame.start.actionCamInteractFocusCheck.label:SetWidth(200)
+    frame.start.actionCamInteractFocusCheck.label:SetJustifyH("LEFT")
+    frame.start.actionCamInteractFocusCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+    frame.start.actionCamInteractFocusCheck.label:SetText("Focus interact targets")
+    frame.start.actionCamInteractFocusCheck.ruleKey = "actionCamInteractFocus"
+    frame.start.actionCamInteractFocusCheck:SetScript("OnClick", function(btn)
+        frame.start.selectedRules.actionCamInteractFocus = btn:GetChecked() and true or false
+        SC:MasterUI_Refresh()
+    end)
+    table.insert(frame.start.controls, frame.start.actionCamInteractFocusCheck)
+
+    frame.start.actionCamHeadLabel = CreateLabel(startPanel, "Head motion", 0, -618, "GameFontNormalSmall", 72)
+    table.insert(frame.start.controls, frame.start.actionCamHeadLabel)
+    frame.start.actionCamHeadBox = CreateFrame("EditBox", nil, startPanel, "InputBoxTemplate")
+    frame.start.actionCamHeadBox:SetSize(40, 22)
+    frame.start.actionCamHeadBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 76, -614)
+    frame.start.actionCamHeadBox:SetAutoFocus(false)
+    frame.start.actionCamHeadBox:SetScript("OnTextChanged", function(self)
+        local n = tonumber(self:GetText())
+        if n then
+            frame.start.selectedRules.actionCamHeadMovementStrength = n
+        end
+    end)
+    frame.start.actionCamHeadBox:SetScript("OnEditFocusLost", function()
+        SC:MasterUI_Refresh()
+    end)
+    table.insert(frame.start.controls, frame.start.actionCamHeadBox)
+    local headHint = CreateLabel(startPanel, "0–1, lower = calmer", 118, -618, "GameFontHighlightSmall", 200)
+    table.insert(frame.start.controls, headHint)
+
     function frame.start:RefreshControls()
         if SC.ApplyGroupingMode then
             SC:ApplyGroupingMode(self.selectedRules)
@@ -1495,6 +1597,48 @@ function SC:OpenMasterWindow(focusTab)
         self.instancedPvPCheck:SetChecked(not IsDisallowed(self.selectedRules.instancedPvP))
         self.firstPersonCheck:SetChecked(IsDisallowed(self.selectedRules.firstPersonOnly))
         self.actionCamCheck:SetChecked(IsDisallowed(self.selectedRules.actionCam))
+        self.actionCamShoulderBox:SetText(tostring(self.selectedRules.actionCamShoulderOffset or 1.5))
+        self.actionCamHeadBox:SetText(tostring(self.selectedRules.actionCamHeadMovementStrength or 0.5))
+        self.actionCamPitchCheck:SetChecked(self.selectedRules.actionCamDynamicPitch ~= false)
+        self.actionCamEnemyFocusCheck:SetChecked(self.selectedRules.actionCamEnemyFocus ~= false)
+        self.actionCamInteractFocusCheck:SetChecked(self.selectedRules.actionCamInteractFocus ~= false)
+        self.actionCamShoulderBox:SetEnabled(canEdit)
+        self.actionCamHeadBox:SetEnabled(canEdit)
+        self.actionCamPitchCheck:SetEnabled(canEdit)
+        self.actionCamEnemyFocusCheck:SetEnabled(canEdit)
+        self.actionCamInteractFocusCheck:SetEnabled(canEdit)
+        if self.actionCamShoulderLabel then
+            SetFontStringRGB(self.actionCamShoulderLabel, canEdit and BODY_TEXT or MUTED_TEXT)
+        end
+        if self.actionCamHeadLabel then
+            SetFontStringRGB(self.actionCamHeadLabel, canEdit and BODY_TEXT or MUTED_TEXT)
+        end
+        for _, camTune in ipairs({
+            self.actionCamPitchCheck,
+            self.actionCamEnemyFocusCheck,
+            self.actionCamInteractFocusCheck,
+        }) do
+            if camTune and camTune.label and self.isModifyingRules and self.draftBaseRules and camTune.ruleKey then
+                local baseVal = self.draftBaseRules[camTune.ruleKey]
+                local curVal = self.selectedRules[camTune.ruleKey]
+                if tostring(baseVal) ~= tostring(curVal) then
+                    local checked = IsCheckedRuleValue(camTune.ruleKey, curVal)
+                    SetFontStringRGB(camTune.label, checked == false and RED_TEXT or GREEN_TEXT)
+                else
+                    SetFontStringRGB(camTune.label, BODY_TEXT)
+                end
+            elseif camTune and camTune.label then
+                SetFontStringRGB(camTune.label, BODY_TEXT)
+            end
+        end
+        if self.isModifyingRules and self.draftBaseRules then
+            local b1 = tonumber(self.draftBaseRules.actionCamShoulderOffset) or 1.5
+            local c1 = tonumber(self.selectedRules.actionCamShoulderOffset) or 1.5
+            SetFontStringRGB(self.actionCamShoulderLabel, b1 ~= c1 and GREEN_TEXT or BODY_TEXT)
+            local b2 = tonumber(self.draftBaseRules.actionCamHeadMovementStrength) or 0.5
+            local c2 = tonumber(self.selectedRules.actionCamHeadMovementStrength) or 0.5
+            SetFontStringRGB(self.actionCamHeadLabel, b2 ~= c2 and GREEN_TEXT or BODY_TEXT)
+        end
         self.selectedRules.maxDeaths = false
         self.selectedRules.maxDeathsValue = self.selectedRules.maxDeathsValue or 3
     end

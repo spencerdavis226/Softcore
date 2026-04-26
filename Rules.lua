@@ -71,6 +71,13 @@ local HASH_RULE_ORDER = {
     "instancedPvP",
     "maxDeaths",
     "maxDeathsValue",
+    "firstPersonOnly",
+    "actionCam",
+    "actionCamShoulderOffset",
+    "actionCamDynamicPitch",
+    "actionCamEnemyFocus",
+    "actionCamInteractFocus",
+    "actionCamHeadMovementStrength",
 }
 
 local BOOLEAN_RULES = {

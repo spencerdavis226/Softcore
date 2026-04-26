@@ -315,6 +315,18 @@ end
 local SetCVarCompat = (C_CVar and C_CVar.SetCVar) and function(k, v) C_CVar.SetCVar(k, v) end or SetCVar
 local GetCVarCompat = (C_CVar and C_CVar.GetCVar) and function(k) return C_CVar.GetCVar(k) end or GetCVar
 
+local function GetCVarDefaultCompat(key)
+    if C_CVar and C_CVar.GetCVarDefault then
+        local v = C_CVar.GetCVarDefault(key)
+        if v ~= nil then return tostring(v) end
+    end
+    if GetCVarDefault then
+        local v = GetCVarDefault(key)
+        if v ~= nil then return tostring(v) end
+    end
+    return nil
+end
+
 local ACTIONCAM_CVARS = {
     "ActionCam",
     "CameraKeepCharacterCentered",
@@ -322,15 +334,40 @@ local ACTIONCAM_CVARS = {
     "test_cameraDynamicPitch",
     "test_cameraTargetFocusEnemyEnable",
     "test_cameraTargetFocusInteractEnable",
+    "test_cameraHeadMovementStrength",
+}
+
+local ACTIONCAM_CVAR_FALLBACK_DEFAULTS = {
+    ActionCam = "default",
+    CameraKeepCharacterCentered = "1",
+    test_cameraOverShoulder = "0",
+    test_cameraDynamicPitch = "0",
+    test_cameraTargetFocusEnemyEnable = "1",
+    test_cameraTargetFocusInteractEnable = "1",
+    test_cameraHeadMovementStrength = "1",
 }
 
 local actionCamOriginals = nil
 
 local function CaptureActionCamOriginals()
     if actionCamOriginals then return end
+    local db = GetDB()
+    if db and db.actionCamCvarBackup then
+        actionCamOriginals = {}
+        for _, key in ipairs(ACTIONCAM_CVARS) do
+            actionCamOriginals[key] = db.actionCamCvarBackup[key]
+        end
+        return
+    end
     actionCamOriginals = {}
     for _, key in ipairs(ACTIONCAM_CVARS) do
         actionCamOriginals[key] = GetCVarCompat(key)
+    end
+    if db then
+        db.actionCamCvarBackup = {}
+        for _, key in ipairs(ACTIONCAM_CVARS) do
+            db.actionCamCvarBackup[key] = actionCamOriginals[key]
+        end
     end
 end
 
@@ -367,12 +404,49 @@ function SC:SnapCameraToFirstPerson()
 end
 
 function SC:RestoreActionCamSettings()
+    local db = GetDB()
+    if not actionCamOriginals and db and db.actionCamCvarBackup then
+        actionCamOriginals = {}
+        for _, key in ipairs(ACTIONCAM_CVARS) do
+            actionCamOriginals[key] = db.actionCamCvarBackup[key]
+        end
+    end
     if not actionCamOriginals then return end
     for _, key in ipairs(ACTIONCAM_CVARS) do
         local v = actionCamOriginals[key]
         if v ~= nil then SetCVarCompat(key, v) end
     end
     actionCamOriginals = nil
+    if db then
+        db.actionCamCvarBackup = nil
+    end
+end
+
+local function RevertActionCamToEngineDefaults()
+    for _, key in ipairs(ACTIONCAM_CVARS) do
+        local def = GetCVarDefaultCompat(key) or ACTIONCAM_CVAR_FALLBACK_DEFAULTS[key]
+        if def and GetCVarCompat(key) ~= def then
+            SetCVarCompat(key, def)
+        end
+    end
+end
+
+function SC:CleanupActionCamIfNeeded()
+    local db = GetDB()
+    local enforcingZoom = GetActionCamZoomTarget()
+    local enforcingFp = IsFirstPersonEnforced()
+    if enforcingZoom or enforcingFp then
+        return
+    end
+    if db and db.actionCamCvarBackup then
+        actionCamOriginals = {}
+        for _, key in ipairs(ACTIONCAM_CVARS) do
+            actionCamOriginals[key] = db.actionCamCvarBackup[key]
+        end
+        self:RestoreActionCamSettings()
+        return
+    end
+    RevertActionCamToEngineDefaults()
 end
 
 function SC:EnforceActionCamSettings()
@@ -411,6 +485,11 @@ function SC:EnforceActionCamSettings()
         SetCVarCompat("test_cameraTargetFocusInteractEnable", interactStr)
     end
 
+    local headStr = tostring(tonumber(ruleset.actionCamHeadMovementStrength) or 0.5)
+    if GetCVarCompat("test_cameraHeadMovementStrength") ~= headStr then
+        SetCVarCompat("test_cameraHeadMovementStrength", headStr)
+    end
+
     -- First-person rule owns zoom=0; skip zoom enforcement when it's active.
     if not IsFirstPersonEnforced() then
         local current = GetCameraZoom and GetCameraZoom() or target
@@ -426,6 +505,12 @@ end
 do
     local elapsed = 0
     local frame = CreateFrame("Frame")
+    frame:RegisterEvent("PLAYER_LOGIN")
+    frame:SetScript("OnEvent", function()
+        if SC.CleanupActionCamIfNeeded then
+            SC:CleanupActionCamIfNeeded()
+        end
+    end)
     frame:SetScript("OnUpdate", function(_, dt)
         elapsed = elapsed + dt
         if elapsed < 0.2 then return end
