@@ -8,7 +8,6 @@ local SC = Softcore
 
 SC.name = "Softcore"
 SC.version = "0.5.0"
-SC.maxLogEntries = 30
 
 local function Print(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r " .. tostring(message))
@@ -275,6 +274,23 @@ local function EnsureDatabase()
     return SoftcoreDB
 end
 
+local function BindCharacterDatabase()
+    local currentCharacter = GetPlayerSnapshot()
+    local currentKey = GetPlayerKey(currentCharacter)
+    local legacyKey = SoftcoreDB and SoftcoreDB.character and GetPlayerKey(SoftcoreDB.character) or nil
+
+    if not SoftcoreCharDB then
+        if legacyKey and legacyKey == currentKey then
+            SoftcoreCharDB = SoftcoreDB
+        else
+            SoftcoreCharDB = {}
+        end
+    end
+
+    SoftcoreDB = SoftcoreCharDB
+    SoftcoreDB.character = SoftcoreDB.character or currentCharacter
+end
+
 local function CreateStableId(kind)
     local db = EnsureDatabase()
 
@@ -377,11 +393,6 @@ function SC:AddLog(kind, message, extra)
 
     table.insert(db.eventLog, entry)
     db.sync.seenAuditIds[entry.id] = true
-
-    -- Keep the visible saved log useful but small for this early addon phase.
-    while #db.eventLog > self.maxLogEntries do
-        table.remove(db.eventLog, 1)
-    end
 
     if self.HUD_Refresh then
         self:HUD_Refresh()
@@ -891,10 +902,6 @@ function SC:ImportSharedLog(entry)
 
     db.sync.seenAuditIds[entry.id] = true
     table.insert(db.eventLog, entry)
-
-    while #db.eventLog > self.maxLogEntries do
-        table.remove(db.eventLog, 1)
-    end
 
     if self.MasterUI_Refresh then
         self:MasterUI_Refresh()
@@ -1491,6 +1498,7 @@ function SC:HandleSlash(input)
 end
 
 function SC:Initialize()
+    BindCharacterDatabase()
     EnsureDatabase()
     self:RefreshCharacter()
 
