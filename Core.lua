@@ -1054,6 +1054,7 @@ function SC:StartRun(runOptions)
     db.run.valid = true
     db.run.failed = false
     db.run.startTime = time()
+    db.run.startLevel = db.character.level
     db.run.deathCount = 0
     db.run.warningCount = 0
     db.run.ruleset = runOptions.ruleset and CopyTable(runOptions.ruleset) or CreateDefaultRuleset()
@@ -1075,7 +1076,7 @@ function SC:StartRun(runOptions)
     participant.currentLevel = db.character.level
     participant.class = db.character.class
 
-    self:AddLog("RUN_START", "Run started for " .. db.character.name .. "-" .. db.character.realm .. ".")
+    self:AddLog("RUN_START", "Run started for " .. db.character.name .. "-" .. db.character.realm .. " at level " .. tostring(db.character.level or "?") .. ".")
     self:RefreshParticipantsFromRoster()
     self:PlayUISound("RUN_STARTED")
     Print("run started.")

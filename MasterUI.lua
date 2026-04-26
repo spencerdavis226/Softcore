@@ -252,14 +252,44 @@ local STATUS_COLORS = {
 }
 local COLOR_RESET = "|r"
 
+local STATUS_LABELS = {
+    VALID = "Valid",
+    ACTIVE = "Active",
+    FAILED = "Failed",
+    BLOCKED = "Blocked",
+    CONFLICT = "Conflict",
+    VIOLATION = "Violation",
+    WARNING = "Violation",
+    UNSYNCED = "Unsynced",
+    INACTIVE = "Inactive",
+    NOT_IN_RUN = "Not in Run",
+    OUT_OF_PARTY = "Out of Party",
+    RETIRED = "Retired",
+    RUN_MISMATCH = "Run Conflict",
+    RULESET_MISMATCH = "Rules Conflict",
+    ADDON_VERSION_MISMATCH = "Version Conflict",
+}
+
+local function FriendlyStatus(statusStr)
+    local raw = tostring(statusStr or "")
+    local base, detail = string.match(raw, "^(%u+)%s*%((.*)%)$")
+    base = base or raw
+    local label = STATUS_LABELS[base] or raw
+    if detail and detail ~= "" then
+        return label .. " (" .. detail .. ")"
+    end
+    return label
+end
+
 local function ColorStatus(statusStr)
     if not statusStr then return "" end
     local base = string.match(statusStr, "^(%u+)")
     local color = base and STATUS_COLORS[base]
+    local label = FriendlyStatus(statusStr)
     if color then
-        return color .. statusStr .. COLOR_RESET
+        return color .. label .. COLOR_RESET
     end
-    return statusStr
+    return label
 end
 
 local function IsDisallowed(value)
@@ -457,17 +487,22 @@ local function GetPartyDisplayRows()
     local participants = db and db.run and db.run.participants or {}
     local localKey = SC:GetPlayerKey()
     local displayRows = {}
+    local seen = {}
 
     local localStatus = SC:GetPlayerStatus()
     local localName = db and db.character and db.character.name or FormatPlayerLabel(localKey)
+    local localParticipant = participants[localKey]
     table.insert(displayRows, {
         name = (localName or "You") .. " *",
         level = db and db.character and db.character.level,
+        startLevel = localParticipant and localParticipant.levelAtJoin,
         status = localStatus.participantStatus or "NOT_IN_RUN",
         totalViolations = CountAllViolations(localKey),
     })
+    seen[localKey] = true
 
     for _, peer in ipairs(syncRows) do
+        local peerKey = peer.playerKey or peer.name
         local displayStatus = tostring(SC.Sync_GetDisplayStatus and SC:Sync_GetDisplayStatus(peer) or peer.participantStatus or "UNKNOWN")
         if (peer.activeViolations or 0) > 0 then
             local violationType = peer.latestViolation and peer.latestViolation.type
@@ -478,29 +513,51 @@ local function GetPartyDisplayRows()
             end
         end
 
-        table.insert(displayRows, {
-            name = peer.name or peer.playerKey or "Unknown",
-            level = peer.level,
-            status = displayStatus,
-            totalViolations = CountAllViolations(peer.playerKey or ""),
-        })
+        if peerKey and not seen[peerKey] and #displayRows < 5 then
+            table.insert(displayRows, {
+                name = peer.name or peer.playerKey or "Unknown",
+                level = peer.level,
+                startLevel = participants[peerKey] and participants[peerKey].levelAtJoin,
+                status = displayStatus,
+                totalViolations = CountAllViolations(peer.playerKey or ""),
+            })
+            seen[peerKey] = true
+        end
     end
 
     for _, participantKey in ipairs(participantOrder) do
-        if participantKey ~= localKey then
+        if participantKey ~= localKey and not seen[participantKey] and #displayRows < 5 then
             local participant = participants[participantKey]
             if participant then
                 table.insert(displayRows, {
                     name = participant.playerKey,
                     level = participant.currentLevel,
+                    startLevel = participant.levelAtJoin,
                     status = tostring(participant.status or "UNKNOWN"),
                     totalViolations = CountAllViolations(participantKey),
                 })
+                seen[participantKey] = true
             end
         end
     end
 
     return displayRows
+end
+
+local function CreateOverviewPartyRow(parent, index)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetSize(690, 24)
+    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -268 - ((index - 1) * 28))
+    if index % 2 == 0 then
+        local rowBg = row:CreateTexture(nil, "BACKGROUND")
+        rowBg:SetAllPoints(row)
+        rowBg:SetColorTexture(0.82, 0.58, 0.22, 0.08)
+    end
+    row.name = CreateField(row, 0, 0, 190)
+    row.level = CreateField(row, 204, 0, 90)
+    row.status = CreateField(row, 314, 0, 180)
+    row.total = CreateField(row, 520, 0, 120)
+    return row
 end
 
 local function RefreshOverviewPanel(frame)
@@ -510,6 +567,9 @@ local function RefreshOverviewPanel(frame)
     local status = SC:GetPlayerStatus()
     local partyRows = GetPartyDisplayRows()
     local activeViolations = #GetSortedActiveViolations()
+    local localKey = SC:GetPlayerKey()
+    local localParticipant = run.participants and run.participants[localKey]
+    local startLevel = (localParticipant and localParticipant.levelAtJoin) or run.startLevel
 
     frame.overview.noRunText:SetShown(not active)
     frame.overview.goToRunBtn:SetShown(not active)
@@ -520,30 +580,43 @@ local function RefreshOverviewPanel(frame)
     frame.overview.elapsed:SetShown(active)
     frame.overview.deaths:SetShown(active)
     frame.overview.violations:SetShown(active)
+    frame.overview.levels:SetShown(active)
     frame.overview.runId:SetShown(active)
 
     if active then
-        SetLine(frame.overview.run, "Run", run.runName or "Softcore Run")
-        frame.overview.localStatus:SetText("You: " .. ColorStatus(status.participantStatus or "NOT_IN_RUN"))
+        frame.overview.run:SetText("|cffffd100" .. tostring(run.runName or "Softcore Run") .. "|r")
+        frame.overview.localStatus:SetText("Character: " .. ColorStatus(status.participantStatus or "NOT_IN_RUN"))
         frame.overview.partyStatus:SetText("Party: " .. ColorStatus(status.partyStatus or "INACTIVE"))
-        frame.overview.elapsed:SetText("Time: " .. FormatElapsed(run.startTime) .. "  |cff6b7280(since " .. FormatTime(run.startTime) .. ")|r")
+        frame.overview.elapsed:SetText("Elapsed: " .. FormatElapsed(run.startTime) .. "  |cffad8f61Started " .. FormatTime(run.startTime) .. "|r")
         SetLine(frame.overview.deaths, "Deaths", tostring(run.deathCount or 0) .. " (permanent)")
+        if not tonumber(startLevel) or tonumber(startLevel) <= 0 then
+            startLevel = "?"
+        end
+        frame.overview.levels:SetText("Level: " .. tostring(db and db.character and db.character.level or "?") .. "  |cffad8f61Started at " .. tostring(startLevel) .. "|r")
 
         local violationColor = activeViolations > 0 and "|cfffbbf24" or ""
         local violationReset = activeViolations > 0 and "|r" or ""
-        frame.overview.violations:SetText("Active violations: " .. violationColor .. activeViolations .. violationReset)
+        frame.overview.violations:SetText("Violations: " .. violationColor .. activeViolations .. violationReset)
 
-        SetLine(frame.overview.runId, "Run ID", run.runId or "none")
+        frame.overview.runId:SetText("|cffad8f61Run ID: " .. tostring(run.runId or "none") .. "|r")
     end
 
     frame.overview.partyEmpty:SetShown(#partyRows == 0)
+
+    for index = #frame.overview.partyRows + 1, math.min(#partyRows, 5) do
+        frame.overview.partyRows[index] = CreateOverviewPartyRow(frame.overview.panel, index)
+    end
 
     for index, row in ipairs(frame.overview.partyRows) do
         local display = partyRows[index]
         if display then
             row:Show()
             row.name:SetText(Trunc(display.name, 24))
-            row.level:SetText(display.level and tostring(display.level) or "")
+            local levelText = display.level and tostring(display.level) or ""
+            if tonumber(display.startLevel) and tonumber(display.startLevel) > 0 then
+                levelText = levelText .. " |cffad8f61(" .. tostring(display.startLevel) .. ")|r"
+            end
+            row.level:SetText(levelText)
             row.status:SetText(ColorStatus(display.status))
             local total = display.totalViolations or 0
             row.total:SetText(total > 0 and "|cfffbbf24" .. total .. "|r" or "0")
@@ -893,7 +966,7 @@ function SC:OpenMasterWindow(focusTab)
     logo:SetSize(40, 40)
     logo:SetPoint("TOPLEFT", frame, "TOPLEFT", 26, -15)
     logo:SetTexture(MENU_LOGO_TEXTURE)
-    logo:SetTexCoord(0.05, 0.95, 0.05, 0.95)
+    logo:SetTexCoord(0, 1, 0, 1)
 
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 10, -4)
@@ -1185,16 +1258,18 @@ function SC:OpenMasterWindow(focusTab)
 
     local overviewPanel = CreatePanel(frame)
     frame.panels[TAB_OVERVIEW] = overviewPanel
-    CreateSectionHeader(overviewPanel, "Run Status", 0, 0, 300)
+    CreateSectionHeader(overviewPanel, "Character Record", 0, 0, 650)
     frame.overview = {
+        panel = overviewPanel,
         noRunText = CreateField(overviewPanel, 0, -34, 500),
         run = CreateField(overviewPanel, 0, -34),
         localStatus = CreateField(overviewPanel, 0, -58),
-        partyStatus = CreateField(overviewPanel, 0, -82),
-        elapsed = CreateField(overviewPanel, 0, -106),
-        deaths = CreateField(overviewPanel, 360, -58, 220),
-        violations = CreateField(overviewPanel, 360, -82, 220),
-        runId = CreateField(overviewPanel, 0, -132, 650),
+        partyStatus = CreateField(overviewPanel, 0, -84),
+        elapsed = CreateField(overviewPanel, 0, -110),
+        levels = CreateField(overviewPanel, 380, -58, 260),
+        deaths = CreateField(overviewPanel, 380, -84, 220),
+        violations = CreateField(overviewPanel, 380, -110, 220),
+        runId = CreateField(overviewPanel, 0, -140, 650),
         partyRows = {},
     }
     frame.overview.noRunText:SetText("No active run. Start a Softcore run to begin tracking deaths, violations, and party status.")
@@ -1204,43 +1279,28 @@ function SC:OpenMasterWindow(focusTab)
         frame.activeTab = TAB_RUN
         SC:MasterUI_Refresh()
     end)
-    CreateSectionHeader(overviewPanel, "Party", 0, -176, 650)
+    CreateSectionHeader(overviewPanel, "Party Ledger", 0, -184, 650)
     frame.overview.resyncBtn = CreateButton(overviewPanel, "Resync", 72, 20)
-    frame.overview.resyncBtn:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", -20, -174)
+    frame.overview.resyncBtn:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", -20, -182)
     frame.overview.resyncBtn:SetScript("OnClick", function()
         if SC.Sync_BroadcastStatus then
             SC:Sync_BroadcastStatus("RESYNC")
             Print("resync requested.")
         end
     end)
-    CreateLabel(overviewPanel, "Name",  0,   -214, "GameFontNormalSmall", 190)
-    CreateLabel(overviewPanel, "Level", 198, -214, "GameFontNormalSmall", 44)
-    CreateLabel(overviewPanel, "Status",252, -214, "GameFontNormalSmall", 190)
-    CreateLabel(overviewPanel, "Violations", 460, -214, "GameFontNormalSmall", 140)
+    CreateLabel(overviewPanel, "Name", 0, -222, "GameFontNormalSmall", 190)
+    CreateLabel(overviewPanel, "Level (Start)", 204, -222, "GameFontNormalSmall", 100)
+    CreateLabel(overviewPanel, "Status", 314, -222, "GameFontNormalSmall", 180)
+    CreateLabel(overviewPanel, "Violations", 520, -222, "GameFontNormalSmall", 120)
 
     local columnSep = overviewPanel:CreateTexture(nil, "ARTWORK")
     columnSep:SetHeight(1)
-    columnSep:SetPoint("TOPLEFT",  overviewPanel, "TOPLEFT",  0, -229)
-    columnSep:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", -20, -229)
+    columnSep:SetPoint("TOPLEFT",  overviewPanel, "TOPLEFT",  0, -237)
+    columnSep:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", -20, -237)
     columnSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
 
-    frame.overview.partyEmpty = CreateField(overviewPanel, 0, -242, 620)
+    frame.overview.partyEmpty = CreateField(overviewPanel, 0, -252, 620)
     frame.overview.partyEmpty:SetText("No synced party members.")
-    for index = 1, 8 do
-        local row = CreateFrame("Frame", nil, overviewPanel)
-        row:SetSize(690, 22)
-        row:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", 0, -260 - ((index - 1) * 24))
-        if index % 2 == 0 then
-            local rowBg = row:CreateTexture(nil, "BACKGROUND")
-            rowBg:SetAllPoints(row)
-            rowBg:SetColorTexture(0.82, 0.58, 0.22, 0.08)
-        end
-        row.name  = CreateField(row, 0,   0, 190)
-        row.level = CreateField(row, 198, 0, 44)
-        row.status = CreateField(row, 252, 0, 190)
-        row.total  = CreateField(row, 460, 0, 140)
-        frame.overview.partyRows[index] = row
-    end
 
     local violationsPanel = CreatePanel(frame)
     frame.panels[TAB_VIOLATIONS] = violationsPanel
