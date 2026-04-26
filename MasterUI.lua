@@ -80,6 +80,10 @@ local EDITABLE_RULE_ORDER = {
     "instancedPvP",
     "firstPersonOnly",
     "actionCam",
+    "actionCamShoulderOffset",
+    "actionCamDynamicPitch",
+    "actionCamEnemyFocus",
+    "actionCamInteractFocus",
 }
 
 local function Print(message)

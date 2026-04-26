@@ -315,6 +315,25 @@ end
 local SetCVarCompat = (C_CVar and C_CVar.SetCVar) and function(k, v) C_CVar.SetCVar(k, v) end or SetCVar
 local GetCVarCompat = (C_CVar and C_CVar.GetCVar) and function(k) return C_CVar.GetCVar(k) end or GetCVar
 
+local ACTIONCAM_CVARS = {
+    "ActionCam",
+    "CameraKeepCharacterCentered",
+    "test_cameraOverShoulder",
+    "test_cameraDynamicPitch",
+    "test_cameraTargetFocusEnemyEnable",
+    "test_cameraTargetFocusInteractEnable",
+}
+
+local actionCamOriginals = nil
+
+local function CaptureActionCamOriginals()
+    if actionCamOriginals then return end
+    actionCamOriginals = {}
+    for _, key in ipairs(ACTIONCAM_CVARS) do
+        actionCamOriginals[key] = GetCVarCompat(key)
+    end
+end
+
 local function IsFirstPersonEnforced()
     if not IsRunActive() then return false end
     local db = GetDB()
@@ -347,12 +366,49 @@ function SC:SnapCameraToFirstPerson()
     end
 end
 
+function SC:RestoreActionCamSettings()
+    if not actionCamOriginals then return end
+    for _, key in ipairs(ACTIONCAM_CVARS) do
+        local v = actionCamOriginals[key]
+        if v ~= nil then SetCVarCompat(key, v) end
+    end
+    actionCamOriginals = nil
+end
+
 function SC:EnforceActionCamSettings()
     local target = GetActionCamZoomTarget()
     if not target then return end
 
+    CaptureActionCamOriginals()
+
+    local db = GetDB()
+    local ruleset = db and db.run and db.run.ruleset or {}
+
     if GetCVarCompat("ActionCam") ~= "full" then
         SetCVarCompat("ActionCam", "full")
+    end
+    if GetCVarCompat("CameraKeepCharacterCentered") ~= "0" then
+        SetCVarCompat("CameraKeepCharacterCentered", "0")
+    end
+
+    local shoulderStr = tostring(tonumber(ruleset.actionCamShoulderOffset) or 1.5)
+    if GetCVarCompat("test_cameraOverShoulder") ~= shoulderStr then
+        SetCVarCompat("test_cameraOverShoulder", shoulderStr)
+    end
+
+    local pitchStr = (ruleset.actionCamDynamicPitch ~= false) and "1" or "0"
+    if GetCVarCompat("test_cameraDynamicPitch") ~= pitchStr then
+        SetCVarCompat("test_cameraDynamicPitch", pitchStr)
+    end
+
+    local enemyStr = (ruleset.actionCamEnemyFocus ~= false) and "1" or "0"
+    if GetCVarCompat("test_cameraTargetFocusEnemyEnable") ~= enemyStr then
+        SetCVarCompat("test_cameraTargetFocusEnemyEnable", enemyStr)
+    end
+
+    local interactStr = (ruleset.actionCamInteractFocus ~= false) and "1" or "0"
+    if GetCVarCompat("test_cameraTargetFocusInteractEnable") ~= interactStr then
+        SetCVarCompat("test_cameraTargetFocusInteractEnable", interactStr)
     end
 
     -- First-person rule owns zoom=0; skip zoom enforcement when it's active.
@@ -384,6 +440,8 @@ do
 
         if GetActionCamZoomTarget() then
             SC:EnforceActionCamSettings()
+        elseif actionCamOriginals then
+            SC:RestoreActionCamSettings()
         end
     end)
 end

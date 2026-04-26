@@ -138,6 +138,12 @@ local function CreateDefaultRuleset()
         vendor = "ALLOWED",
         consumables = "ALLOWED",
         instancedPvP = "ALLOWED",
+        firstPersonOnly = "ALLOWED",
+        actionCam = "ALLOWED",
+        actionCamShoulderOffset = 1.5,
+        actionCamDynamicPitch = true,
+        actionCamEnemyFocus = true,
+        actionCamInteractFocus = true,
         maxDeaths = false,
         maxDeathsValue = 3,
     }
@@ -1157,6 +1163,10 @@ function SC:ResetRun()
     db.pendingProposalId = nil
     db.acceptedRunId = nil
     db.acceptedRulesetHash = nil
+
+    if self.RestoreActionCamSettings then
+        self:RestoreActionCamSettings()
+    end
 
     self:AddLog("RUN_RESET", "Local run reset.")
     Print("local run reset.")
