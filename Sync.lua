@@ -201,7 +201,7 @@ local function CanImportSharedAudit(payload)
     return payload.runId and payload.runId == db.run.runId
 end
 
-local function RecordConflict(playerKey, conflictType, localValue, remoteValue)
+local function RecordConflict(playerKey, conflictType, localValue, remoteValue, extra)
     local db = GetDB()
     local key = playerKey .. ":" .. conflictType
 
@@ -213,6 +213,12 @@ local function RecordConflict(playerKey, conflictType, localValue, remoteValue)
         active = true,
         detectedAt = time(),
     }
+
+    if extra then
+        for k, v in pairs(extra) do
+            db.run.conflicts[key][k] = v
+        end
+    end
 end
 
 local function ClearConflict(playerKey, conflictType)
@@ -374,7 +380,7 @@ function SC:Sync_BuildPayload(reason)
 
     local status = self:GetPlayerStatus()
 
-    return AddViolationSnapshot({
+    local payload = AddViolationSnapshot({
         type = "STATUS",
         reason = reason or "UPDATE",
         runName = status.runName,
@@ -395,6 +401,15 @@ function SC:Sync_BuildPayload(reason)
         rulesetHash = status.rulesetHash,
         timestamp = status.timestamp,
     })
+
+    if reason == "RESYNC" and self.SerializeRuleset then
+        local db = self.db or SoftcoreDB
+        if db and db.run and db.run.ruleset then
+            payload.ruleset = self:SerializeRuleset(db.run.ruleset)
+        end
+    end
+
+    return payload
 end
 
 function SC:Sync_BroadcastStatus(reason)
@@ -423,7 +438,7 @@ function SC:Sync_SendFullState()
     local db = GetDB()
     local status = self:GetPlayerStatus()
 
-    SendPayload(AddViolationSnapshot({
+    local payload = AddViolationSnapshot({
         type = "FULL_STATE_RESPONSE",
         name = status.name,
         realm = status.realm,
@@ -439,7 +454,11 @@ function SC:Sync_SendFullState()
         participantCount = #(db.run.participantOrder or {}),
         rulesetVersion = status.rulesetVersion,
         rulesetHash = status.rulesetHash,
-    }))
+    })
+    if self.SerializeRuleset and db.run and db.run.ruleset then
+        payload.ruleset = self:SerializeRuleset(db.run.ruleset)
+    end
+    SendPayload(payload)
 end
 
 function SC:Sync_SendProposal(proposalType, proposalId)
@@ -722,6 +741,7 @@ function SC:Sync_HandleMessage(message, sender)
     local remoteRunId = payload.runId
     local localRulesetHash = self.GetRulesetHash and self:GetRulesetHash() or ""
     local remoteRulesetHash = payload.rulesetHash
+    local remoteRuleset = payload.ruleset and self.DeserializeRuleset and self:DeserializeRuleset(payload.ruleset) or nil
 
     local participantStatus = payload.participantStatus
     if localRunId and remoteRunId and localRunId ~= remoteRunId then
@@ -735,7 +755,10 @@ function SC:Sync_HandleMessage(message, sender)
         if participantStatus ~= "RUN_MISMATCH" then
             participantStatus = "RULESET_MISMATCH"
         end
-        RecordConflict(key, "RULESET_MISMATCH", localRulesetHash, remoteRulesetHash)
+        RecordConflict(key, "RULESET_MISMATCH", localRulesetHash, remoteRulesetHash, {
+            remoteRuleset = remoteRuleset,
+            remoteRulesetSerialized = payload.ruleset,
+        })
     else
         ClearConflict(key, "RULESET_MISMATCH")
     end

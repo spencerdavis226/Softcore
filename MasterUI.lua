@@ -30,6 +30,8 @@ local PANEL_HEIGHT = 500
 local BODY_TEXT = { r = 0.94, g = 0.86, b = 0.68 }
 local MUTED_TEXT = { r = 0.68, g = 0.56, b = 0.38 }
 local GOLD_TEXT = { r = 1.00, g = 0.82, b = 0.20 }
+local GREEN_TEXT = { r = 0.42, g = 1.00, b = 0.54 }
+local RED_TEXT = { r = 1.00, g = 0.30, b = 0.25 }
 local MENU_LOGO_TEXTURE = "Interface\\AddOns\\Softcore\\Assets\\SoftcoreLogoMenu"
 
 local GROUPING_OPTIONS = {
@@ -300,6 +302,20 @@ local function SetDisallowedRule(rules, key, checked)
     rules[key] = checked and "ALLOWED" or DISALLOWED_OUTCOME
 end
 
+local function SetFontStringRGB(fontString, color)
+    fontString:SetTextColor(color.r, color.g, color.b)
+end
+
+local function IsCheckedRuleValue(ruleName, value)
+    if ruleName == "groupingMode" or ruleName == "gearQuality" or ruleName == "maxLevelGapValue" then
+        return nil
+    end
+    if ruleName == "maxLevelGap" then
+        return value ~= "ALLOWED"
+    end
+    return not IsDisallowed(value)
+end
+
 local function CreateAllowCheckbox(parent, rules, spec, x, y)
     local checkbox = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     checkbox:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
@@ -456,6 +472,16 @@ local function GetPendingRunProposal()
         local proposal = SC:GetPendingProposal()
         if proposal and proposal.status == "PENDING" then
             return proposal
+        end
+    end
+    return nil
+end
+
+local function GetPendingRulesConflict()
+    local db = SC.db or SoftcoreDB
+    for _, conflict in pairs(db and db.run and db.run.conflicts or {}) do
+        if conflict.active and conflict.type == "RULESET_MISMATCH" and conflict.remoteRuleset and not conflict.dismissed then
+            return conflict
         end
     end
     return nil
@@ -734,6 +760,53 @@ local function RefreshAmendmentPanel(frame, amendment, isProposer)
     end
 end
 
+local function RenderRuleDiffRows(panel, currentRules, proposedRules)
+    local rowCount = 0
+    for _, ruleName in ipairs(EDITABLE_RULE_ORDER) do
+        local proposed = proposedRules and proposedRules[ruleName]
+        if proposed ~= nil then
+            local current = currentRules and currentRules[ruleName]
+            local label = RULE_DISPLAY_NAMES[ruleName] or ruleName
+            local changed = currentRules and tostring(current) ~= tostring(proposed)
+            rowCount = rowCount + 1
+            if rowCount <= #panel.ruleRows then
+                local row = panel.ruleRows[rowCount]
+                local checked = IsCheckedRuleValue(ruleName, proposed)
+                row:Show()
+                row.check:SetShown(checked ~= nil)
+                row.check:SetChecked(checked == true)
+                row.check:Disable()
+                row.label:SetText(label)
+                row.value:SetText(FriendlyRuleValue(ruleName, proposed))
+                SetFontStringRGB(row.label, BODY_TEXT)
+                SetFontStringRGB(row.value, GOLD_TEXT)
+                SetFontStringRGB(row.previous, MUTED_TEXT)
+                if changed then
+                    local changeColor = checked == false and RED_TEXT or GREEN_TEXT
+                    if checked == nil then
+                        changeColor = GOLD_TEXT
+                    end
+                    SetFontStringRGB(row.label, changeColor)
+                    SetFontStringRGB(row.value, changeColor)
+                    row.previous:SetText("was " .. FriendlyRuleValue(ruleName, current))
+                else
+                    row.previous:SetText("")
+                end
+            end
+        end
+    end
+
+    for i = rowCount + 1, #panel.ruleRows do
+        panel.ruleRows[i]:Hide()
+    end
+
+    if rowCount > #panel.ruleRows then
+        panel.more:SetText("|cffad8f61+" .. tostring(rowCount - #panel.ruleRows) .. " more rules in proposal.|r")
+    else
+        panel.more:SetText("")
+    end
+end
+
 local function RefreshRunProposalPanel(frame, proposal)
     local panel = frame.start.proposalPanel
     local proposer = FormatPlayerLabel(proposal.proposedBy)
@@ -748,37 +821,15 @@ local function RefreshRunProposalPanel(frame, proposal)
         panel.subtitle:SetText("Proposed by " .. proposer .. " for " .. tostring(proposal.runName or "Softcore Run") .. ".")
     end
     panel.runId:SetText("|cffad8f61Run ID: " .. tostring(proposal.runId or "?") .. "|r")
+    panel.rulesTitle:SetText("Proposed Rules")
 
-    local lineCount = 0
-    for _, ruleName in ipairs(EDITABLE_RULE_ORDER) do
-        local proposed = proposal.ruleset and proposal.ruleset[ruleName]
-        if proposed ~= nil then
-            local current = currentRules and currentRules[ruleName]
-            local label = RULE_DISPLAY_NAMES[ruleName] or ruleName
-            lineCount = lineCount + 1
-            if lineCount <= 10 then
-                if currentRules and tostring(current) ~= tostring(proposed) then
-                    panel.ruleLines[lineCount]:SetText(label .. ": " .. FriendlyRuleValue(ruleName, current) .. " -> |cffffd100" .. FriendlyRuleValue(ruleName, proposed) .. "|r")
-                else
-                    panel.ruleLines[lineCount]:SetText(label .. ": |cffffd100" .. FriendlyRuleValue(ruleName, proposed) .. "|r")
-                end
-            end
-        end
-    end
-
-    for i = lineCount + 1, 10 do
-        panel.ruleLines[i]:SetText("")
-    end
-
-    if lineCount > 10 then
-        panel.more:SetText("|cffad8f61+" .. tostring(lineCount - 10) .. " more rules in proposal.|r")
-    else
-        panel.more:SetText("")
-    end
+    RenderRuleDiffRows(panel, currentRules, proposal.ruleset)
 
     panel.waitText:SetShown(isProposer)
     panel.acceptBtn:SetShown(not isProposer)
     panel.declineBtn:SetShown(not isProposer)
+    panel.acceptBtn:SetText("Accept")
+    panel.declineBtn:SetText("Decline")
 
     panel.acceptBtn:SetScript("OnClick", function()
         if SC.AcceptPendingProposal then
@@ -789,6 +840,50 @@ local function RefreshRunProposalPanel(frame, proposal)
     panel.declineBtn:SetScript("OnClick", function()
         if SC.DeclinePendingProposal then
             SC:DeclinePendingProposal()
+        end
+        SC:MasterUI_Refresh()
+    end)
+end
+
+local function RefreshRulesConflictPanel(frame, conflict)
+    local panel = frame.start.proposalPanel
+    local db = SC.db or SoftcoreDB
+    local currentRules = db and db.run and db.run.ruleset or nil
+    local remoteLabel = FormatPlayerLabel(conflict.playerKey)
+
+    panel.title:SetText("|cffffd100Rules Conflict|r")
+    panel.subtitle:SetText("Synced rules from " .. remoteLabel .. " differ from this run.")
+    panel.runId:SetText("|cffad8f61Review the highlighted differences before accepting or keeping your local rules.|r")
+    panel.rulesTitle:SetText("Synced Rules")
+
+    RenderRuleDiffRows(panel, currentRules, conflict.remoteRuleset)
+
+    panel.waitText:Hide()
+    panel.acceptBtn:Show()
+    panel.declineBtn:Show()
+    panel.acceptBtn:SetText("Accept")
+    panel.declineBtn:SetText("Decline")
+
+    panel.acceptBtn:SetScript("OnClick", function()
+        local changes = BuildRuleChanges(currentRules or {}, conflict.remoteRuleset or {})
+        if CountRuleChanges(changes) > 0 and SC.ProposeRuleAmendment then
+            local reason = "Accepted synced rules from " .. remoteLabel .. "."
+            local amendment = SC:ProposeRuleAmendment(changes, reason)
+            if amendment and not IsInGroup() and SC.AcceptRuleAmendment and SC.ApplyRuleAmendment then
+                SC:AcceptRuleAmendment(amendment.id)
+                SC:ApplyRuleAmendment(amendment.id)
+            end
+        elseif SC.AddLog then
+            SC:AddLog("RULE_CONFLICT_ACCEPTED", "Accepted synced rules from " .. remoteLabel .. ", but no rule differences were found.")
+        end
+        conflict.dismissed = true
+        SC:MasterUI_Refresh()
+    end)
+
+    panel.declineBtn:SetScript("OnClick", function()
+        conflict.dismissed = true
+        if SC.AddLog then
+            SC:AddLog("RULE_CONFLICT_DECLINED", "Kept local rules instead of synced rules from " .. remoteLabel .. ".")
         end
         SC:MasterUI_Refresh()
     end)
@@ -809,6 +904,41 @@ local function HideAllRunControls(frame)
     frame.start.applyChangesBtn:Hide()
     frame.start.cancelChangesBtn:Hide()
     frame.start.changeSummary:Hide()
+end
+
+local function AnchorRunFooterButtons(frame)
+    local start = frame.start
+    local first
+
+    if start.primaryBtn:IsShown() then
+        first = start.primaryBtn
+    elseif start.stopBtn:IsShown() then
+        first = start.stopBtn
+    elseif start.applyChangesBtn:IsShown() then
+        first = start.applyChangesBtn
+    end
+
+    if not first then return end
+
+    first:ClearAllPoints()
+    first:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 32, 24)
+
+    if start.stopBtn:IsShown() and start.stopBtn ~= first then
+        start.stopBtn:ClearAllPoints()
+        start.stopBtn:SetPoint("LEFT", first, "RIGHT", 8, 0)
+    end
+    if start.modifyBtn:IsShown() then
+        start.modifyBtn:ClearAllPoints()
+        start.modifyBtn:SetPoint("LEFT", start.stopBtn, "RIGHT", 8, 0)
+    end
+    if start.applyChangesBtn:IsShown() and start.applyChangesBtn ~= first then
+        start.applyChangesBtn:ClearAllPoints()
+        start.applyChangesBtn:SetPoint("LEFT", first, "RIGHT", 8, 0)
+    end
+    if start.cancelChangesBtn:IsShown() then
+        start.cancelChangesBtn:ClearAllPoints()
+        start.cancelChangesBtn:SetPoint("LEFT", start.applyChangesBtn, "RIGHT", 8, 0)
+    end
 end
 
 local function RefreshRunPanel(frame)
@@ -835,6 +965,14 @@ local function RefreshRunPanel(frame)
         HideAllRunControls(frame)
         frame.start.proposalPanel:Show()
         RefreshRunProposalPanel(frame, pendingProposal)
+        return
+    end
+
+    local pendingConflict = GetPendingRulesConflict()
+    if pendingConflict and frame.start.proposalPanel then
+        HideAllRunControls(frame)
+        frame.start.proposalPanel:Show()
+        RefreshRulesConflictPanel(frame, pendingConflict)
         return
     end
     if frame.start.proposalPanel then
@@ -883,6 +1021,7 @@ local function RefreshRunPanel(frame)
     if frame.start.RefreshControls then
         frame.start:RefreshControls()
     end
+    AnchorRunFooterButtons(frame)
 
     if modifying then
         local changes = BuildRuleChanges(frame.start.draftBaseRules or {}, frame.start.selectedRules or {})
@@ -1341,7 +1480,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.amendmentPanel = amendPanel
 
     local proposalPanel = CreateFrame("Frame", nil, startPanel, "BackdropTemplate")
-    proposalPanel:SetSize(650, 360)
+    proposalPanel:SetSize(650, 392)
     proposalPanel:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, 0)
     proposalPanel:EnableMouse(true)
     proposalPanel:SetBackdrop({
@@ -1361,11 +1500,31 @@ function SC:OpenMasterWindow(focusTab)
     proposalPanel.runId = CreateField(proposalPanel, 14, -64, 620)
     CreateDivider(proposalPanel, 14, -88, 620)
     CreateLabel(proposalPanel, "Proposed Rules", 14, -106, "GameFontNormal", 180)
-    proposalPanel.ruleLines = {}
-    for i = 1, 10 do
-        proposalPanel.ruleLines[i] = CreateField(proposalPanel, 24, -132 - ((i - 1) * 18), 610)
+    proposalPanel.ruleRows = {}
+    for i = 1, 18 do
+        local row = CreateFrame("Frame", nil, proposalPanel)
+        local column = i > 9 and 1 or 0
+        local rowIndex = ((i - 1) % 9) + 1
+        row:SetSize(300, 26)
+        row:SetPoint("TOPLEFT", proposalPanel, "TOPLEFT", 18 + (column * 310), -132 - ((rowIndex - 1) * 28))
+        row.check = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate")
+        row.check:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 2)
+        row.check:SetSize(22, 22)
+        row.label = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.label:SetPoint("LEFT", row.check, "RIGHT", 2, 0)
+        row.label:SetWidth(150)
+        row.label:SetJustifyH("LEFT")
+        row.value = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        row.value:SetPoint("LEFT", row.label, "RIGHT", 8, 0)
+        row.value:SetWidth(80)
+        row.value:SetJustifyH("LEFT")
+        row.previous = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        row.previous:SetPoint("TOPLEFT", row.label, "BOTTOMLEFT", 0, 2)
+        row.previous:SetWidth(250)
+        row.previous:SetJustifyH("LEFT")
+        proposalPanel.ruleRows[i] = row
     end
-    proposalPanel.more = CreateField(proposalPanel, 24, -316, 610)
+    proposalPanel.more = CreateField(proposalPanel, 24, -350, 610)
     proposalPanel.waitText = CreateField(proposalPanel, 14, -999, 610)
     proposalPanel.waitText:SetPoint("BOTTOMLEFT", proposalPanel, "BOTTOMLEFT", 14, 44)
     proposalPanel.waitText:SetText("|cffad8f61Waiting for party members to accept...|r")
