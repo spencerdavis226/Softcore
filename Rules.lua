@@ -1,6 +1,7 @@
 -- Structured rules engine and local amendment foundation.
 
 local SC = Softcore
+local AMENDMENT_TIMEOUT_SECONDS = 30 * 60
 
 local SUPPORTED_SEVERITIES = {
     ALLOWED = true,
@@ -128,6 +129,25 @@ local function GetDB()
     SoftcoreDB.nextIds = SoftcoreDB.nextIds or {}
     SoftcoreDB.nextIds.amendment = SoftcoreDB.nextIds.amendment or 0
     return SoftcoreDB
+end
+
+local function IsAmendmentExpired(amendment)
+    return time() - (tonumber(amendment and amendment.proposedAt) or time()) > AMENDMENT_TIMEOUT_SECONDS
+end
+
+function SC:ClearStaleRuleAmendments()
+    local db = GetDB()
+    local changed = false
+    for _, amendment in ipairs(db.ruleAmendments or {}) do
+        if (amendment.status == "PENDING" or amendment.status == "ACCEPTED") and IsAmendmentExpired(amendment) then
+            amendment.status = "EXPIRED"
+            amendment.expiredAt = time()
+            changed = true
+        end
+    end
+    if changed and self.MasterUI_Refresh then
+        self:MasterUI_Refresh()
+    end
 end
 
 local function CreateAmendmentId()
@@ -335,6 +355,11 @@ function SC:AcceptRuleAmendment(amendmentId)
     for _, amendment in ipairs(db.ruleAmendments) do
         if amendment.id == amendmentId then
             if amendment.status == "PENDING" then
+                if IsAmendmentExpired(amendment) then
+                    amendment.status = "EXPIRED"
+                    amendment.expiredAt = time()
+                    return amendment
+                end
                 amendment.status = "ACCEPTED"
                 amendment.acceptedAt = time()
                 amendment.acceptedBy = self:GetPlayerKey()
@@ -359,6 +384,11 @@ function SC:DeclineRuleAmendment(amendmentId)
     for _, amendment in ipairs(db.ruleAmendments) do
         if amendment.id == amendmentId then
             if amendment.status == "PENDING" then
+                if IsAmendmentExpired(amendment) then
+                    amendment.status = "EXPIRED"
+                    amendment.expiredAt = time()
+                    return amendment
+                end
                 amendment.status = "DECLINED"
                 amendment.declinedAt = time()
                 amendment.declinedBy = self:GetPlayerKey()
@@ -382,6 +412,11 @@ function SC:ApplyRuleAmendment(amendmentId)
 
     for _, amendment in ipairs(db.ruleAmendments) do
         if amendment.id == amendmentId then
+            if amendment.status ~= "APPLIED" and IsAmendmentExpired(amendment) then
+                amendment.status = "EXPIRED"
+                amendment.expiredAt = time()
+                return nil
+            end
             if amendment.status ~= "ACCEPTED" and amendment.status ~= "APPLIED" then
                 return nil
             end
@@ -464,6 +499,12 @@ function SC:ReceiveRuleAmendmentResponse(payload, senderKey)
     for _, amendment in ipairs(db.ruleAmendments) do
         if amendment.id == amendmentId and amendment.status == "PENDING" then
             if amendment.proposedBy ~= localKey then return end
+            if IsAmendmentExpired(amendment) then
+                amendment.status = "EXPIRED"
+                amendment.expiredAt = time()
+                if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+                return
+            end
 
             if payload.type == "AMENDMENT_ACCEPT" then
                 amendment.acceptances = amendment.acceptances or {}
@@ -510,7 +551,12 @@ function SC:ReceiveRuleAmendmentApplied(payload)
     if not amendmentId then return end
 
     for _, amendment in ipairs(db.ruleAmendments) do
-        if amendment.id == amendmentId and amendment.status == "PENDING" then
+        if amendment.id == amendmentId and (amendment.status == "PENDING" or amendment.status == "ACCEPTED") then
+            if IsAmendmentExpired(amendment) then
+                amendment.status = "EXPIRED"
+                amendment.expiredAt = time()
+                break
+            end
             amendment.status = "ACCEPTED"
             amendment.acceptedAt = time()
             self:ApplyRuleAmendment(amendmentId)

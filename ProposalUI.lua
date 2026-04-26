@@ -4,6 +4,7 @@ local SC = Softcore
 
 local SEPARATOR = "\031"
 local PAIR_SEPARATOR = "\030"
+local PROPOSAL_TIMEOUT_SECONDS = 30 * 60
 
 local RULE_KEYS = {
     "death",
@@ -224,9 +225,26 @@ end
 function SC:GetPendingProposal()
     local db = GetDB()
     if db.pendingProposalId then
-        return db.proposals[db.pendingProposalId]
+        local proposal = db.proposals[db.pendingProposalId]
+        if proposal and (proposal.status == "PENDING" or proposal.status == "ACCEPTED") then
+            local createdAt = tonumber(proposal.proposedAt) or time()
+            if time() - createdAt > PROPOSAL_TIMEOUT_SECONDS then
+                proposal.status = "EXPIRED"
+                db.pendingProposalId = nil
+                self:AddLog("PROPOSAL_EXPIRED", "Expired stale proposal: " .. tostring(proposal.runName), {
+                    proposalId = proposal.proposalId,
+                    runId = proposal.runId,
+                })
+                return nil
+            end
+        end
+        return proposal
     end
     return nil
+end
+
+function SC:ClearStalePendingProposal()
+    self:GetPendingProposal()
 end
 
 function SC:CanProposeRun()
@@ -310,6 +328,12 @@ function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, r
     end
 
     local db = GetDB()
+    local existing = self:GetPendingProposal()
+    if existing and (existing.status == "PENDING" or existing.status == "ACCEPTED") then
+        Print("finish or cancel the current proposal before creating another.")
+        return nil
+    end
+
     if (proposalType == "RUN" or not proposalType) and db.run and db.run.active then
         Print("cannot propose a new run while an active run is in progress. Use /sc reset to stop it first.")
         return nil
@@ -461,16 +485,19 @@ function SC:ReceiveRunProposal(payload, proposerKey)
         return
     end
 
-    -- Cancel any existing pending proposal before storing the new one so the old
-    -- proposalId isn't left dangling and the UI doesn't show a stale proposal.
     local existing = self:GetPendingProposal()
     if existing and existing.proposalId ~= proposal.proposalId then
-        existing.status = "CANCELLED"
-        db.pendingProposalId = nil
-        self:AddLog("PROPOSAL_SUPERSEDED", "Pending proposal superseded by new proposal from " .. proposerKey, {
+        db.proposals[proposal.proposalId] = proposal
+        proposal.status = "DECLINED"
+        self:AddLog("PROPOSAL_BUSY_DECLINED", "Ignored proposal from " .. proposerKey .. " because another proposal is pending.", {
             oldProposalId = existing.proposalId,
             newProposalId = proposal.proposalId,
         })
+        if self.Sync_SendProposalResponse then
+            self:Sync_SendProposalResponse("PROPOSAL_DECLINE", proposal)
+        end
+        Print("proposal from " .. tostring(proposerKey) .. " ignored: another proposal is pending.")
+        return
     end
 
     self:StoreProposal(proposal)
@@ -641,6 +668,13 @@ function SC:ReceiveProposalResponse(payload, playerKey)
         })
         return
     end
+    if time() - (tonumber(proposal.proposedAt) or time()) > PROPOSAL_TIMEOUT_SECONDS then
+        proposal.status = "EXPIRED"
+        if db.pendingProposalId == proposal.proposalId then
+            db.pendingProposalId = nil
+        end
+        return
+    end
 
     if payload.type == "PROPOSAL_ACCEPT" then
         proposal.acceptedBy[playerKey] = true
@@ -715,6 +749,14 @@ function SC:ReceiveRunConfirmed(payload, confirmerKey)
     local db = GetDB()
     local proposal = db.proposals[payload.proposalId]
     if not proposal then return end
+    if proposal.status ~= "PENDING" and proposal.status ~= "ACCEPTED" then return end
+    if time() - (tonumber(proposal.proposedAt) or time()) > PROPOSAL_TIMEOUT_SECONDS then
+        proposal.status = "EXPIRED"
+        if db.pendingProposalId == proposal.proposalId then
+            db.pendingProposalId = nil
+        end
+        return
+    end
 
     local playerKey = self:GetPlayerKey()
 

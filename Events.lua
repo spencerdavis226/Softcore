@@ -278,6 +278,12 @@ function SC:Events_Register()
             CheckMovementRules()
         elseif event == "GROUP_ROSTER_UPDATE" then
             SC:AddLog("GROUP_ROSTER", "Group roster changed.")
+            if SC.ClearStalePendingProposal then
+                SC:ClearStalePendingProposal()
+            end
+            if SC.ClearStaleRuleAmendments then
+                SC:ClearStaleRuleAmendments()
+            end
             if SC.Sync_MarkRoster then
                 SC:Sync_MarkRoster()
             end
@@ -298,6 +304,12 @@ function SC:Events_Register()
                 Broadcast("GROUP_ROSTER_UPDATE")
             end
         elseif event == "PLAYER_ENTERING_WORLD" then
+            if SC.ClearStalePendingProposal then
+                SC:ClearStalePendingProposal()
+            end
+            if SC.ClearStaleRuleAmendments then
+                SC:ClearStaleRuleAmendments()
+            end
             if SC.ScanEquippedGear then
                 SC:ScanEquippedGear(true)
             end

@@ -952,6 +952,10 @@ function SC:ImportSharedViolationClear(violationId, clearedBy, clearedAt, clearR
 
     for _, violation in ipairs(db.violations) do
         if violation.id == violationId then
+            if not violation.shared then
+                return nil
+            end
+
             if violation.status ~= "CLEARED" then
                 violation.status = "CLEARED"
                 violation.clearedBy = clearedBy
@@ -1501,6 +1505,12 @@ function SC:Initialize()
     BindCharacterDatabase()
     EnsureDatabase()
     self:RefreshCharacter()
+    if self.ClearStalePendingProposal then
+        self:ClearStalePendingProposal()
+    end
+    if self.ClearStaleRuleAmendments then
+        self:ClearStaleRuleAmendments()
+    end
 
     SLASH_SOFTCORE1 = "/softcore"
     SLASH_SOFTCORE2 = "/sc"

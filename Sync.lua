@@ -8,12 +8,22 @@ local HEARTBEAT_SECONDS = 10
 local MAX_AUDIT_TEXT = 120
 local MAX_MESSAGE_BYTES = 230
 local MAX_CHUNK_DATA_BYTES = 180
+local CHUNK_TIMEOUT_SECONDS = 30
 
 SC.syncEnabled = true
 SC.groupStatuses = SC.groupStatuses or {}
 
 local syncFrame
 local pendingChunks = {}
+
+local function CleanupPendingChunks(now)
+    now = now or time()
+    for key, buffer in pairs(pendingChunks) do
+        if now - (buffer.createdAt or now) > CHUNK_TIMEOUT_SECONDS then
+            pendingChunks[key] = nil
+        end
+    end
+end
 
 local function PlayerKey(name, realm)
     if not realm or realm == "" then
@@ -619,6 +629,8 @@ end
 
 function SC:Sync_HandleMessage(message, sender, isReassembled)
     if not isReassembled and string.sub(message or "", 1, 6) == "CHUNK|" then
+        CleanupPendingChunks()
+
         local chunkId, chunkIndexText, chunkTotalText, chunkData = string.match(message, "^CHUNK|([^|]+)|([^|]+)|([^|]+)|(.*)$")
         local chunkIndex = tonumber(chunkIndexText)
         local chunkTotal = tonumber(chunkTotalText)
@@ -937,6 +949,7 @@ function SC:Sync_Initialize()
         end)
         if C_Timer.NewTicker then
             self.syncTicker = C_Timer.NewTicker(5, function()
+                CleanupPendingChunks()
                 if SC.HUD_Refresh then
                     SC:HUD_Refresh()
                 end
