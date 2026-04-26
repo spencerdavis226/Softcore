@@ -153,13 +153,18 @@ local function CreatePanel(parent)
 end
 
 local function ApplyParchmentBackdrop(frame)
+    local parchmentFill = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
+    parchmentFill:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -12)
+    parchmentFill:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 12)
+    parchmentFill:SetColorTexture(0.78, 0.60, 0.34, 0.98)
+
     frame:SetBackdrop({
         bgFile   = "Interface\\QuestFrame\\QuestBG",
         edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border",
-        tile = false, tileSize = 256, edgeSize = 32,
+        tile = true, tileSize = 256, edgeSize = 32,
         insets = { left = 11, right = 12, top = 12, bottom = 11 },
     })
-    frame:SetBackdropColor(1, 1, 1, 1)
+    frame:SetBackdropColor(0.95, 0.82, 0.55, 0.96)
     frame:SetBackdropBorderColor(0.72, 0.56, 0.22, 1)
 end
 
