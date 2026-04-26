@@ -170,8 +170,6 @@ function SC:GetAchievementDefinitions()
     local maxLevel = GetMaxLevel()
 
     AddDefinition(result, "acct_first_run", "ACCOUNT", "Account", "First Steps", "Start your first Softcore run on this account.", "BINARY")
-    AddDefinition(result, "acct_first_max_level", "ACCOUNT", "Account", "First Survivor", "Reach max level on an eligible Softcore character.", "MAX_LEVEL")
-    AddDefinition(result, "char_first_run", "ACCOUNT", "Account", "Into the Ledger", "Start a Softcore run.", "BINARY")
 
     for level = 10, maxLevel, 10 do
         AddDefinition(result, "char_level_" .. tostring(level), "ACCOUNT", "Leveling", "Still Breathing: " .. tostring(level), "Reach level " .. tostring(level) .. " during an active Softcore run.", "LEVEL", level)
@@ -354,7 +352,6 @@ function SC:Achievements_OnRunStart(runOptions)
         ruleViolations = {},
     }
 
-    Earn("char_first_run", "CHARACTER", "Into the Ledger")
     Earn("acct_first_run", "ACCOUNT", "First Steps")
     self:Achievements_OnLevelChanged(db.character.level)
 end
@@ -381,7 +378,6 @@ function SC:Achievements_OnLevelChanged(level)
     end
 
     Earn("char_max_level", "CHARACTER", "Softcore Champion")
-    Earn("acct_first_max_level", "ACCOUNT", "First Survivor")
 
     if not eligibility.hadViolation then
         Earn("char_clean_max_level", "CHARACTER", "Clean Finish")
