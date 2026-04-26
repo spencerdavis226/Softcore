@@ -26,6 +26,9 @@
     "UIDropDownMenu_AddButton",
     "UIDropDownMenu_CreateInfo",
     "UIDropDownMenu_EnableDropDown",
-    "UIDropDownMenu_DisableDropDown"
+    "UIDropDownMenu_DisableDropDown",
+    "UISpecialFrames",
+    "GameTooltip_Hide",
+    "SOUNDKIT"
   ]
 }
