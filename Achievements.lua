@@ -66,21 +66,17 @@ local function IsLocalActiveAndValid(db)
     return true
 end
 
-local function EarnedStore(scope)
-    if scope == "ACCOUNT" then
-        return GetAccountDB().earned
-    end
-
-    return GetCharDB().earned
+local function EarnedStore()
+    return GetAccountDB().earned
 end
 
 local function Earn(id, scope, detail)
-    local store = EarnedStore(scope)
+    local store = EarnedStore()
     if store[id] then return false end
 
     store[id] = {
         id = id,
-        scope = scope,
+        scope = "ACCOUNT",
         earnedAt = time(),
         playerKey = SC.GetPlayerKey and SC:GetPlayerKey() or nil,
         runId = SoftcoreDB and SoftcoreDB.run and SoftcoreDB.run.runId or nil,
@@ -90,7 +86,7 @@ local function Earn(id, scope, detail)
     if SC.AddLog then
         SC:AddLog("ACHIEVEMENT_EARNED", "Achievement earned: " .. tostring(detail or id), {
             achievementId = id,
-            achievementScope = scope,
+            achievementScope = "ACCOUNT",
         })
     end
 
@@ -175,18 +171,18 @@ function SC:GetAchievementDefinitions()
 
     AddDefinition(result, "acct_first_run", "ACCOUNT", "Account", "First Steps", "Start your first Softcore run on this account.", "BINARY")
     AddDefinition(result, "acct_first_max_level", "ACCOUNT", "Account", "First Survivor", "Reach max level on an eligible Softcore character.", "MAX_LEVEL")
-    AddDefinition(result, "char_first_run", "CHARACTER", "Character", "Into the Ledger", "Start a Softcore run on this character.", "BINARY")
+    AddDefinition(result, "char_first_run", "ACCOUNT", "Account", "Into the Ledger", "Start a Softcore run.", "BINARY")
 
     for level = 10, maxLevel, 10 do
-        AddDefinition(result, "char_level_" .. tostring(level), "CHARACTER", "Leveling", "Still Breathing: " .. tostring(level), "Reach level " .. tostring(level) .. " during an active Softcore run.", "LEVEL", level)
+        AddDefinition(result, "char_level_" .. tostring(level), "ACCOUNT", "Leveling", "Still Breathing: " .. tostring(level), "Reach level " .. tostring(level) .. " during an active Softcore run.", "LEVEL", level)
     end
 
-    AddDefinition(result, "char_max_level", "CHARACTER", "Max Level", "Softcore Champion", "Reach max level after starting the run at level 10 or below.", "MAX_LEVEL")
-    AddDefinition(result, "char_clean_max_level", "CHARACTER", "Max Level", "Clean Finish", "Reach max level on an eligible run without any local violations.", "CLEAN_MAX")
-    AddDefinition(result, "char_ironman_max_level", "CHARACTER", "Max Level", "Iron Will", "Reach max level on an eligible run that started with the Ironman preset.", "IRONMAN_MAX")
+    AddDefinition(result, "char_max_level", "ACCOUNT", "Max Level", "Softcore Champion", "Reach max level after starting the run at level 10 or below.", "MAX_LEVEL")
+    AddDefinition(result, "char_clean_max_level", "ACCOUNT", "Max Level", "Clean Finish", "Reach max level on an eligible run without any local violations.", "CLEAN_MAX")
+    AddDefinition(result, "char_ironman_max_level", "ACCOUNT", "Max Level", "Iron Will", "Reach max level on an eligible run that started with the Ironman preset.", "IRONMAN_MAX")
 
     for _, spec in ipairs(RESTRICTION_RULES) do
-        AddDefinition(result, "char_max_" .. spec.id, "CHARACTER", "Rules", spec.name, spec.description or ("Reach max level with " .. spec.label .. " disallowed from run start through max level."), "RULE_MAX", nil, spec.rule)
+        AddDefinition(result, "char_max_" .. spec.id, "ACCOUNT", "Rules", spec.name, spec.description or ("Reach max level with " .. spec.label .. " disallowed from run start through max level."), "RULE_MAX", nil, spec.rule)
     end
 
     return result
@@ -287,11 +283,16 @@ function SC:GetAchievementRows()
     local accountEarned = GetAccountDB().earned
 
     for _, definition in ipairs(self:GetAchievementDefinitions()) do
-        local earned = definition.scope == "ACCOUNT" and accountEarned[definition.id] or charEarned[definition.id]
+        if charEarned[definition.id] and not accountEarned[definition.id] then
+            accountEarned[definition.id] = charEarned[definition.id]
+            accountEarned[definition.id].scope = "ACCOUNT"
+        end
+
+        local earned = accountEarned[definition.id]
         local progressValue, progressText = BuildProgress(definition, earned)
         table.insert(rows, {
             id = definition.id,
-            scope = definition.scope,
+            scope = "ACCOUNT",
             category = definition.category,
             name = definition.name,
             description = definition.description,
@@ -301,6 +302,31 @@ function SC:GetAchievementRows()
             progressText = progressText,
         })
     end
+
+    table.sort(rows, function(left, right)
+        if left.earned ~= right.earned then
+            return not left.earned
+        end
+
+        if left.earned and right.earned then
+            return (left.earnedAt or 0) > (right.earnedAt or 0)
+        end
+
+        local leftProgress = tonumber(left.progressValue or 0) or 0
+        local rightProgress = tonumber(right.progressValue or 0) or 0
+        local leftStarted = leftProgress > 0
+        local rightStarted = rightProgress > 0
+
+        if leftStarted ~= rightStarted then
+            return leftStarted
+        end
+
+        if leftStarted and leftProgress ~= rightProgress then
+            return leftProgress > rightProgress
+        end
+
+        return tostring(left.name or "") < tostring(right.name or "")
+    end)
 
     return rows
 end

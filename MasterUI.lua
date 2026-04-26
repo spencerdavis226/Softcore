@@ -1024,7 +1024,7 @@ end
 
 local function CreateAchievementRow(parent, index)
     local row = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    row:SetSize(650, 74)
+    row:SetSize(628, 74)
     row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -((index - 1) * 82))
     row:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
@@ -1046,17 +1046,17 @@ local function CreateAchievementRow(parent, index)
     })
     row.medal:SetBackdropColor(0.25, 0.18, 0.08, 1)
     row.medal:SetBackdropBorderColor(0.76, 0.58, 0.18, 1)
-    row.icon = row.medal:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    row.icon = row.medal:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.icon:SetPoint("CENTER", row.medal, "CENTER", 0, 0)
-    row.icon:SetText("*")
+    row.icon:SetWidth(42)
+    row.icon:SetJustifyH("CENTER")
+    row.icon:SetText("?")
 
     row.name = CreateField(row, 70, -10, 250)
     row.name:SetFontObject(GameFontNormal)
-    row.meta = CreateField(row, 326, -12, 130)
-    row.meta:SetJustifyH("RIGHT")
-    row.date = CreateField(row, 464, -12, 170)
+    row.date = CreateField(row, 424, -12, 190)
     row.date:SetJustifyH("RIGHT")
-    row.description = CreateField(row, 70, -32, 414)
+    row.description = CreateField(row, 70, -32, 390)
     row.description:SetFontObject(GameFontHighlightSmall)
     row.progress = CreateFrame("StatusBar", nil, row)
     row.progress:SetSize(210, 10)
@@ -1066,7 +1066,7 @@ local function CreateAchievementRow(parent, index)
     row.progressBg = row.progress:CreateTexture(nil, "BACKGROUND")
     row.progressBg:SetAllPoints(row.progress)
     row.progressBg:SetColorTexture(0.05, 0.04, 0.025, 0.95)
-    row.progressText = CreateField(row, 292, -52, 330)
+    row.progressText = CreateField(row, 292, -52, 310)
     row.progressText:SetFontObject(GameFontHighlightSmall)
 
     return row
@@ -1096,15 +1096,22 @@ local function RefreshAchievementsPanel(frame)
         frame.achievements.rows[index] = CreateAchievementRow(frame.achievements.content, index)
     end
 
-    frame.achievements.content:SetHeight(math.max(408, #rows * 82))
+    local contentHeight = math.max(408, (#rows * 82) + 12)
+    frame.achievements.content:SetSize(628, contentHeight)
 
     for index, rowFrame in ipairs(frame.achievements.rows) do
         local achievement = rows[index]
         if achievement then
             rowFrame:Show()
-            rowFrame.icon:SetText(achievement.earned and "|cffffd100*|r" or "|cff6b7280?|r")
+            local progressValue = tonumber(achievement.progressValue or 0) or 0
+            if achievement.earned then
+                rowFrame.icon:SetText("|cff4ade80✓|r")
+            elseif progressValue > 0 then
+                rowFrame.icon:SetText("|cffffffff" .. tostring(math.floor((progressValue * 100) + 0.5)) .. "%|r")
+            else
+                rowFrame.icon:SetText("|cff6b7280?|r")
+            end
             rowFrame.name:SetText((achievement.earned and "|cffffd100" or "|cffad8f61") .. tostring(achievement.name or "?") .. "|r")
-            rowFrame.meta:SetText("|cffad8f61" .. tostring(achievement.category or "") .. " - " .. (achievement.scope == "ACCOUNT" and "Account" or "Character") .. "|r")
             rowFrame.description:SetText(Trunc(achievement.description or "", 72))
             if achievement.earnedAt then
                 rowFrame.date:SetText("|cff4ade80" .. FormatTime(achievement.earnedAt) .. "|r")
@@ -1116,7 +1123,6 @@ local function RefreshAchievementsPanel(frame)
                 rowFrame.medal:SetBackdropColor(0.42, 0.30, 0.07, 1)
                 rowFrame.medal:SetBackdropBorderColor(1.0, 0.82, 0.20, 1)
             else
-                local progressValue = tonumber(achievement.progressValue or 0) or 0
                 rowFrame.date:SetText("|cff9ca3afLocked|r")
                 rowFrame.progress:SetValue(progressValue)
                 if progressValue > 0 then
@@ -1707,8 +1713,21 @@ function SC:OpenMasterWindow(focusTab)
     frame.achievements.scroll = CreateFrame("ScrollFrame", "SoftcoreAchievementsScrollFrame", achievementsPanel, "UIPanelScrollFrameTemplate")
     frame.achievements.scroll:SetPoint("TOPLEFT", achievementsPanel, "TOPLEFT", 0, -64)
     frame.achievements.scroll:SetSize(674, 408)
+    frame.achievements.scroll:EnableMouseWheel(true)
+    frame.achievements.scroll:SetScript("OnMouseWheel", function(self, delta)
+        local current = self:GetVerticalScroll() or 0
+        local maxScroll = self:GetVerticalScrollRange() or 0
+        local nextScroll = current - (delta * 48)
+        if nextScroll < 0 then nextScroll = 0 end
+        if nextScroll > maxScroll then nextScroll = maxScroll end
+        self:SetVerticalScroll(nextScroll)
+        local scrollBar = _G[self:GetName() .. "ScrollBar"]
+        if scrollBar then
+            scrollBar:SetValue(nextScroll)
+        end
+    end)
     frame.achievements.content = CreateFrame("Frame", nil, frame.achievements.scroll)
-    frame.achievements.content:SetSize(650, 408)
+    frame.achievements.content:SetSize(628, 408)
     frame.achievements.scroll:SetScrollChild(frame.achievements.content)
 
     self.masterFrame = frame
