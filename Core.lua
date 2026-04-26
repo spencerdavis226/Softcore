@@ -1107,6 +1107,9 @@ function SC:StartRun(runOptions)
             self:SnapCameraToFirstPerson()
         end
     end
+    if self.EnforceActionCamSettings then
+        self:EnforceActionCamSettings()
+    end
     self:RefreshParticipantsFromRoster()
     self:PlayUISound("RUN_STARTED")
     Print("run started.")

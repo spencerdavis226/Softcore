@@ -312,6 +312,9 @@ function SC:PrintGearStatus()
     end
 end
 
+local SetCVarCompat = (C_CVar and C_CVar.SetCVar) and function(k, v) C_CVar.SetCVar(k, v) end or SetCVar
+local GetCVarCompat = (C_CVar and C_CVar.GetCVar) and function(k) return C_CVar.GetCVar(k) end or GetCVar
+
 local function IsFirstPersonEnforced()
     if not IsRunActive() then return false end
     local db = GetDB()
@@ -319,14 +322,48 @@ local function IsFirstPersonEnforced()
     return rule ~= nil and rule ~= "ALLOWED" and rule ~= false
 end
 
+local function GetActionCamZoomTarget()
+    if not IsRunActive() then return nil end
+    local db = GetDB()
+    local ruleset = db and db.run and db.run.ruleset
+    if not ruleset then return nil end
+    local rule = ruleset.actionCam
+    if rule == nil or rule == "ALLOWED" or rule == false then return nil end
+    return tonumber(ruleset.actionCamZoom) or 7
+end
+
 function SC:IsFirstPersonEnforced()
     return IsFirstPersonEnforced()
+end
+
+function SC:IsActionCamEnforced()
+    return GetActionCamZoomTarget() ~= nil
 end
 
 function SC:SnapCameraToFirstPerson()
     local zoom = GetCameraZoom and GetCameraZoom() or 0
     if zoom > 0 then
         CameraZoomIn(zoom + 1)
+    end
+end
+
+function SC:EnforceActionCamSettings()
+    local target = GetActionCamZoomTarget()
+    if not target then return end
+
+    if GetCVarCompat("ActionCam") ~= "full" then
+        SetCVarCompat("ActionCam", "full")
+    end
+
+    -- First-person rule owns zoom=0; skip zoom enforcement when it's active.
+    if not IsFirstPersonEnforced() then
+        local current = GetCameraZoom and GetCameraZoom() or target
+        local delta = current - target
+        if delta > 0.5 then
+            CameraZoomIn(delta)
+        elseif delta < -0.5 then
+            CameraZoomOut(-delta)
+        end
     end
 end
 
@@ -337,11 +374,16 @@ do
         elapsed = elapsed + dt
         if elapsed < 0.2 then return end
         elapsed = 0
+
         if IsFirstPersonEnforced() then
             local zoom = GetCameraZoom and GetCameraZoom() or 0
             if zoom > 0 then
                 CameraZoomIn(zoom + 1)
             end
+        end
+
+        if GetActionCamZoomTarget() then
+            SC:EnforceActionCamSettings()
         end
     end)
 end

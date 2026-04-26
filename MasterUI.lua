@@ -79,6 +79,8 @@ local EDITABLE_RULE_ORDER = {
     "consumables",
     "instancedPvP",
     "firstPersonOnly",
+    "actionCam",
+    "actionCamZoom",
 }
 
 local function Print(message)
@@ -312,8 +314,11 @@ local function IsCheckedRuleValue(ruleName, value)
     if ruleName == "groupingMode" or ruleName == "gearQuality" or ruleName == "maxLevelGapValue" then
         return nil
     end
-    if ruleName == "maxLevelGap" or ruleName == "firstPersonOnly" then
+    if ruleName == "maxLevelGap" or ruleName == "firstPersonOnly" or ruleName == "actionCam" then
         return value ~= "ALLOWED"
+    end
+    if ruleName == "actionCamZoom" then
+        return nil
     end
     return not IsDisallowed(value)
 end
@@ -362,6 +367,8 @@ local function ApplyStartPreset(frame, preset)
     SetDisallowedRule(rules, "consumables", preset ~= "IRONMAN")
     SetDisallowedRule(rules, "instancedPvP", false)
     rules.firstPersonOnly = "ALLOWED"
+    rules.actionCam = "ALLOWED"
+    rules.actionCamZoom = 7
     rules.maxDeaths = false
     rules.maxDeathsValue = rules.maxDeathsValue or 3
     rules.achievementPreset = preset
@@ -429,6 +436,8 @@ local RULE_DISPLAY_NAMES = {
     consumables    = "Consumables",
     instancedPvP   = "Instanced PvP",
     firstPersonOnly = "First Person Camera",
+    actionCam      = "ActionCam",
+    actionCamZoom  = "ActionCam Zoom",
 }
 
 local function FriendlyRuleValue(ruleName, value)
@@ -1275,7 +1284,7 @@ function SC:OpenMasterWindow(focusTab)
     AddTab("achievementsTab", "Achievements", TAB_ACHIEVEMENTS, logTab, 110)
 
     local startPanel = CreatePanel(frame)
-    startPanel:SetHeight(470)
+    startPanel:SetHeight(530)
     frame.panels[TAB_RUN] = startPanel
     frame.start = { controls = {}, selectedRules = SC:GetDefaultRuleset(), selectedPreset = "CASUAL" }
     frame.start.selectedRules.dungeonRepeat = "ALLOWED"
@@ -1378,7 +1387,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.instancedPvPCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 360, -436)
     table.insert(frame.start.controls, frame.start.instancedPvPCheck)
 
-    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Camera", 0, -398, 300))
+    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Camera", 0, -398, 660))
     frame.start.firstPersonCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
     frame.start.firstPersonCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -428)
     frame.start.firstPersonCheck.label = frame.start.firstPersonCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -1393,6 +1402,38 @@ function SC:OpenMasterWindow(focusTab)
         SC:MasterUI_Refresh()
     end)
     table.insert(frame.start.controls, frame.start.firstPersonCheck)
+
+    frame.start.actionCamCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
+    frame.start.actionCamCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -458)
+    frame.start.actionCamCheck.label = frame.start.actionCamCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.start.actionCamCheck.label:SetPoint("LEFT", frame.start.actionCamCheck, "RIGHT", 2, 0)
+    frame.start.actionCamCheck.label:SetWidth(280)
+    frame.start.actionCamCheck.label:SetJustifyH("LEFT")
+    frame.start.actionCamCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+    frame.start.actionCamCheck.label:SetText("Enforce ActionCam (full)")
+    frame.start.actionCamCheck.ruleKey = "actionCam"
+    frame.start.actionCamCheck:SetScript("OnClick", function(btn)
+        frame.start.selectedRules.actionCam = btn:GetChecked() and DISALLOWED_OUTCOME or "ALLOWED"
+        SC:MasterUI_Refresh()
+    end)
+    table.insert(frame.start.controls, frame.start.actionCamCheck)
+
+    frame.start.actionCamZoomLabel = CreateLabel(startPanel, "Zoom (1-39)", 28, -494, "GameFontNormalSmall", 80)
+    table.insert(frame.start.controls, frame.start.actionCamZoomLabel)
+    frame.start.actionCamZoomBox = CreateFrame("EditBox", nil, startPanel, "InputBoxTemplate")
+    frame.start.actionCamZoomBox:SetSize(42, 22)
+    frame.start.actionCamZoomBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 112, -488)
+    frame.start.actionCamZoomBox:SetAutoFocus(false)
+    frame.start.actionCamZoomBox:SetNumeric(true)
+    frame.start.actionCamZoomBox:SetScript("OnTextChanged", function(box)
+        local value = tonumber(box:GetText())
+        if value then
+            frame.start.selectedRules.actionCamZoom = math.max(1, math.min(39, value))
+        end
+    end)
+    frame.start.actionCamZoomBox:SetScript("OnEditFocusLost", function()
+        SC:MasterUI_Refresh()
+    end)
 
     function frame.start:RefreshControls()
         if SC.ApplyGroupingMode then
@@ -1472,6 +1513,24 @@ function SC:OpenMasterWindow(focusTab)
         self.consumablesCheck:SetChecked(not IsDisallowed(self.selectedRules.consumables))
         self.instancedPvPCheck:SetChecked(not IsDisallowed(self.selectedRules.instancedPvP))
         self.firstPersonCheck:SetChecked(IsDisallowed(self.selectedRules.firstPersonOnly))
+        local actionCamOn = IsDisallowed(self.selectedRules.actionCam)
+        self.actionCamCheck:SetChecked(actionCamOn)
+        local canEditZoom = canEdit and actionCamOn
+        if canEditZoom then self.actionCamZoomBox:Enable() else self.actionCamZoomBox:Disable() end
+        self.actionCamZoomBox:SetText(tostring(self.selectedRules.actionCamZoom or 7))
+        if self.actionCamZoomLabel then
+            if self.isModifyingRules and self.draftBaseRules then
+                local baseVal = self.draftBaseRules.actionCamZoom
+                local curVal  = self.selectedRules.actionCamZoom
+                if tostring(baseVal) ~= tostring(curVal) then
+                    SetFontStringRGB(self.actionCamZoomLabel, GREEN_TEXT)
+                else
+                    SetFontStringRGB(self.actionCamZoomLabel, canEditZoom and BODY_TEXT or MUTED_TEXT)
+                end
+            else
+                SetFontStringRGB(self.actionCamZoomLabel, canEditZoom and BODY_TEXT or MUTED_TEXT)
+            end
+        end
         self.selectedRules.maxDeaths = false
         self.selectedRules.maxDeathsValue = self.selectedRules.maxDeathsValue or 3
     end

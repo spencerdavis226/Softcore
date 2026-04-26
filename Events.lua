@@ -327,6 +327,9 @@ function SC:Events_Register()
                     SC:SnapCameraToFirstPerson()
                 end
             end
+            if SC.EnforceActionCamSettings then
+                SC:EnforceActionCamSettings()
+            end
             Broadcast("PLAYER_ENTERING_WORLD")
         end
 
@@ -346,7 +349,7 @@ function SC:Events_Register()
         local link = C_Container.GetContainerItemLink(bag, slot)
         if not link then return end
 
-        local itemName, _, _, _, _, itemType, itemSubType = GetItemInfo(link)
+        local itemName, _, _, _, _, itemType, itemSubType = C_Item.GetItemInfo(link)
         if itemType ~= "Consumable" or itemSubType == "Other" then return end
 
         SC:ApplyRuleOutcome("consumables", {
