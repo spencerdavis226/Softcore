@@ -30,5 +30,6 @@
     "UISpecialFrames",
     "GameTooltip_Hide",
     "SOUNDKIT"
-  ]
+  ],
+  "Lua.type.weakUnionCheck": true
 }

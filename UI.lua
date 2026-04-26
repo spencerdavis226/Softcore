@@ -1,6 +1,5 @@
--- Compact always-visible HUD: run and party status at a glance.
--- Left-click opens the master menu (Violations tab if violations are active).
--- Drag to reposition.  /sc hud to toggle visibility.
+-- Compact run-status HUD. Auto-shows when a run is active, hides when not.
+-- Click to toggle the Softcore menu. Drag to reposition. /sc hud to show/hide.
 
 local SC = Softcore
 local MINIMAP_LOGO_TEXTURE = "Interface\\AddOns\\Softcore\\Assets\\SoftcoreLogoMinimap"
@@ -21,25 +20,18 @@ local function RestorePosition(key, frame, defaultX, defaultY)
     end
 end
 
-local HUD_WIDTH    = 160
+-- ── HUD ──────────────────────────────────────────────────────────────────────
+
+local HUD_W        = 130
 local HUD_PAD      = 8
-local HUD_MAX_MEMBERS = 5
+local ROW_H        = 22
+local DOT_SIZE     = 8
+local HUD_MAX_ROWS = 6
 
--- Row geometry
-local HERO_TOP     = -7
-local HERO_H       = 20
-local MEMBER_TOP   = -(HERO_TOP - HERO_TOP + 7 + HERO_H + 4)   -- = -31
-local MEMBER_H     = 16
-local MEMBER_STEP  = -(MEMBER_H + 2)                            -- = -18
-
--- Indicator sizes
-local HERO_LIGHT   = 10
-local MEMBER_LIGHT = 8
-
--- Status → RGB color
-local STATUS_RGB = {
-    VALID      = {0.29, 0.85, 0.50},
+-- Maps status prefix → RGB color (green=ok, yellow=warning, red=failed, grey=inactive)
+local STATUS_COLOR = {
     ACTIVE     = {0.29, 0.85, 0.50},
+    VALID      = {0.29, 0.85, 0.50},
     FAILED     = {1.00, 0.27, 0.27},
     BLOCKED    = {0.98, 0.75, 0.14},
     CONFLICT   = {0.98, 0.75, 0.14},
@@ -49,12 +41,12 @@ local STATUS_RGB = {
     INACTIVE   = {0.61, 0.64, 0.69},
     NOT_IN_RUN = {0.61, 0.64, 0.69},
 }
-local RGB_NEUTRAL = {0.61, 0.64, 0.69}
 
-local function SetLight(texture, statusStr)
+local function SetStatusDot(texture, statusStr)
     local base = statusStr and string.match(statusStr, "^(%u+)")
-    local c = (base and STATUS_RGB[base]) or RGB_NEUTRAL
+    local c = (base and STATUS_COLOR[base]) or STATUS_COLOR.INACTIVE
     texture:SetColorTexture(c[1], c[2], c[3], 1)
+    texture:SetSize(DOT_SIZE, DOT_SIZE)
 end
 
 local function ShortName(name)
@@ -72,20 +64,6 @@ local function LocalActiveViolations()
     return n
 end
 
-local function MakeLight(parent, size)
-    local t = parent:CreateTexture(nil, "OVERLAY")
-    t:SetSize(size, size)
-    t:SetColorTexture(RGB_NEUTRAL[1], RGB_NEUTRAL[2], RGB_NEUTRAL[3], 1)
-    return t
-end
-
-local function MakeLabel(parent, fontObj, width)
-    local fs = parent:CreateFontString(nil, "OVERLAY", fontObj)
-    fs:SetWidth(width)
-    fs:SetJustifyH("LEFT")
-    return fs
-end
-
 function SC:HUD_Create()
     if self.hudFrame then
         self:HUD_Refresh()
@@ -93,8 +71,7 @@ function SC:HUD_Create()
     end
 
     local frame = CreateFrame("Button", "SoftcoreHUDFrame", UIParent, "BackdropTemplate")
-    frame:SetWidth(HUD_WIDTH)
-    frame:SetHeight(34)
+    frame:SetSize(HUD_W, HUD_PAD * 2 + ROW_H)
     RestorePosition("hud", frame, 0, 150)
     frame:SetMovable(true)
     frame:EnableMouse(true)
@@ -106,42 +83,52 @@ function SC:HUD_Create()
     end)
     frame:RegisterForClicks("LeftButtonUp")
     frame:SetScript("OnClick", function()
-        if SC.OpenMasterWindow then
-            SC:OpenMasterWindow(LocalActiveViolations() > 0 and "VIOLATIONS" or "OVERVIEW")
+        if SC.OpenMasterWindow and LocalActiveViolations() > 0 then
+            SC:OpenMasterWindow("VIOLATIONS")
+        elseif SC.ToggleMasterWindow then
+            SC:ToggleMasterWindow()
         end
     end)
     frame:SetBackdrop({
-        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
+        bgFile   = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 10,
+        tile = false, edgeSize = 12,
         insets = { left = 3, right = 3, top = 3, bottom = 3 },
     })
-    frame:SetBackdropColor(0, 0, 0, 0.80)
+    frame:SetBackdropColor(0.08, 0.045, 0.02, 0.96)
+    frame:SetBackdropBorderColor(0.72, 0.49, 0.18, 0.85)
+    frame:Hide()
 
-    -- Hero row: light left-centered in row, label to its right
-    local textW = HUD_WIDTH - HUD_PAD * 2 - HERO_LIGHT - 5
-    frame.heroLight = MakeLight(frame, HERO_LIGHT)
-    frame.heroLight:SetPoint("LEFT", frame, "TOPLEFT", HUD_PAD, HERO_TOP - HERO_H / 2)
-    frame.heroLabel = MakeLabel(frame, "GameFontNormal", textW)
-    frame.heroLabel:SetPoint("TOPLEFT", frame, "TOPLEFT", HUD_PAD + HERO_LIGHT + 5, HERO_TOP)
+    frame.rows = {}
+    for i = 1, HUD_MAX_ROWS do
+        local dot = frame:CreateTexture(nil, "OVERLAY")
+        dot:SetPoint("CENTER", frame, "TOPLEFT",
+            HUD_PAD + DOT_SIZE / 2,
+            -HUD_PAD - (i - 1) * ROW_H - ROW_H / 2)
+        local mask = frame:CreateMaskTexture()
+        mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMaskSmall",
+            "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+        mask:SetAllPoints(dot)
+        dot:AddMaskTexture(mask)
 
-    -- Member rows: indented, smaller light + label
-    local memberTextW = HUD_WIDTH - HUD_PAD * 2 - 4 - MEMBER_LIGHT - 4
-    frame.memberRows = {}
-    for i = 1, HUD_MAX_MEMBERS do
-        local topY = MEMBER_TOP + (i - 1) * MEMBER_STEP
-        local row = {
-            light = MakeLight(frame, MEMBER_LIGHT),
-            label = MakeLabel(frame, "GameFontNormalSmall", memberTextW),
-        }
-        row.light:SetPoint("LEFT", frame, "TOPLEFT", HUD_PAD + 4, topY - MEMBER_H / 2)
-        row.label:SetPoint("TOPLEFT", frame, "TOPLEFT", HUD_PAD + 4 + MEMBER_LIGHT + 4, topY)
-        row.light:Hide()
-        frame.memberRows[i] = row
+        local label = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        label:SetPoint("TOPLEFT", frame, "TOPLEFT",
+            HUD_PAD + DOT_SIZE + 6,
+            -HUD_PAD - (i - 1) * ROW_H)
+        label:SetSize(HUD_W - HUD_PAD * 2 - DOT_SIZE - 6, ROW_H)
+        label:SetJustifyH("LEFT")
+        label:SetJustifyV("MIDDLE")
+
+        dot:Hide()
+        label:Hide()
+        frame.rows[i] = { dot = dot, label = label }
     end
 
-    -- Violation hint row (no light — yellow text only)
-    frame.violHint = MakeLabel(frame, "GameFontNormalSmall", HUD_WIDTH - HUD_PAD * 2 - 4)
+    frame.violLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.violLabel:SetSize(HUD_W - HUD_PAD * 2, ROW_H)
+    frame.violLabel:SetJustifyH("LEFT")
+    frame.violLabel:SetJustifyV("MIDDLE")
+    frame.violLabel:Hide()
 
     self.hudFrame = frame
     self:HUD_Refresh()
@@ -151,67 +138,69 @@ function SC:HUD_Refresh()
     local frame = self.hudFrame
     if not frame then return end
 
-    local db       = self.db or SoftcoreDB
-    local run      = db and db.run or {}
-    local char     = db and db.character or {}
-    local active   = run.active
-    local localKey = self:GetPlayerKey()
-    local status   = self:GetPlayerStatus()
-    local pStatus  = status.participantStatus or "NOT_IN_RUN"
-    local syncRows = self.Sync_GetGroupRows and self:Sync_GetGroupRows() or {}
-    local inParty  = IsInGroup() and #syncRows > 0
-    local violations = LocalActiveViolations()
+    local db     = self.db or SoftcoreDB
+    local run    = db and db.run or {}
+    local active = run.active
+    local ui     = SoftcoreDB and SoftcoreDB.ui or {}
 
-    -- Hero row
-    if not active then
-        SetLight(frame.heroLight, "INACTIVE")
-        frame.heroLabel:SetText("No Run")
-    elseif inParty then
-        SetLight(frame.heroLight, status.partyStatus or "INACTIVE")
-        frame.heroLabel:SetText("Party")
-    else
-        SetLight(frame.heroLight, pStatus)
-        frame.heroLabel:SetText("Run Status")
+    if not active or ui.hudHidden then
+        frame:Hide()
+        return
     end
 
-    -- Member rows (party only: local player first, then peers)
-    local usedRows = 0
+    local status     = self:GetPlayerStatus()
+    local pStatus    = status.participantStatus or "NOT_IN_RUN"
+    local syncRows   = self.Sync_GetGroupRows and self:Sync_GetGroupRows() or {}
+    local inParty    = IsInGroup() and #syncRows > 0
+    local violations = LocalActiveViolations()
 
-    if active and inParty then
-        usedRows = 1
-        SetLight(frame.memberRows[1].light, pStatus)
-        frame.memberRows[1].label:SetText((char.name or ShortName(localKey)) .. " *")
-        frame.memberRows[1].light:Show()
-
+    local entries = {}
+    table.insert(entries, {
+        name    = inParty and "Party Status" or "Run Status",
+        status  = inParty and (status.partyStatus or pStatus) or pStatus,
+        isLocal = true,
+    })
+    if inParty then
         for _, peer in ipairs(syncRows) do
-            if usedRows >= HUD_MAX_MEMBERS then break end
-            usedRows = usedRows + 1
-            local raw = self.Sync_GetDisplayStatus and self:Sync_GetDisplayStatus(peer) or peer.participantStatus or "UNSYNCED"
-            SetLight(frame.memberRows[usedRows].light, raw)
-            frame.memberRows[usedRows].label:SetText(ShortName(peer.name))
-            frame.memberRows[usedRows].light:Show()
+            if #entries >= HUD_MAX_ROWS then break end
+            local raw = self.Sync_GetDisplayStatus and self:Sync_GetDisplayStatus(peer)
+                     or peer.participantStatus or "UNSYNCED"
+            table.insert(entries, { name = ShortName(peer.name), status = raw })
         end
     end
 
-    for i = usedRows + 1, HUD_MAX_MEMBERS do
-        frame.memberRows[i].light:Hide()
-        frame.memberRows[i].label:SetText("")
+    for i, entry in ipairs(entries) do
+        local row = frame.rows[i]
+        SetStatusDot(row.dot, entry.status)
+        row.label:SetText(entry.name)
+        if entry.isLocal then
+            row.label:SetTextColor(1, 0.82, 0.20)
+        else
+            row.label:SetTextColor(0.94, 0.86, 0.68)
+        end
+        row.dot:Show()
+        row.label:Show()
+    end
+    for i = #entries + 1, HUD_MAX_ROWS do
+        frame.rows[i].dot:Hide()
+        frame.rows[i].label:Hide()
     end
 
-    -- Violation hint (text only, no light needed — yellow is the signal)
-    if active and violations > 0 then
-        local violY = MEMBER_TOP + usedRows * MEMBER_STEP
-        frame.violHint:ClearAllPoints()
-        frame.violHint:SetPoint("TOPLEFT", frame, "TOPLEFT", HUD_PAD + 4, violY)
+    local totalRows = #entries
+    if violations > 0 then
+        frame.violLabel:ClearAllPoints()
+        frame.violLabel:SetPoint("TOPLEFT", frame, "TOPLEFT",
+            HUD_PAD, -HUD_PAD - totalRows * ROW_H)
         local word = violations == 1 and "violation" or "violations"
-        frame.violHint:SetText("|cfffbbf24" .. violations .. " active " .. word .. "|r")
+        frame.violLabel:SetText("|cfffbbf24" .. violations .. " active " .. word .. "|r")
+        frame.violLabel:Show()
+        totalRows = totalRows + 1
     else
-        frame.violHint:SetText("")
+        frame.violLabel:Hide()
     end
 
-    -- Resize: hero (34px base) + member rows + viol hint row
-    local extraRows = usedRows + (active and violations > 0 and 1 or 0)
-    frame:SetHeight(extraRows == 0 and 34 or (36 + extraRows * 18))
+    frame:SetHeight(HUD_PAD * 2 + totalRows * ROW_H)
+    frame:Show()
 end
 
 function SC:HUD_Toggle()
@@ -219,11 +208,12 @@ function SC:HUD_Toggle()
         self:HUD_Create()
         return
     end
-    if self.hudFrame:IsShown() then
-        self.hudFrame:Hide()
-    else
-        self.hudFrame:Show()
-        self:HUD_Refresh()
+    SoftcoreDB = SoftcoreDB or {}
+    SoftcoreDB.ui = SoftcoreDB.ui or {}
+    SoftcoreDB.ui.hudHidden = not SoftcoreDB.ui.hudHidden
+    self:HUD_Refresh()
+    if SoftcoreDB.ui.hudHidden then
+        DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r Status HUD hidden. Type /sc hud to restore.")
     end
 end
 
@@ -268,7 +258,7 @@ function SC:MinimapButton_Create()
     border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 
     button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
-    button:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    button:RegisterForClicks("LeftButtonUp")
     button:RegisterForDrag("LeftButton")
 
     local dragging = false
@@ -291,23 +281,15 @@ function SC:MinimapButton_Create()
         C_Timer.After(0.05, function() dragging = false end)
     end)
 
-    button:SetScript("OnClick", function(_, btn)
+    button:SetScript("OnClick", function()
         if dragging then return end
-        if btn == "RightButton" then
-            button:Hide()
-            GetMinimapUI().minimapHidden = true
-            DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r Minimap button hidden. Type /sc minimap to restore it.")
-        else
-            if SC.OpenMasterWindow then SC:OpenMasterWindow() end
-        end
+        if SC.ToggleMasterWindow then SC:ToggleMasterWindow() end
     end)
 
     button:SetScript("OnEnter", function()
         GameTooltip:SetOwner(button, "ANCHOR_LEFT")
         GameTooltip:SetText("Softcore", 1, 1, 1)
-        GameTooltip:AddLine("Left-click: open menu", 0.8, 0.8, 0.8)
-        GameTooltip:AddLine("Right-click: hide button", 0.8, 0.8, 0.8)
-        GameTooltip:AddLine("Drag: reposition", 0.8, 0.8, 0.8)
+        GameTooltip:AddLine("/sc minimap to hide this button", 0.6, 0.6, 0.6)
         GameTooltip:Show()
     end)
     button:SetScript("OnLeave", function() GameTooltip:Hide() end)
