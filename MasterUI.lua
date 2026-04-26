@@ -27,6 +27,9 @@ local DISALLOWED_OUTCOME = "WARNING"
 local LOG_ROWS = 22
 local PANEL_WIDTH = 710
 local PANEL_HEIGHT = 500
+local BODY_TEXT = { r = 0.94, g = 0.86, b = 0.68 }
+local MUTED_TEXT = { r = 0.68, g = 0.56, b = 0.38 }
+local GOLD_TEXT = { r = 1.00, g = 0.82, b = 0.20 }
 
 local GROUPING_OPTIONS = {
     { text = "Group", value = "SYNCED_GROUP_ALLOWED" },
@@ -156,7 +159,7 @@ local function ApplyParchmentBackdrop(frame)
     local parchmentFill = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
     parchmentFill:SetPoint("TOPLEFT", frame, "TOPLEFT", 12, -12)
     parchmentFill:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 12)
-    parchmentFill:SetColorTexture(0.78, 0.60, 0.34, 0.98)
+    parchmentFill:SetColorTexture(0.12, 0.075, 0.035, 0.98)
 
     frame:SetBackdrop({
         edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border",
@@ -171,7 +174,7 @@ local function CreateDivider(parent, x, y, width)
     divider:SetHeight(1)
     divider:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     divider:SetWidth(width or PANEL_WIDTH)
-    divider:SetColorTexture(0.56, 0.36, 0.12, 0.45)
+    divider:SetColorTexture(0.72, 0.49, 0.18, 0.42)
     return divider
 end
 
@@ -193,6 +196,7 @@ local function CreateField(parent, x, y, width)
     fs:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     fs:SetWidth(width or (PANEL_WIDTH - 40))
     fs:SetJustifyH("LEFT")
+    fs:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
     fs:SetText("")
     return fs
 end
@@ -200,6 +204,11 @@ end
 local function CreateLabel(parent, text, x, y, template, width)
     local fs = CreateField(parent, x, y, width or 220)
     fs:SetFontObject(_G[template or "GameFontNormalSmall"])
+    if template == "GameFontNormal" then
+        fs:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
+    else
+        fs:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+    end
     fs:SetText(text)
     return fs
 end
@@ -270,6 +279,7 @@ local function CreateAllowCheckbox(parent, rules, spec, x, y)
     checkbox.label:SetPoint("LEFT", checkbox, "RIGHT", 2, 0)
     checkbox.label:SetWidth(230)
     checkbox.label:SetJustifyH("LEFT")
+    checkbox.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
     checkbox.label:SetText(spec.label)
     checkbox:SetChecked(not IsDisallowed(rules[spec.key]))
     checkbox:SetScript("OnClick", function(self)
@@ -871,19 +881,19 @@ function SC:OpenMasterWindow(focusTab)
     headerBg:SetPoint("TOPLEFT",  frame, "TOPLEFT",  18, -16)
     headerBg:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -18, -16)
     headerBg:SetHeight(48)
-    headerBg:SetColorTexture(0.18, 0.08, 0.02, 0.28)
+    headerBg:SetColorTexture(0.20, 0.11, 0.045, 0.92)
 
     local headerSep = frame:CreateTexture(nil, "ARTWORK")
     headerSep:SetHeight(1)
     headerSep:SetPoint("TOPLEFT",  frame, "TOPLEFT",  22, -64)
     headerSep:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -22, -64)
-    headerSep:SetColorTexture(0.57, 0.38, 0.12, 0.75)
+    headerSep:SetColorTexture(0.78, 0.55, 0.20, 0.75)
 
     local tabSep = frame:CreateTexture(nil, "ARTWORK")
     tabSep:SetHeight(1)
     tabSep:SetPoint("TOPLEFT",  frame, "TOPLEFT",  22, -92)
     tabSep:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -22, -92)
-    tabSep:SetColorTexture(0.57, 0.38, 0.12, 0.55)
+    tabSep:SetColorTexture(0.78, 0.55, 0.20, 0.55)
     frame.activeTab = NormalizeTab(focusTab)
     frame.panels = {}
 
@@ -893,7 +903,8 @@ function SC:OpenMasterWindow(focusTab)
 
     local subtitle = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     subtitle:SetPoint("LEFT", title, "RIGHT", 12, -1)
-    subtitle:SetText("|cff6f4b1fHardcore-style run ledger|r")
+    subtitle:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
+    subtitle:SetText("Hardcore-style run ledger")
 
     local closeBtn = CreateFrame("Button", "SoftcoreMasterCloseButton", frame, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 4, 4)
@@ -988,6 +999,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.maxGapCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 360, -338)
     frame.start.maxGapCheck.label = frame.start.maxGapCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.start.maxGapCheck.label:SetPoint("LEFT", frame.start.maxGapCheck, "RIGHT", 2, 0)
+    frame.start.maxGapCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
     frame.start.maxGapCheck.label:SetText("Enforce Level Gap")
     frame.start.maxGapCheck:SetScript("OnClick", function(self)
         frame.start.selectedRules.maxLevelGap = self:GetChecked() and DISALLOWED_OUTCOME or "ALLOWED"
@@ -1030,6 +1042,11 @@ function SC:OpenMasterWindow(focusTab)
         self.maxGapCheck:SetChecked(not isSolo and self.selectedRules.maxLevelGap ~= "ALLOWED")
         self.maxGapCheck:SetEnabled(not isSolo)
         self.maxGapCheck.label:SetFontObject(isSolo and GameFontDisableSmall or GameFontNormalSmall)
+        if isSolo then
+            self.maxGapCheck.label:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
+        else
+            self.maxGapCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+        end
         if isSolo then self.maxGapBox:Disable() end
         self.maxGapBox:SetText(tostring(self.selectedRules.maxLevelGapValue or 3))
 
@@ -1206,7 +1223,7 @@ function SC:OpenMasterWindow(focusTab)
     columnSep:SetHeight(1)
     columnSep:SetPoint("TOPLEFT",  overviewPanel, "TOPLEFT",  0, -229)
     columnSep:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", -20, -229)
-    columnSep:SetColorTexture(0.56, 0.36, 0.12, 0.45)
+    columnSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
 
     frame.overview.partyEmpty = CreateField(overviewPanel, 0, -242, 620)
     frame.overview.partyEmpty:SetText("No synced party members.")
@@ -1217,7 +1234,7 @@ function SC:OpenMasterWindow(focusTab)
         if index % 2 == 0 then
             local rowBg = row:CreateTexture(nil, "BACKGROUND")
             rowBg:SetAllPoints(row)
-            rowBg:SetColorTexture(0.40, 0.20, 0.06, 0.08)
+            rowBg:SetColorTexture(0.82, 0.58, 0.22, 0.08)
         end
         row.name  = CreateField(row, 0,   0, 190)
         row.level = CreateField(row, 198, 0, 44)
@@ -1238,7 +1255,7 @@ function SC:OpenMasterWindow(focusTab)
     violColSep:SetHeight(1)
     violColSep:SetPoint("TOPLEFT",  violationsPanel, "TOPLEFT",  0, -53)
     violColSep:SetPoint("TOPRIGHT", violationsPanel, "TOPRIGHT", -20, -53)
-    violColSep:SetColorTexture(0.56, 0.36, 0.12, 0.45)
+    violColSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
     frame.violations.empty = CreateField(violationsPanel, 0, -66, 620)
     frame.violations.empty:SetText("No active violations.")
     for index = 1, 12 do
@@ -1248,7 +1265,7 @@ function SC:OpenMasterWindow(focusTab)
         if index % 2 == 0 then
             local rowBg = row:CreateTexture(nil, "BACKGROUND")
             rowBg:SetAllPoints(row)
-            rowBg:SetColorTexture(0.40, 0.20, 0.06, 0.08)
+            rowBg:SetColorTexture(0.82, 0.58, 0.22, 0.08)
         end
         row.time = CreateField(row, 0, 0, 118)
         row.owner = CreateField(row, 122, 0, 110)
@@ -1271,7 +1288,7 @@ function SC:OpenMasterWindow(focusTab)
     logColSep:SetHeight(1)
     logColSep:SetPoint("TOPLEFT",  logPanel, "TOPLEFT",  0, -53)
     logColSep:SetPoint("TOPRIGHT", logPanel, "TOPRIGHT", -20, -53)
-    logColSep:SetColorTexture(0.56, 0.36, 0.12, 0.45)
+    logColSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
     frame.log.empty = CreateField(logPanel, 0, -66, 620)
     frame.log.empty:SetText("No events recorded.")
     for index = 1, LOG_ROWS do
@@ -1281,7 +1298,7 @@ function SC:OpenMasterWindow(focusTab)
         if index % 2 == 0 then
             local rowBg = row:CreateTexture(nil, "BACKGROUND")
             rowBg:SetAllPoints(row)
-            rowBg:SetColorTexture(0.40, 0.20, 0.06, 0.08)
+            rowBg:SetColorTexture(0.82, 0.58, 0.22, 0.08)
         end
         row.time = CreateField(row, 0, 0, 130)
         row.actor = CreateField(row, 134, 0, 100)
