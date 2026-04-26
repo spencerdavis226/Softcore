@@ -760,6 +760,7 @@ local function HideAllRunControls(frame)
     frame.start.primaryBtn:Hide()
     frame.start.stopBtn:Hide()
     frame.start.modifyBtn:Hide()
+    if frame.start.syncBtn then frame.start.syncBtn:Hide() end
     frame.start.applyChangesBtn:Hide()
     frame.start.cancelChangesBtn:Hide()
     if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:Hide() end
@@ -795,6 +796,10 @@ local function AnchorRunFooterButtons(frame)
     if start.modifyBtn:IsShown() then
         start.modifyBtn:ClearAllPoints()
         start.modifyBtn:SetPoint("LEFT", start.stopBtn, "RIGHT", 8, 0)
+    end
+    if start.syncBtn and start.syncBtn:IsShown() then
+        start.syncBtn:ClearAllPoints()
+        start.syncBtn:SetPoint("LEFT", start.modifyBtn, "RIGHT", 8, 0)
     end
     if start.applyChangesBtn:IsShown() and start.applyChangesBtn ~= first then
         start.applyChangesBtn:ClearAllPoints()
@@ -844,13 +849,22 @@ local function RefreshRunPanel(frame)
         frame.start.inactiveText:SetShown(false)
         frame.start.activeText:SetShown(true)
         if isProposer then
-            frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your run proposal...|r")
+            if pendingProposal.proposalType == "SYNC_RUN" then
+                frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your run sync proposal...|r")
+            else
+                frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your run proposal...|r")
+            end
         else
-            frame.start.activeText:SetText("|cffffd100Run proposal from " .. proposer .. ".|r Review the proposed rules below, then Accept or Decline.")
+            if pendingProposal.proposalType == "SYNC_RUN" then
+                frame.start.activeText:SetText("|cffffd100Run sync proposal from " .. proposer .. ".|r Review the matching rules below, then Accept or Decline.")
+            else
+                frame.start.activeText:SetText("|cffffd100Run proposal from " .. proposer .. ".|r Review the proposed rules below, then Accept or Decline.")
+            end
         end
         frame.start.primaryBtn:Hide()
         frame.start.stopBtn:Hide()
         frame.start.modifyBtn:Hide()
+        if frame.start.syncBtn then frame.start.syncBtn:Hide() end
         frame.start.applyChangesBtn:Hide()
         frame.start.cancelChangesBtn:Hide()
         frame.start.proposalAcceptBtn:SetShown(not isProposer)
@@ -893,6 +907,9 @@ local function RefreshRunPanel(frame)
     frame.start.primaryBtn:SetShown(not active)
     frame.start.stopBtn:SetShown(active and not modifying)
     frame.start.modifyBtn:SetShown(active and not modifying)
+    if frame.start.syncBtn then
+        frame.start.syncBtn:SetShown(active and not modifying and IsInGroup())
+    end
     frame.start.applyChangesBtn:SetShown(modifying)
     frame.start.cancelChangesBtn:SetShown(modifying)
     SetRunSetupEnabled(frame, (not active) or modifying)
@@ -1342,6 +1359,16 @@ function SC:OpenMasterWindow(focusTab)
         frame.start.isModifyingRules = true
         frame.start.draftBaseRules = SC:CopyTable(db.run.ruleset)
         CopyRulesInto(frame.start.selectedRules, db.run.ruleset)
+        SC:MasterUI_Refresh()
+    end)
+    frame.start.syncBtn = CreateButton(startPanel, "Propose Sync", 110, 24)
+    frame.start.syncBtn:SetPoint("LEFT", frame.start.modifyBtn, "RIGHT", 8, 0)
+    frame.start.syncBtn:SetScript("OnClick", function()
+        if SC.CreateRunSyncProposal then
+            SC:CreateRunSyncProposal()
+        else
+            Print("run sync proposals are not loaded.")
+        end
         SC:MasterUI_Refresh()
     end)
     frame.start.applyChangesBtn = CreateButton(startPanel, "Apply Changes", 120, 24)

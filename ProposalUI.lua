@@ -270,13 +270,13 @@ function SC:CheckPendingProposalOnRosterUpdate()
     local proposal = self:GetPendingProposal()
     if not proposal or proposal.status ~= "PENDING" then return end
     if proposal.proposedBy ~= self:GetPlayerKey() then return end
-    if proposal.proposalType ~= "RUN" then return end
+    if proposal.proposalType ~= "RUN" and proposal.proposalType ~= "SYNC_RUN" then return end
 
     if self:CheckAllProposalMembersAccepted(proposal) then
         proposal.status = "CONFIRMED"
         db.pendingProposalId = nil
 
-        if not db.run or not db.run.active then
+        if proposal.proposalType == "RUN" and (not db.run or not db.run.active) then
             self:StartRun({
                 runId = proposal.runId,
                 runName = proposal.runName,
@@ -288,7 +288,11 @@ function SC:CheckPendingProposalOnRosterUpdate()
             self:Sync_SendRunProposalConfirmed(proposal)
         end
 
-        Print("all present members accepted. Run started.")
+        if proposal.proposalType == "SYNC_RUN" then
+            Print("all present members accepted. Run sync confirmed.")
+        else
+            Print("all present members accepted. Run started.")
+        end
     end
 end
 
@@ -337,6 +341,66 @@ function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, r
     end
 
     return proposal
+end
+
+function SC:CreateRunSyncProposal()
+    local db = GetDB()
+    if not IsInGroup() then
+        Print("run sync proposals require a party.")
+        return nil
+    end
+    if not db.run or not db.run.active then
+        Print("start a run before proposing party sync.")
+        return nil
+    end
+
+    return self:CreateRunProposal(db.run.runName or "Softcore Run", db.run.ruleset, "SYNC_RUN", nil, db.run.runId)
+end
+
+function SC:ApplyRunSyncProposal(proposal, sourceKey)
+    local db = GetDB()
+    if not proposal or proposal.proposalType ~= "SYNC_RUN" then
+        return false
+    end
+    if not db.run or not db.run.active then
+        Print("cannot sync: no active local run.")
+        return false
+    end
+
+    local localHash = self.GetRulesetHash and self:GetRulesetHash() or ""
+    if localHash ~= "" and proposal.rulesetHash and localHash ~= proposal.rulesetHash then
+        Print("cannot sync: local rules do not match the proposal.")
+        return false
+    end
+
+    local oldRunId = db.run.runId
+    db.run.runId = proposal.runId
+    db.run.runName = proposal.runName or db.run.runName
+
+    local participant = self:GetOrCreateParticipant(self:GetPlayerKey())
+    participant.status = "ACTIVE"
+    participant.joinedAt = participant.joinedAt or time()
+
+    for _, conflict in pairs(db.run.conflicts or {}) do
+        if conflict.type == "RUN_MISMATCH" then
+            conflict.active = false
+            conflict.clearedAt = time()
+        end
+    end
+
+    self:AddLog("RUN_SYNCED", "Run synced with party proposal from " .. tostring(sourceKey or proposal.proposedBy or "?") .. ".", {
+        proposalId = proposal.proposalId,
+        oldRunId = oldRunId,
+        runId = proposal.runId,
+    })
+
+    if self.Sync_BroadcastStatus then
+        self:Sync_BroadcastStatus("RUN_SYNCED")
+    end
+    if self.HUD_Refresh then self:HUD_Refresh() end
+    if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+
+    return true
 end
 
 function SC:ReceiveRunProposal(payload, proposerKey)
@@ -417,6 +481,16 @@ function SC:AcceptPendingProposal()
         Print("cannot accept: ruleset mismatch detected.")
         return
     end
+    if proposal.proposalType == "SYNC_RUN" then
+        if not db.run or not db.run.active then
+            Print("cannot accept sync: no active local run.")
+            return
+        end
+        if localHash ~= "" and proposal.rulesetHash and localHash ~= proposal.rulesetHash then
+            Print("cannot accept sync: ruleset mismatch detected.")
+            return
+        end
+    end
 
     proposal.acceptedBy[playerKey] = true
     proposal.status = "ACCEPTED"
@@ -427,6 +501,9 @@ function SC:AcceptPendingProposal()
         local participant = self:GetOrCreateParticipant(playerKey)
         participant.status = "ACTIVE"
         participant.joinedAt = participant.joinedAt or time()
+    elseif proposal.proposalType == "SYNC_RUN" then
+        -- Keep the proposal visible until the proposer confirms that everyone
+        -- currently present has accepted.
     else
         -- When in a group, wait for PROPOSAL_CONFIRMED from the proposer.
         -- When not in a group (edge case), start immediately.
@@ -504,12 +581,12 @@ function SC:ReceiveProposalResponse(payload, playerKey)
 
         -- Only the proposer drives the "all accepted" check and starts the run.
         -- Guard against DECLINED/CANCELLED → CONFIRMED: only act from PENDING state.
-        if proposal.proposedBy == self:GetPlayerKey() and proposal.proposalType == "RUN" and proposal.status == "PENDING" then
+        if proposal.proposedBy == self:GetPlayerKey() and (proposal.proposalType == "RUN" or proposal.proposalType == "SYNC_RUN") and proposal.status == "PENDING" then
             if self:CheckAllProposalMembersAccepted(proposal) then
                 proposal.status = "CONFIRMED"
                 db.pendingProposalId = nil
 
-                if not db.run.active then
+                if proposal.proposalType == "RUN" and not db.run.active then
                     self:StartRun({
                         runId = proposal.runId,
                         runName = proposal.runName,
@@ -521,7 +598,11 @@ function SC:ReceiveProposalResponse(payload, playerKey)
                     self:Sync_SendRunProposalConfirmed(proposal)
                 end
 
-                Print("all members accepted. Run started.")
+                if proposal.proposalType == "SYNC_RUN" then
+                    Print("all members accepted. Run sync confirmed.")
+                else
+                    Print("all members accepted. Run started.")
+                end
             end
         end
 
@@ -533,7 +614,7 @@ function SC:ReceiveProposalResponse(payload, playerKey)
         })
 
         -- Proposer cancels the proposal when any member declines.
-        if proposal.proposedBy == self:GetPlayerKey() and proposal.proposalType == "RUN" and proposal.status == "PENDING" then
+        if proposal.proposedBy == self:GetPlayerKey() and (proposal.proposalType == "RUN" or proposal.proposalType == "SYNC_RUN") and proposal.status == "PENDING" then
             proposal.status = "DECLINED"
             db.pendingProposalId = nil
 
@@ -567,7 +648,9 @@ function SC:ReceiveRunConfirmed(payload, confirmerKey)
         db.pendingProposalId = nil
     end
 
-    if not db.run.active then
+    if proposal.proposalType == "SYNC_RUN" then
+        self:ApplyRunSyncProposal(proposal, confirmerKey)
+    elseif not db.run.active then
         self:StartRun({
             runId = proposal.runId,
             runName = proposal.runName,
@@ -579,7 +662,11 @@ function SC:ReceiveRunConfirmed(payload, confirmerKey)
         proposalId = proposal.proposalId,
     })
 
-    Print("run started: all members accepted.")
+    if proposal.proposalType == "SYNC_RUN" then
+        Print("run synced: all members accepted.")
+    else
+        Print("run started: all members accepted.")
+    end
 
     if self.HUD_Refresh then
         self:HUD_Refresh()

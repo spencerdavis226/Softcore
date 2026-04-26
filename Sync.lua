@@ -6,11 +6,14 @@ local PREFIX = "SOFTCORE"
 local UNSYNCED_AFTER = 30
 local HEARTBEAT_SECONDS = 10
 local MAX_AUDIT_TEXT = 120
+local MAX_MESSAGE_BYTES = 230
+local MAX_CHUNK_DATA_BYTES = 180
 
 SC.syncEnabled = true
 SC.groupStatuses = SC.groupStatuses or {}
 
 local syncFrame
+local pendingChunks = {}
 
 local function PlayerKey(name, realm)
     if not realm or realm == "" then
@@ -130,7 +133,22 @@ local function SendPayload(payload)
         return false
     end
 
-    DispatchAddonMessage(Encode(AddMetadata(payload)), channel)
+    local message = Encode(AddMetadata(payload))
+    if #message <= MAX_MESSAGE_BYTES then
+        DispatchAddonMessage(message, channel)
+        return true
+    end
+
+    local chunkId = tostring(time()) .. "-" .. tostring(math.random(100000, 999999))
+    local total = math.ceil(#message / MAX_CHUNK_DATA_BYTES)
+    for index = 1, total do
+        local first = ((index - 1) * MAX_CHUNK_DATA_BYTES) + 1
+        DispatchAddonMessage(
+            "CHUNK|" .. chunkId .. "|" .. tostring(index) .. "|" .. tostring(total) .. "|" .. string.sub(message, first, first + MAX_CHUNK_DATA_BYTES - 1),
+            channel
+        )
+    end
+
     return true
 end
 
@@ -599,7 +617,53 @@ function SC:Sync_SendProposalCancelled(proposal)
     })
 end
 
-function SC:Sync_HandleMessage(message, sender)
+function SC:Sync_HandleMessage(message, sender, isReassembled)
+    if not isReassembled and string.sub(message or "", 1, 6) == "CHUNK|" then
+        local chunkId, chunkIndexText, chunkTotalText, chunkData = string.match(message, "^CHUNK|([^|]+)|([^|]+)|([^|]+)|(.*)$")
+        local chunkIndex = tonumber(chunkIndexText)
+        local chunkTotal = tonumber(chunkTotalText)
+        if not chunkId or not chunkIndex or not chunkTotal or chunkTotal < 1 then
+            return
+        end
+
+        local senderName, senderRealm = SplitFullName(sender)
+        local key = PlayerKey(senderName, senderRealm)
+        if key == LocalPlayerKey() then
+            return
+        end
+
+        local bufferKey = key .. ":" .. chunkId
+        local buffer = pendingChunks[bufferKey]
+        if not buffer then
+            buffer = {
+                total = chunkTotal,
+                chunks = {},
+                received = 0,
+                createdAt = time(),
+            }
+            pendingChunks[bufferKey] = buffer
+        end
+
+        if not buffer.chunks[chunkIndex] then
+            buffer.chunks[chunkIndex] = chunkData or ""
+            buffer.received = buffer.received + 1
+        end
+
+        if buffer.received >= buffer.total then
+            local parts = {}
+            for index = 1, buffer.total do
+                if not buffer.chunks[index] then
+                    return
+                end
+                parts[index] = buffer.chunks[index]
+            end
+            pendingChunks[bufferKey] = nil
+            self:Sync_HandleMessage(table.concat(parts), sender, true)
+        end
+
+        return
+    end
+
     local payload = Decode(message)
 
     local name = payload.name
