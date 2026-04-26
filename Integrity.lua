@@ -319,6 +319,10 @@ local function IsFirstPersonEnforced()
     return rule ~= nil and rule ~= "ALLOWED" and rule ~= false
 end
 
+function SC:IsFirstPersonEnforced()
+    return IsFirstPersonEnforced()
+end
+
 function SC:SnapCameraToFirstPerson()
     local zoom = GetCameraZoom and GetCameraZoom() or 0
     if zoom > 0 then

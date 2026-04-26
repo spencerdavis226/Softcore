@@ -322,6 +322,11 @@ function SC:Events_Register()
             if SC.CheckMaxLevelGap then
                 SC:CheckMaxLevelGap(true)
             end
+            if SC.IsFirstPersonEnforced and SC:IsFirstPersonEnforced() then
+                if SC.SnapCameraToFirstPerson then
+                    SC:SnapCameraToFirstPerson()
+                end
+            end
             Broadcast("PLAYER_ENTERING_WORLD")
         end
 
