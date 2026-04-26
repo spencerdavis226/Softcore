@@ -1531,7 +1531,7 @@ function SC:OpenMasterWindow(focusTab)
     proposalPanel.subtitle = CreateField(proposalPanel, 14, -42, 620)
     proposalPanel.runId = CreateField(proposalPanel, 14, -64, 620)
     CreateDivider(proposalPanel, 14, -88, 620)
-    CreateLabel(proposalPanel, "Proposed Rules", 14, -106, "GameFontNormal", 180)
+    proposalPanel.rulesTitle = CreateLabel(proposalPanel, "Proposed Rules", 14, -106, "GameFontNormal", 180)
     proposalPanel.ruleRows = {}
     for i = 1, 18 do
         local row = CreateFrame("Frame", nil, proposalPanel)
