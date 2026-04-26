@@ -175,13 +175,20 @@ function SC:GetAchievementDefinitions()
         AddDefinition(result, "char_level_" .. tostring(level), "ACCOUNT", "Leveling", "Still Breathing: " .. tostring(level), "Reach level " .. tostring(level) .. " during an active Softcore run.", "LEVEL", level)
     end
 
+    AddDefinition(result, "char_clean_level_30", "ACCOUNT", "Leveling", "Rule Keeper", "Reach level 30 on an eligible run with no violations.", "LEVEL_CLEAN", 30)
+    AddDefinition(result, "char_clean_level_40", "ACCOUNT", "Leveling", "Steady Hands", "Reach level 40 on an eligible run with no violations.", "LEVEL_CLEAN", 40)
+
     AddDefinition(result, "char_max_level", "ACCOUNT", "Max Level", "Softcore Champion", "Reach max level after starting the run at level 10 or below.", "MAX_LEVEL")
     AddDefinition(result, "char_clean_max_level", "ACCOUNT", "Max Level", "Clean Finish", "Reach max level on an eligible run without any local violations.", "CLEAN_MAX")
     AddDefinition(result, "char_ironman_max_level", "ACCOUNT", "Max Level", "Iron Will", "Reach max level on an eligible run that started with the Ironman preset.", "IRONMAN_MAX")
+    AddDefinition(result, "char_original_terms", "ACCOUNT", "Max Level", "Original Terms", "Reach max level on an eligible run with no rule amendments applied.", "RULE_UNCHANGED_MAX")
+    AddDefinition(result, "char_party_survivor", "ACCOUNT", "Max Level", "Party Survivor", "Reach max level on an eligible run started in group mode.", "GROUPED_MAX")
 
     for _, spec in ipairs(RESTRICTION_RULES) do
         AddDefinition(result, "char_max_" .. spec.id, "ACCOUNT", "Rules", spec.name, spec.description or ("Reach max level with " .. spec.label .. " disallowed from run start through max level."), "RULE_MAX", nil, spec.rule)
     end
+
+    AddDefinition(result, "char_white_knuckles", "ACCOUNT", "Rules", "White Knuckles", "Reach max level with white/gray gear quality enforced from run start.", "GEAR_QUALITY_MAX", nil, "WHITE_GRAY_ONLY")
 
     return result
 end
@@ -213,6 +220,24 @@ local function BuildProgress(definition, earned)
             return 0, "Started above target"
         end
         return math.min(currentLevel / target, 1), "Level " .. tostring(currentLevel) .. " / " .. tostring(target)
+    end
+
+    if definition.progressKind == "LEVEL_CLEAN" then
+        local target = tonumber(definition.target or 0) or 0
+        if target <= 0 then return 0, "Not earned" end
+        if not eligibility or not eligibility.createdAtRunStart then
+            return 0, "Start an active run"
+        end
+        if eligibility.failed then
+            return 0, "Failed this run"
+        end
+        if eligibility.hadViolation then
+            return 0, "Violation recorded"
+        end
+        if target < (tonumber(eligibility.startLevel or 0) or 0) then
+            return 0, "Started above target"
+        end
+        return math.min(currentLevel / target, 1), "Clean: " .. tostring(currentLevel) .. " / " .. tostring(target)
     end
 
     if not eligibility or not eligibility.createdAtRunStart then
@@ -251,6 +276,39 @@ local function BuildProgress(definition, earned)
             return 0, "Rules changed"
         end
         return math.min(currentLevel / maxLevel, 1), "Ironman: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
+    end
+
+    if definition.progressKind == "RULE_UNCHANGED_MAX" then
+        if not eligibility.startedAtOrBelow10 then
+            return 0, "Started above level 10"
+        end
+        if eligibility.anyRuleChanged then
+            return 0, "Rules amended"
+        end
+        return math.min(currentLevel / maxLevel, 1), "No amendments: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
+    end
+
+    if definition.progressKind == "GROUPED_MAX" then
+        if not eligibility.startedAtOrBelow10 then
+            return 0, "Started above level 10"
+        end
+        if not eligibility.initialRules or eligibility.initialRules.groupingMode ~= "SYNCED_GROUP_ALLOWED" then
+            return 0, "Not started in group mode"
+        end
+        return math.min(currentLevel / maxLevel, 1), "Group run: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
+    end
+
+    if definition.progressKind == "GEAR_QUALITY_MAX" then
+        if not eligibility.startedAtOrBelow10 then
+            return 0, "Started above level 10"
+        end
+        if not eligibility.initialRules or eligibility.initialRules.gearQuality ~= definition.ruleName then
+            return 0, "Wrong gear quality at start"
+        end
+        if eligibility.ruleChanges and eligibility.ruleChanges.gearQuality then
+            return 0, "Gear quality changed"
+        end
+        return math.min(currentLevel / maxLevel, 1), "Eligible: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
     end
 
     if definition.progressKind == "RULE_MAX" then
@@ -373,6 +431,13 @@ function SC:Achievements_OnLevelChanged(level)
         end
     end
 
+    if level >= 30 and 30 >= startLevel and not eligibility.hadViolation then
+        Earn("char_clean_level_30", "CHARACTER", "Rule Keeper")
+    end
+    if level >= 40 and 40 >= startLevel and not eligibility.hadViolation then
+        Earn("char_clean_level_40", "CHARACTER", "Steady Hands")
+    end
+
     if level < maxLevel or not CanEarnMaxRunAchievement(eligibility) then
         return
     end
@@ -385,6 +450,19 @@ function SC:Achievements_OnLevelChanged(level)
 
     if eligibility.initialPreset == "IRONMAN" and IsIronmanRules(eligibility.initialRules) and not eligibility.anyRuleChanged then
         Earn("char_ironman_max_level", "CHARACTER", "Iron Will")
+    end
+
+    if not eligibility.anyRuleChanged then
+        Earn("char_original_terms", "CHARACTER", "Original Terms")
+    end
+
+    if eligibility.initialRules and eligibility.initialRules.groupingMode == "SYNCED_GROUP_ALLOWED" then
+        Earn("char_party_survivor", "CHARACTER", "Party Survivor")
+    end
+
+    if eligibility.initialRules and eligibility.initialRules.gearQuality == "WHITE_GRAY_ONLY"
+       and not (eligibility.ruleChanges and eligibility.ruleChanges.gearQuality) then
+        Earn("char_white_knuckles", "CHARACTER", "White Knuckles")
     end
 
     for _, spec in ipairs(RESTRICTION_RULES) do
