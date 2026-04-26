@@ -329,7 +329,7 @@ local function GetActionCamZoomTarget()
     if not ruleset then return nil end
     local rule = ruleset.actionCam
     if rule == nil or rule == "ALLOWED" or rule == false then return nil end
-    return tonumber(ruleset.actionCamZoom) or 7
+    return (IsMounted and IsMounted()) and 7 or 5
 end
 
 function SC:IsFirstPersonEnforced()
