@@ -304,6 +304,7 @@ function SC:CheckPendingProposalOnRosterUpdate()
                 runId = proposal.runId,
                 runName = proposal.runName,
                 ruleset = proposal.ruleset,
+                preset = proposal.preset,
             })
         end
 
@@ -351,6 +352,7 @@ function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, r
         proposedAt = time(),
         ruleset = proposalRuleset,
         rulesetHash = self:ComputeRulesetHash(proposalRuleset),
+        preset = proposalRuleset.achievementPreset or proposalRuleset.preset or "CUSTOM",
         acceptedBy = {},
         declinedBy = {},
         status = "PENDING",
@@ -421,6 +423,9 @@ function SC:ApplyRunSyncProposal(proposal, sourceKey)
     local oldRunId = db.run.runId
     db.run.runId = proposal.runId
     db.run.runName = proposal.runName or db.run.runName
+    if self.Achievements_OnRunSynced then
+        self:Achievements_OnRunSynced(oldRunId, db.run.runId)
+    end
 
     local participant = self:GetOrCreateParticipant(self:GetPlayerKey())
     participant.status = "ACTIVE"
@@ -469,6 +474,7 @@ function SC:ReceiveRunProposal(payload, proposerKey)
         proposedAt = tonumber(payload.proposedAt) or time(),
         ruleset = ruleset,
         rulesetHash = payload.proposalRulesetHash or computedHash,
+        preset = payload.preset or "CUSTOM",
         acceptedBy = {},
         declinedBy = {},
         status = "PENDING",
@@ -564,6 +570,7 @@ function SC:AcceptPendingProposal()
                     runId = proposal.runId,
                     runName = proposal.runName,
                     ruleset = proposal.ruleset,
+                    preset = proposal.preset,
                 })
             end
         end
@@ -579,6 +586,7 @@ function SC:AcceptPendingProposal()
                     runId = proposal.runId,
                     runName = proposal.runName,
                     ruleset = proposal.ruleset,
+                    preset = proposal.preset,
                 })
             else
                 local participant = self:GetOrCreateParticipant(playerKey)
@@ -695,6 +703,7 @@ function SC:ReceiveProposalResponse(payload, playerKey)
                         runId = proposal.runId,
                         runName = proposal.runName,
                         ruleset = proposal.ruleset,
+                        preset = proposal.preset,
                     })
                 end
 
@@ -777,6 +786,7 @@ function SC:ReceiveRunConfirmed(payload, confirmerKey)
                 runId = proposal.runId,
                 runName = proposal.runName,
                 ruleset = proposal.ruleset,
+                preset = proposal.preset,
             })
         else
             local participant = self:GetOrCreateParticipant(playerKey)
@@ -788,6 +798,7 @@ function SC:ReceiveRunConfirmed(payload, confirmerKey)
             runId = proposal.runId,
             runName = proposal.runName,
             ruleset = proposal.ruleset,
+            preset = proposal.preset,
         })
     end
 

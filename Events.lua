@@ -84,6 +84,9 @@ local function HandleLevelUp(level)
     db.character.level = level or UnitLevel("player") or db.character.level
     SC:GetOrCreateParticipant(SC:GetPlayerKey()).currentLevel = db.character.level
     SC:AddLog("LEVEL_UP", "Reached level " .. tostring(db.character.level) .. ".")
+    if SC.Achievements_OnLevelChanged then
+        SC:Achievements_OnLevelChanged(db.character.level)
+    end
     Broadcast("PLAYER_LEVEL_UP")
 end
 

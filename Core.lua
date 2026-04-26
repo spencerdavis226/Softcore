@@ -456,6 +456,10 @@ function SC:AddViolation(violationType, detail, severity, playerKey)
         suppressAuditSync = true,
     })
 
+    if self.Achievements_OnViolationAdded then
+        self:Achievements_OnViolationAdded(violation)
+    end
+
     if self.Sync_BroadcastViolation then
         self:Sync_BroadcastViolation(violation)
     end
@@ -650,6 +654,9 @@ function SC:MarkParticipantFailed(playerKey, reason)
         self:AddLog("PARTICIPANT_FAILED", participant.playerKey .. " failed: " .. participant.failReason, {
             playerKey = participant.playerKey,
         })
+        if self.Achievements_OnParticipantFailed then
+            self:Achievements_OnParticipantFailed(playerKey)
+        end
     end
 
     return participant
@@ -1069,6 +1076,7 @@ function SC:StartRun(runOptions)
     db.run.deathCount = 0
     db.run.warningCount = 0
     db.run.ruleset = runOptions.ruleset and CopyTable(runOptions.ruleset) or CreateDefaultRuleset()
+    db.run.ruleset.achievementPreset = runOptions.preset or db.run.ruleset.achievementPreset or "CUSTOM"
     ApplyGroupingModeRules(db.run.ruleset)
     db.run.governance = CreateDefaultGovernance()
     db.run.participants = {}
@@ -1088,6 +1096,9 @@ function SC:StartRun(runOptions)
     participant.class = db.character.class
 
     self:AddLog("RUN_START", "Run started for " .. db.character.name .. "-" .. db.character.realm .. " at level " .. tostring(db.character.level or "?") .. ".")
+    if self.Achievements_OnRunStart then
+        self:Achievements_OnRunStart(runOptions)
+    end
     self:RefreshParticipantsFromRoster()
     self:PlayUISound("RUN_STARTED")
     Print("run started.")

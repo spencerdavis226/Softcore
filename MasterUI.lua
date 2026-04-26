@@ -22,9 +22,11 @@ local TAB_RUN = "RUN"
 local TAB_OVERVIEW = "OVERVIEW"
 local TAB_VIOLATIONS = "VIOLATIONS"
 local TAB_LOG = "LOG"
+local TAB_ACHIEVEMENTS = "ACHIEVEMENTS"
 
 local DISALLOWED_OUTCOME = "WARNING"
 local LOG_ROWS = 22
+local ACHIEVEMENT_ROWS = 16
 local PANEL_WIDTH = 710
 local PANEL_HEIGHT = 500
 local BODY_TEXT = { r = 0.94, g = 0.86, b = 0.68 }
@@ -137,7 +139,7 @@ local function NormalizeTab(tab)
         return TAB_OVERVIEW
     end
 
-    if tab == TAB_LOG or tab == TAB_RUN or tab == TAB_OVERVIEW or tab == TAB_VIOLATIONS then
+    if tab == TAB_LOG or tab == TAB_RUN or tab == TAB_OVERVIEW or tab == TAB_VIOLATIONS or tab == TAB_ACHIEVEMENTS then
         return tab
     end
 
@@ -338,6 +340,7 @@ end
 
 local function ApplyStartPreset(frame, preset)
     local rules = frame.start.selectedRules
+    frame.start.selectedPreset = preset
 
     rules.groupingMode = preset == "IRONMAN" and "SOLO_SELF_FOUND" or "SYNCED_GROUP_ALLOWED"
     rules.gearQuality = preset == "IRONMAN" and "WHITE_GRAY_ONLY" or "ALLOWED"
@@ -360,6 +363,7 @@ local function ApplyStartPreset(frame, preset)
     SetDisallowedRule(rules, "instancedPvP", false)
     rules.maxDeaths = false
     rules.maxDeathsValue = rules.maxDeathsValue or 3
+    rules.achievementPreset = preset
 
     if SC.ApplyGroupingMode then
         SC:ApplyGroupingMode(rules)
@@ -1019,6 +1023,55 @@ local function RefreshLogPanel(frame)
     end
 end
 
+local function RefreshAchievementsPanel(frame)
+    if not frame.achievements then return end
+
+    local rows = SC.GetAchievementRows and SC:GetAchievementRows() or {}
+    local earnedCount = 0
+    local page = frame.achievements.page or 1
+    local pageCount = math.max(1, math.ceil(#rows / ACHIEVEMENT_ROWS))
+    if page > pageCount then page = pageCount end
+    if page < 1 then page = 1 end
+    frame.achievements.page = page
+    local offset = (page - 1) * ACHIEVEMENT_ROWS
+
+    for _, row in ipairs(rows) do
+        if row.earned then
+            earnedCount = earnedCount + 1
+        end
+    end
+
+    frame.achievements.summary:SetText("Earned: " .. tostring(earnedCount) .. " / " .. tostring(#rows))
+    frame.achievements.pageText:SetText("Page " .. tostring(page) .. " / " .. tostring(pageCount))
+    frame.achievements.prevBtn:SetEnabled(page > 1)
+    frame.achievements.nextBtn:SetEnabled(page < pageCount)
+
+    if #rows == 0 then
+        frame.achievements.empty:Show()
+    else
+        frame.achievements.empty:Hide()
+    end
+
+    for index, rowFrame in ipairs(frame.achievements.rows) do
+        local achievement = rows[offset + index]
+        if achievement then
+            rowFrame:Show()
+            rowFrame.icon:SetText(achievement.earned and "|cff22c55e*|r" or "|cff6b7280-|r")
+            rowFrame.name:SetText((achievement.earned and "|cff4ade80" or "|cffffd100") .. tostring(achievement.name or "?") .. "|r")
+            rowFrame.scope:SetText(achievement.scope == "ACCOUNT" and "Account" or "Character")
+            rowFrame.category:SetText(tostring(achievement.category or ""))
+            rowFrame.description:SetText(Trunc(achievement.description or "", 58))
+            if achievement.earnedAt then
+                rowFrame.date:SetText(FormatTime(achievement.earnedAt))
+            else
+                rowFrame.date:SetText("|cff9ca3afLocked|r")
+            end
+        else
+            rowFrame:Hide()
+        end
+    end
+end
+
 local function ConfirmStopRun()
     SC:ResetRun()
     if SC.masterFrame then
@@ -1045,11 +1098,13 @@ function SC:MasterUI_Refresh()
     frame.runTab:SetEnabled(frame.activeTab ~= TAB_RUN)
     frame.violationsTab:SetEnabled(frame.activeTab ~= TAB_VIOLATIONS)
     frame.logTab:SetEnabled(frame.activeTab ~= TAB_LOG)
+    frame.achievementsTab:SetEnabled(frame.activeTab ~= TAB_ACHIEVEMENTS)
 
     RefreshOverviewPanel(frame)
     RefreshRunPanel(frame)
     RefreshViolationsPanel(frame)
     RefreshLogPanel(frame)
+    RefreshAchievementsPanel(frame)
 
     if SC.HUD_Refresh then
         SC:HUD_Refresh()
@@ -1136,11 +1191,12 @@ function SC:OpenMasterWindow(focusTab)
     local runTab = AddTab("runTab", "Run", TAB_RUN, overviewTab)
     local violationsTab = AddTab("violationsTab", "Violations", TAB_VIOLATIONS, runTab)
     local logTab = AddTab("logTab", "Log", TAB_LOG, violationsTab)
+    AddTab("achievementsTab", "Achieve", TAB_ACHIEVEMENTS, logTab)
 
     local startPanel = CreatePanel(frame)
     startPanel:SetHeight(470)
     frame.panels[TAB_RUN] = startPanel
-    frame.start = { controls = {}, selectedRules = SC:GetDefaultRuleset() }
+    frame.start = { controls = {}, selectedRules = SC:GetDefaultRuleset(), selectedPreset = "CASUAL" }
     frame.start.selectedRules.dungeonRepeat = "ALLOWED"
     frame.start.selectedRules.instanceWithUnsyncedPlayers = "ALLOWED"
     frame.start.selectedRules.unsyncedMembers = "ALLOWED"
@@ -1331,6 +1387,7 @@ function SC:OpenMasterWindow(focusTab)
         end
         ruleset.instanceWithUnsyncedPlayers = "ALLOWED"
         ruleset.unsyncedMembers = "ALLOWED"
+        ruleset.achievementPreset = frame.start.selectedPreset or ruleset.achievementPreset or "CUSTOM"
         if IsInGroup() then
             if SC.CreateRunProposal then
                 SC:CreateRunProposal("Softcore Run", ruleset, "RUN")
@@ -1341,6 +1398,7 @@ function SC:OpenMasterWindow(focusTab)
             SC:StartRun({
                 runName = "Softcore Run",
                 ruleset = ruleset,
+                preset = ruleset.achievementPreset,
             })
             frame.activeTab = TAB_OVERVIEW
         end
@@ -1572,6 +1630,57 @@ function SC:OpenMasterWindow(focusTab)
         row.kind = CreateField(row, 242, 0, 128)
         row.message = CreateField(row, 378, 0, 300)
         frame.log.rows[index] = row
+    end
+
+    local achievementsPanel = CreatePanel(frame)
+    frame.panels[TAB_ACHIEVEMENTS] = achievementsPanel
+    frame.achievements = { rows = {} }
+    CreateSectionHeader(achievementsPanel, "Achievements", 0, 0, 650)
+    frame.achievements.summary = CreateField(achievementsPanel, 0, -34, 250)
+    frame.achievements.summary:SetText("Earned: 0 / 0")
+    frame.achievements.prevBtn = CreateButton(achievementsPanel, "<", 28, 22)
+    frame.achievements.prevBtn:SetPoint("TOPLEFT", achievementsPanel, "TOPLEFT", 500, -28)
+    frame.achievements.prevBtn:SetScript("OnClick", function()
+        frame.achievements.page = math.max(1, (frame.achievements.page or 1) - 1)
+        SC:MasterUI_Refresh()
+    end)
+    frame.achievements.pageText = CreateField(achievementsPanel, 534, -33, 82)
+    frame.achievements.pageText:SetText("Page 1 / 1")
+    frame.achievements.nextBtn = CreateButton(achievementsPanel, ">", 28, 22)
+    frame.achievements.nextBtn:SetPoint("LEFT", frame.achievements.pageText, "RIGHT", 6, 0)
+    frame.achievements.nextBtn:SetScript("OnClick", function()
+        frame.achievements.page = (frame.achievements.page or 1) + 1
+        SC:MasterUI_Refresh()
+    end)
+    frame.achievements.empty = CreateField(achievementsPanel, 0, -66, 620)
+    frame.achievements.empty:SetText("No achievements are loaded.")
+    CreateLabel(achievementsPanel, "Status", 0, -64, "GameFontNormalSmall", 48)
+    CreateLabel(achievementsPanel, "Achievement", 54, -64, "GameFontNormalSmall", 170)
+    CreateLabel(achievementsPanel, "Scope", 230, -64, "GameFontNormalSmall", 78)
+    CreateLabel(achievementsPanel, "Category", 318, -64, "GameFontNormalSmall", 92)
+    CreateLabel(achievementsPanel, "Requirement", 420, -64, "GameFontNormalSmall", 190)
+    CreateLabel(achievementsPanel, "Earned", 612, -64, "GameFontNormalSmall", 90)
+    local achSep = achievementsPanel:CreateTexture(nil, "ARTWORK")
+    achSep:SetHeight(1)
+    achSep:SetPoint("TOPLEFT", achievementsPanel, "TOPLEFT", 0, -80)
+    achSep:SetPoint("TOPRIGHT", achievementsPanel, "TOPRIGHT", -20, -80)
+    achSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
+    for index = 1, ACHIEVEMENT_ROWS do
+        local row = CreateFrame("Frame", nil, achievementsPanel)
+        row:SetSize(690, 24)
+        row:SetPoint("TOPLEFT", achievementsPanel, "TOPLEFT", 0, -92 - ((index - 1) * 25))
+        if index % 2 == 0 then
+            local rowBg = row:CreateTexture(nil, "BACKGROUND")
+            rowBg:SetAllPoints(row)
+            rowBg:SetColorTexture(0.82, 0.58, 0.22, 0.08)
+        end
+        row.icon = CreateField(row, 0, 0, 48)
+        row.name = CreateField(row, 54, 0, 170)
+        row.scope = CreateField(row, 230, 0, 78)
+        row.category = CreateField(row, 318, 0, 92)
+        row.description = CreateField(row, 420, 0, 190)
+        row.date = CreateField(row, 612, 0, 90)
+        frame.achievements.rows[index] = row
     end
 
     self.masterFrame = frame

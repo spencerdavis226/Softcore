@@ -423,12 +423,16 @@ function SC:ApplyRuleAmendment(amendmentId)
 
             if amendment.status ~= "APPLIED" then
                 for ruleName, value in pairs(amendment.newRules) do
+                    local oldValue = amendment.previousRules[ruleName]
                     db.run.ruleset[ruleName] = value
+                    if self.Achievements_OnRuleChanged then
+                        self:Achievements_OnRuleChanged(ruleName, oldValue, value)
+                    end
                     self:AddLog("RULE_CHANGED", ruleName .. " changed to " .. tostring(value), {
                         amendmentId = amendment.id,
                         ruleName = ruleName,
                         newValue = value,
-                        oldValue = amendment.previousRules[ruleName],
+                        oldValue = oldValue,
                     })
                 end
 
