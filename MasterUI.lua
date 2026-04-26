@@ -1051,6 +1051,11 @@ local function CreateAchievementRow(parent, index)
     row.icon:SetWidth(42)
     row.icon:SetJustifyH("CENTER")
     row.icon:SetText("?")
+    row.iconCheck = row.medal:CreateTexture(nil, "OVERLAY")
+    row.iconCheck:SetSize(32, 32)
+    row.iconCheck:SetPoint("CENTER", row.medal, "CENTER", 0, 0)
+    row.iconCheck:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
+    row.iconCheck:Hide()
 
     row.name = CreateField(row, 70, -10, 340)
     row.name:SetFontObject(GameFontNormal)
@@ -1105,10 +1110,13 @@ local function RefreshAchievementsPanel(frame)
             rowFrame:Show()
             local progressValue = tonumber(achievement.progressValue or 0) or 0
             if achievement.earned then
-                rowFrame.icon:SetText("|cff4ade80✓|r")
+                rowFrame.icon:SetText("")
+                rowFrame.iconCheck:Show()
             elseif progressValue > 0 then
+                rowFrame.iconCheck:Hide()
                 rowFrame.icon:SetText("|cffffffff" .. tostring(math.floor((progressValue * 100) + 0.5)) .. "%|r")
             else
+                rowFrame.iconCheck:Hide()
                 rowFrame.icon:SetText("|cff6b7280?|r")
             end
             rowFrame.name:SetText((achievement.earned and "|cffffd100" or "|cffad8f61") .. tostring(achievement.name or "?") .. "|r")
@@ -1242,8 +1250,8 @@ function SC:OpenMasterWindow(focusTab)
     closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -5, -5)
     closeBtn:SetScript("OnClick", function() frame:Hide() end)
 
-    local function AddTab(fieldName, label, tabName, relativeTo)
-        local tab = CreateButton(frame, label, 92, 24)
+    local function AddTab(fieldName, label, tabName, relativeTo, width)
+        local tab = CreateButton(frame, label, width or 92, 24)
         if relativeTo then
             tab:SetPoint("LEFT", relativeTo, "RIGHT", 6, 0)
         else
@@ -1261,7 +1269,7 @@ function SC:OpenMasterWindow(focusTab)
     local runTab = AddTab("runTab", "Run", TAB_RUN, overviewTab)
     local violationsTab = AddTab("violationsTab", "Violations", TAB_VIOLATIONS, runTab)
     local logTab = AddTab("logTab", "Log", TAB_LOG, violationsTab)
-    AddTab("achievementsTab", "Achievements", TAB_ACHIEVEMENTS, logTab)
+    AddTab("achievementsTab", "Achievements", TAB_ACHIEVEMENTS, logTab, 110)
 
     local startPanel = CreatePanel(frame)
     startPanel:SetHeight(470)
