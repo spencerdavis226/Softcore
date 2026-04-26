@@ -669,7 +669,7 @@ function SC:RefreshParticipantsFromRoster()
         return
     end
 
-    for playerKey, participant in pairs(db.run.participants) do
+    for playerKey, participant in pairs(db.run.participants or {}) do
         if participant.status ~= "FAILED" and participant.status ~= "RETIRED" then
             if partyKeys[playerKey] then
                 if participant.status == "OUT_OF_PARTY" or participant.status == "UNSYNCED" then
@@ -747,7 +747,7 @@ function SC:GetDerivedPartyStatus()
         hasUnsynced = true
     end
 
-    for playerKey, participant in pairs(db.run.participants) do
+    for playerKey, participant in pairs(db.run.participants or {}) do
         if playerKey ~= localStatus.playerKey and self:IsParticipantInCurrentParty(playerKey) then
             if participant.status == "FAILED" and db.run.ruleset.failedMemberBlocksParty then
                 db.run.partyStatus = "BLOCKED"

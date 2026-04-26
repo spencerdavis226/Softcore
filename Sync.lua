@@ -125,10 +125,13 @@ end
 local function SendPayload(payload)
     local channel = GetSyncChannel()
     if not channel then
-        return
+        -- Not in a group; message silently dropped. Callers that need delivery
+        -- confirmation (e.g. proposals) should check IsInGroup() beforehand.
+        return false
     end
 
     DispatchAddonMessage(Encode(AddMetadata(payload)), channel)
+    return true
 end
 
 local function RegisterPrefix()
@@ -551,7 +554,7 @@ function SC:Sync_BroadcastViolationClear(violation)
 end
 
 function SC:Sync_SendRunProposal(proposal)
-    SendPayload({
+    local sent = SendPayload({
         type = "PROPOSAL",
         proposalId = proposal.proposalId,
         runId = proposal.runId,
@@ -564,6 +567,9 @@ function SC:Sync_SendRunProposal(proposal)
         rulesetHash = proposal.rulesetHash,
         proposalRulesetHash = proposal.rulesetHash,
     })
+    if not sent then
+        DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r Proposal created but not sent — you are not in a group.")
+    end
 end
 
 function SC:Sync_SendProposalResponse(messageType, proposal)

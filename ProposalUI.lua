@@ -244,20 +244,52 @@ function SC:CanProposeRun()
     return participant and (participant.status == "ACTIVE" or participant.status == "WARNING")
 end
 
--- Returns true if all members recorded in proposal.partyAtProposalTime have accepted.
+-- Returns true if all members still in the party (from partyAtProposalTime) have accepted.
+-- Members who have left the party since the proposal was created are ignored — they can't
+-- accept anyway and shouldn't block the run from starting.
 function SC:CheckAllProposalMembersAccepted(proposal)
     local party = proposal.partyAtProposalTime
     if not party or not next(party) then
         return true
     end
 
+    local currentParty = GetCurrentPartyKeys()
     for key in pairs(party) do
-        if not proposal.acceptedBy[key] then
+        if currentParty[key] and not proposal.acceptedBy[key] then
             return false
         end
     end
 
     return true
+end
+
+-- Called on GROUP_ROSTER_UPDATE. If the local player is the proposer and a member who
+-- hadn't accepted has now left, re-evaluate whether the proposal can be confirmed.
+function SC:CheckPendingProposalOnRosterUpdate()
+    local db = GetDB()
+    local proposal = self:GetPendingProposal()
+    if not proposal or proposal.status ~= "PENDING" then return end
+    if proposal.proposedBy ~= self:GetPlayerKey() then return end
+    if proposal.proposalType ~= "RUN" then return end
+
+    if self:CheckAllProposalMembersAccepted(proposal) then
+        proposal.status = "CONFIRMED"
+        db.pendingProposalId = nil
+
+        if not db.run or not db.run.active then
+            self:StartRun({
+                runId = proposal.runId,
+                runName = proposal.runName,
+                ruleset = proposal.ruleset,
+            })
+        end
+
+        if self.Sync_SendRunProposalConfirmed then
+            self:Sync_SendRunProposalConfirmed(proposal)
+        end
+
+        Print("all present members accepted. Run started.")
+    end
 end
 
 function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, runId)
@@ -267,6 +299,10 @@ function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, r
     end
 
     local db = GetDB()
+    if (proposalType == "RUN" or not proposalType) and db.run and db.run.active then
+        Print("cannot propose a new run while an active run is in progress. Use /sc reset to stop it first.")
+        return nil
+    end
     local proposalRunId = runId or self:CreateRunId()
     local proposalRuleset = self:CopyTable(ruleset or self:GetDefaultRuleset())
     if self.ApplyGroupingMode then
@@ -340,6 +376,18 @@ function SC:ReceiveRunProposal(payload, proposerKey)
         return
     end
 
+    -- Cancel any existing pending proposal before storing the new one so the old
+    -- proposalId isn't left dangling and the UI doesn't show a stale proposal.
+    local existing = self:GetPendingProposal()
+    if existing and existing.proposalId ~= proposal.proposalId then
+        existing.status = "CANCELLED"
+        db.pendingProposalId = nil
+        self:AddLog("PROPOSAL_SUPERSEDED", "Pending proposal superseded by new proposal from " .. proposerKey, {
+            oldProposalId = existing.proposalId,
+            newProposalId = proposal.proposalId,
+        })
+    end
+
     self:StoreProposal(proposal)
     if self.PlayUISound then self:PlayUISound("PROPOSAL_RECEIVED") end
     if self.OpenMasterWindow then
@@ -360,7 +408,7 @@ function SC:AcceptPendingProposal()
     end
 
     if db.run and db.run.active and proposal.proposalType == "RUN" and db.run.runId ~= proposal.runId then
-        Print("cannot accept: you already have an active run with a different runId. Use /sc reset confirm only if you intend to leave it.")
+        Print("cannot accept: you already have an active run with a different runId. Use /sc reset only if you intend to leave it.")
         return
     end
 
@@ -455,7 +503,8 @@ function SC:ReceiveProposalResponse(payload, playerKey)
         })
 
         -- Only the proposer drives the "all accepted" check and starts the run.
-        if proposal.proposedBy == self:GetPlayerKey() and proposal.proposalType == "RUN" and proposal.status ~= "CONFIRMED" then
+        -- Guard against DECLINED/CANCELLED → CONFIRMED: only act from PENDING state.
+        if proposal.proposedBy == self:GetPlayerKey() and proposal.proposalType == "RUN" and proposal.status == "PENDING" then
             if self:CheckAllProposalMembersAccepted(proposal) then
                 proposal.status = "CONFIRMED"
                 db.pendingProposalId = nil

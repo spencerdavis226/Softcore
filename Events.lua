@@ -287,6 +287,9 @@ function SC:Events_Register()
             if SC.CheckMaxLevelGap then
                 SC:CheckMaxLevelGap(true)
             end
+            if SC.CheckPendingProposalOnRosterUpdate then
+                SC:CheckPendingProposalOnRosterUpdate()
+            end
             if C_Timer and C_Timer.After then
                 C_Timer.After(2, function()
                     Broadcast("GROUP_ROSTER_UPDATE")
