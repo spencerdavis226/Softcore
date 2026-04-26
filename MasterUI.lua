@@ -30,7 +30,6 @@ local PANEL_HEIGHT = 500
 local BODY_TEXT = { r = 0.94, g = 0.86, b = 0.68 }
 local MUTED_TEXT = { r = 0.68, g = 0.56, b = 0.38 }
 local GOLD_TEXT = { r = 1.00, g = 0.82, b = 0.20 }
-local LOGO_TEXTURE = "Interface\\AddOns\\Softcore\\Assets\\SoftcoreLogo"
 
 local GROUPING_OPTIONS = {
     { text = "Group", value = "SYNCED_GROUP_ALLOWED" },
@@ -891,20 +890,15 @@ function SC:OpenMasterWindow(focusTab)
     frame.activeTab = NormalizeTab(focusTab)
     frame.panels = {}
 
-    local logo = frame:CreateTexture(nil, "ARTWORK")
-    logo:SetSize(34, 34)
-    logo:SetPoint("TOPLEFT", frame, "TOPLEFT", 28, -17)
-    logo:SetTexture(LOGO_TEXTURE)
-    logo:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 8, -5)
+    title:SetPoint("TOPLEFT", frame, "TOPLEFT", 28, -18)
+    title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
     title:SetText("|cffffd700Softcore|r")
 
     local subtitle = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    subtitle:SetPoint("LEFT", title, "RIGHT", 12, -1)
+    subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
     subtitle:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
-    subtitle:SetText("Hardcore-style run ledger")
+    subtitle:SetText("Hardcore-style run ledger for group accountability")
 
     local closeBtn = CreateFrame("Button", "SoftcoreMasterCloseButton", frame, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 4, 4)

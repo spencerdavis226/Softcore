@@ -229,7 +229,7 @@ end
 
 -- ── Minimap button ───────────────────────────────────────────────────────────
 
-local MINIMAP_RADIUS = 82
+local MINIMAP_RADIUS = 98
 
 local function GetMinimapUI()
     SoftcoreDB = SoftcoreDB or {}
