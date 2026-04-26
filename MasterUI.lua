@@ -30,6 +30,7 @@ local PANEL_HEIGHT = 500
 local BODY_TEXT = { r = 0.94, g = 0.86, b = 0.68 }
 local MUTED_TEXT = { r = 0.68, g = 0.56, b = 0.38 }
 local GOLD_TEXT = { r = 1.00, g = 0.82, b = 0.20 }
+local MENU_LOGO_TEXTURE = "Interface\\AddOns\\Softcore\\Assets\\SoftcoreLogoMenu"
 
 local GROUPING_OPTIONS = {
     { text = "Group", value = "SYNCED_GROUP_ALLOWED" },
@@ -890,8 +891,14 @@ function SC:OpenMasterWindow(focusTab)
     frame.activeTab = NormalizeTab(focusTab)
     frame.panels = {}
 
+    local logo = frame:CreateTexture(nil, "ARTWORK")
+    logo:SetSize(40, 40)
+    logo:SetPoint("TOPLEFT", frame, "TOPLEFT", 26, -15)
+    logo:SetTexture(MENU_LOGO_TEXTURE)
+    logo:SetTexCoord(0.05, 0.95, 0.05, 0.95)
+
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", frame, "TOPLEFT", 28, -18)
+    title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 10, -4)
     title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
     title:SetText("|cffffd700Softcore|r")
 
