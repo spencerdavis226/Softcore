@@ -1099,6 +1099,9 @@ function SC:StartRun(runOptions)
     if self.Achievements_OnRunStart then
         self:Achievements_OnRunStart(runOptions)
     end
+    if self.ScanEquippedGear then
+        self:ScanEquippedGear(true)
+    end
     self:RefreshParticipantsFromRoster()
     self:PlayUISound("RUN_STARTED")
     Print("run started.")
