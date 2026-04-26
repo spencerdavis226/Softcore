@@ -349,16 +349,10 @@ local ACTIONCAM_CVAR_FALLBACK_DEFAULTS = {
 
 local actionCamOriginals = nil
 
--- Zoom is re-checked every ~0.2s; ActionCam focus (interact/enemy) moves zoom while blending.
--- Fighting that with CameraZoomIn/Out causes snapping. Pause correction during NPC UI and
--- for a short window when zoom changes on its own (focus animation or mouse wheel).
+-- Zoom is re-checked every ~0.2s. test_cameraTargetFocus* modes change zoom to frame targets;
+-- a fixed 5/7 lock fights that and causes snap oscillation, so we skip zoom lock while either
+-- focus option is enabled. Pause correction during NPC UI when focus is off (optional safety).
 local actionCamZoomLastSample = nil
-local actionCamZoomSuppressUntil = 0
--- Require a real step change between ticks; ActionCam / pitch can jitter below this.
-local ACTION_CAM_ZOOM_MOVE_THRESHOLD = 0.28
--- Only arm backoff when zoom is still meaningfully wrong (avoid endless re-arm near target).
-local ACTION_CAM_ZOOM_SUPPRESS_MIN_ERR = 0.95
-local ACTION_CAM_ZOOM_SUPPRESS_SEC = 0.85
 
 local function IsNpcInteractionZoomPause()
     return (GossipFrame and GossipFrame:IsShown())
@@ -439,7 +433,6 @@ function SC:RestoreActionCamSettings()
     end
     actionCamOriginals = nil
     actionCamZoomLastSample = nil
-    actionCamZoomSuppressUntil = 0
     if db then
         db.actionCamCvarBackup = nil
     end
@@ -515,24 +508,12 @@ function SC:EnforceActionCamSettings()
 
     -- First-person rule owns zoom=0; skip zoom enforcement when it's active.
     if not IsFirstPersonEnforced() then
-        local now = GetTime()
         local current = GetCameraZoom and GetCameraZoom() or target
-
         local focusZoomBlend = (ruleset.actionCamInteractFocus ~= false) or (ruleset.actionCamEnemyFocus ~= false)
-        if not focusZoomBlend then
-            actionCamZoomSuppressUntil = 0
-        end
 
-        if IsNpcInteractionZoomPause() then
-            actionCamZoomLastSample = current
-        elseif now < actionCamZoomSuppressUntil then
-            actionCamZoomLastSample = current
-        elseif focusZoomBlend
-            and actionCamZoomLastSample
-            and math.abs(current - actionCamZoomLastSample) > ACTION_CAM_ZOOM_MOVE_THRESHOLD
-            and math.abs(current - target) > ACTION_CAM_ZOOM_SUPPRESS_MIN_ERR
-        then
-            actionCamZoomSuppressUntil = now + ACTION_CAM_ZOOM_SUPPRESS_SEC
+        if focusZoomBlend then
+            actionCamZoomLastSample = nil
+        elseif IsNpcInteractionZoomPause() then
             actionCamZoomLastSample = current
         else
             local delta = current - target
