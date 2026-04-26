@@ -349,6 +349,24 @@ local ACTIONCAM_CVAR_FALLBACK_DEFAULTS = {
 
 local actionCamOriginals = nil
 
+-- Zoom is re-checked every ~0.2s; ActionCam focus (interact/enemy) moves zoom while blending.
+-- Fighting that with CameraZoomIn/Out causes snapping. Pause correction during NPC UI and
+-- for a short window when zoom changes on its own (focus animation or mouse wheel).
+local actionCamZoomLastSample = nil
+local actionCamZoomSuppressUntil = 0
+local ACTION_CAM_ZOOM_MOVE_THRESHOLD = 0.11
+local ACTION_CAM_ZOOM_SUPPRESS_SEC = 1.45
+
+local function IsNpcInteractionZoomPause()
+    return (GossipFrame and GossipFrame:IsShown())
+        or (MerchantFrame and MerchantFrame:IsShown())
+        or (QuestFrame and QuestFrame:IsShown())
+        or (ItemTextFrame and ItemTextFrame:IsShown())
+        or (ClassTrainerFrame and ClassTrainerFrame:IsShown())
+        or (TaxiFrame and TaxiFrame:IsShown())
+        or (GuildRegistrarFrame and GuildRegistrarFrame:IsShown())
+end
+
 local function CaptureActionCamOriginals()
     if actionCamOriginals then return end
     local db = GetDB()
@@ -417,6 +435,8 @@ function SC:RestoreActionCamSettings()
         if v ~= nil then SetCVarCompat(key, v) end
     end
     actionCamOriginals = nil
+    actionCamZoomLastSample = nil
+    actionCamZoomSuppressUntil = 0
     if db then
         db.actionCamCvarBackup = nil
     end
@@ -492,12 +512,24 @@ function SC:EnforceActionCamSettings()
 
     -- First-person rule owns zoom=0; skip zoom enforcement when it's active.
     if not IsFirstPersonEnforced() then
+        local now = GetTime()
         local current = GetCameraZoom and GetCameraZoom() or target
-        local delta = current - target
-        if delta > 0.5 then
-            CameraZoomIn(delta)
-        elseif delta < -0.5 then
-            CameraZoomOut(-delta)
+
+        if IsNpcInteractionZoomPause() then
+            actionCamZoomLastSample = current
+        elseif now < actionCamZoomSuppressUntil then
+            actionCamZoomLastSample = current
+        elseif actionCamZoomLastSample and math.abs(current - actionCamZoomLastSample) > ACTION_CAM_ZOOM_MOVE_THRESHOLD then
+            actionCamZoomSuppressUntil = now + ACTION_CAM_ZOOM_SUPPRESS_SEC
+            actionCamZoomLastSample = current
+        else
+            local delta = current - target
+            if delta > 0.5 then
+                CameraZoomIn(delta)
+            elseif delta < -0.5 then
+                CameraZoomOut(-delta)
+            end
+            actionCamZoomLastSample = GetCameraZoom and GetCameraZoom() or current
         end
     end
 end
