@@ -72,11 +72,11 @@ local function FormatDeathAnnouncementChannels(channels)
 end
 
 local function GetGroupAnnouncementChannel()
+    if IsInRaid() then
+        return nil
+    end
     if IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then
         return "INSTANCE_CHAT"
-    end
-    if IsInRaid() then
-        return "RAID"
     end
     if IsInGroup() then
         return "PARTY"
@@ -245,12 +245,7 @@ local function GetCurrentPartyKeys()
     keys[GetPlayerKey()] = true
 
     if IsInRaid() then
-        for index = 1, GetNumGroupMembers() do
-            local name, realm = UnitFullName("raid" .. index)
-            if name then
-                keys[BuildPlayerKey(name, realm)] = true
-            end
-        end
+        return keys
     elseif IsInGroup() then
         for index = 1, GetNumSubgroupMembers() do
             local name, realm = UnitFullName("party" .. index)
@@ -917,6 +912,12 @@ function SC:GetDerivedPartyStatus()
         return db.run.partyStatus
     end
 
+    if IsInRaid() then
+        db.run.levelGapBlocked = false
+        db.run.partyStatus = "VALID"
+        return db.run.partyStatus
+    end
+
     if db.run.levelGapBlocked then
         db.run.partyStatus = "BLOCKED"
         return db.run.partyStatus
@@ -1550,7 +1551,7 @@ function SC:AnnounceLocalDeath(detail)
     if channels.PARTY then
         local channel = GetGroupAnnouncementChannel()
         if not channel then
-            Print("death announcement skipped: not in a group.")
+            Print(IsInRaid() and "death announcement skipped: raid groups are not supported." or "death announcement skipped: not in a group.")
         else
             SendChatMessage(message, channel)
             announced = true

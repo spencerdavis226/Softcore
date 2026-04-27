@@ -189,12 +189,7 @@ local function GetCurrentPartyLevels()
     end
 
     if IsInRaid() then
-        for index = 1, GetNumGroupMembers() do
-            local level = UnitLevel("raid" .. index)
-            if level and level > 0 then
-                table.insert(levels, level)
-            end
-        end
+        return levels
     elseif IsInGroup() then
         for index = 1, GetNumSubgroupMembers() do
             local level = UnitLevel("party" .. index)
@@ -253,7 +248,7 @@ function SC:CheckMaxLevelGap(force)
 end
 
 local function HasUnsyncedPartyMembers()
-    if not IsInGroup() then
+    if not IsInGroup() or IsInRaid() then
         return false
     end
 

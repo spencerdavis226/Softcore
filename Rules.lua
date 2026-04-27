@@ -142,13 +142,7 @@ local function GetCurrentPartyKeys()
     end
 
     if IsInRaid() then
-        for index = 1, GetNumGroupMembers() do
-            local name, realm = UnitFullName("raid" .. index)
-            if name then
-                if not realm or realm == "" then realm = GetRealmName() end
-                keys[name .. "-" .. realm] = true
-            end
-        end
+        return keys
     elseif IsInGroup() then
         for index = 1, GetNumSubgroupMembers() do
             local name, realm = UnitFullName("party" .. index)
@@ -358,6 +352,10 @@ function SC:ApplyRuleOutcome(ruleName, context)
 end
 
 function SC:ProposeRuleAmendment(newRules, reason)
+    if IsInRaid() then
+        DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r Raid groups are not supported for rule amendments. Changes will stay local.")
+    end
+
     local db = GetDB()
     local amendment = {
         id = CreateAmendmentId(),

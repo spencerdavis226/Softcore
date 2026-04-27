@@ -80,12 +80,12 @@ local function Decode(message)
 end
 
 local function GetSyncChannel()
-    if IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then
-        return "INSTANCE_CHAT"
+    if IsInRaid() then
+        return nil
     end
 
-    if IsInRaid() then
-        return "RAID"
+    if IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then
+        return "INSTANCE_CHAT"
     end
 
     if IsInGroup() then
@@ -189,12 +189,7 @@ local function GetRosterKeys()
     local keys = {}
 
     if IsInRaid() then
-        for index = 1, GetNumGroupMembers() do
-            local key = GetUnitFullName("raid" .. index)
-            if key then
-                table.insert(keys, key)
-            end
-        end
+        table.insert(keys, PlayerKey(UnitFullName("player")))
     elseif IsInGroup() then
         table.insert(keys, PlayerKey(UnitFullName("player")))
 
@@ -941,7 +936,7 @@ function SC:Sync_Initialize()
     syncFrame = CreateFrame("Frame")
     syncFrame:RegisterEvent("CHAT_MSG_ADDON")
     syncFrame:SetScript("OnEvent", function(_, _, prefix, message, channel, sender)
-        if prefix == PREFIX and (channel == "PARTY" or channel == "RAID" or channel == "INSTANCE_CHAT") then
+        if prefix == PREFIX and (channel == "PARTY" or channel == "INSTANCE_CHAT") then
             SC:Sync_HandleMessage(message, sender)
         end
     end)

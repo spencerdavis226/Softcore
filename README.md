@@ -99,7 +99,7 @@ Declining cancels the proposal for everyone. Pending proposals expire after 30 m
 
 ## Existing Runs And Party Sync
 
-Softcore syncs over Blizzard addon messages using the `SOFTCORE` prefix. It automatically uses party, raid, or instance chat depending on group type.
+Softcore syncs over Blizzard addon messages using the `SOFTCORE` prefix. It supports normal parties only; raid groups are treated as local-only and show a raid-unsupported note instead of syncing or displaying a 40-player roster.
 
 Status heartbeats are sent every 10 seconds. Reloading or rejoining may briefly show Unsynced until addon messages arrive. Use `/sc resync` or the Overview Resync button if the display looks stale.
 

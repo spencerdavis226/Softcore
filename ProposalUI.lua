@@ -102,13 +102,7 @@ local function GetCurrentPartyKeys()
     keys[(name or "Unknown") .. "-" .. (realm or "Unknown")] = true
 
     if IsInRaid() then
-        for i = 1, GetNumGroupMembers() do
-            local n, r = UnitFullName("raid" .. i)
-            if n then
-                if not r or r == "" then r = GetRealmName() end
-                keys[n .. "-" .. r] = true
-            end
-        end
+        return keys
     elseif IsInGroup() then
         for i = 1, GetNumSubgroupMembers() do
             local n, r = UnitFullName("party" .. i)
@@ -259,7 +253,7 @@ function SC:CanProposeRun()
     local db = self.db or SoftcoreDB
     local participant = db and db.run and db.run.participants and db.run.participants[self:GetPlayerKey()]
 
-    if not IsInGroup() then
+    if not IsInGroup() or IsInRaid() then
         return true
     end
 
@@ -331,6 +325,11 @@ function SC:CheckPendingProposalOnRosterUpdate()
 end
 
 function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, runId)
+    if IsInRaid() then
+        Print("raid groups are not supported for run proposals.")
+        return nil
+    end
+
     if not self:CanProposeRun() then
         Print("only the party leader or an active participant can propose a run.")
         return nil
@@ -386,8 +385,8 @@ end
 
 function SC:CreateRunSyncProposal()
     local db = GetDB()
-    if not IsInGroup() then
-        Print("run sync proposals require a party.")
+    if not IsInGroup() or IsInRaid() then
+        Print(IsInRaid() and "raid groups are not supported for run sync proposals." or "run sync proposals require a party.")
         return nil
     end
     if not db.run or not db.run.active then
@@ -400,8 +399,8 @@ end
 
 function SC:CreateRunInviteProposal()
     local db = GetDB()
-    if not IsInGroup() then
-        Print("party invites require a party.")
+    if not IsInGroup() or IsInRaid() then
+        Print(IsInRaid() and "raid groups are not supported for party invites." or "party invites require a party.")
         return nil
     end
     if not db.run or not db.run.active then
