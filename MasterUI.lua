@@ -48,6 +48,13 @@ local GROUPING_OPTIONS = {
     { text = "Solo Only", value = "SOLO_SELF_FOUND" },
 }
 
+local DEATH_ANNOUNCE_OPTIONS = {
+    { text = "Off", value = "OFF" },
+    { text = "Chat", value = "CHAT" },
+    { text = "Party", value = "PARTY" },
+    { text = "Guild", value = "GUILD" },
+}
+
 local GEAR_OPTIONS = {
     { text = "Any gear", value = "ALLOWED" },
     { text = "White/gray only", value = "WHITE_GRAY_ONLY" },
@@ -1090,6 +1097,7 @@ local function HideAllRunControls(frame)
     if frame.start.chefBtn then frame.start.chefBtn:Hide() end
     for _, control in ipairs(frame.start.controls) do control:Hide() end
     frame.start.groupingDropdown:Hide()
+    if frame.start.deathAnnounceDropdown then frame.start.deathAnnounceDropdown:Hide() end
     frame.start.gearDropdown:Hide()
     frame.start.maxGapBox:Hide()
     frame.start.primaryBtn:Hide()
@@ -1211,6 +1219,7 @@ local function RefreshRunPanel(frame)
         local proposer = FormatPlayerLabel(pendingProposal.proposedBy)
         CopyRulesInto(frame.start.selectedRules, pendingProposal.ruleset)
         frame.start.groupingDropdown:SetShown(true)
+        if frame.start.deathAnnounceDropdown then frame.start.deathAnnounceDropdown:SetShown(true) end
         frame.start.gearDropdown:SetShown(true)
         frame.start.maxGapBox:SetShown(true)
         if frame.start.presetLabel then frame.start.presetLabel:SetShown(false) end
@@ -1286,6 +1295,7 @@ local function RefreshRunPanel(frame)
     end
 
     frame.start.groupingDropdown:SetShown(true)
+    if frame.start.deathAnnounceDropdown then frame.start.deathAnnounceDropdown:SetShown(true) end
     frame.start.gearDropdown:SetShown(true)
     frame.start.maxGapBox:SetShown(true)
     if frame.start.presetLabel then frame.start.presetLabel:SetShown(true) end
@@ -1335,6 +1345,9 @@ local function RefreshRunPanel(frame)
     frame.start.applyChangesBtn:SetShown(modifying)
     frame.start.cancelChangesBtn:SetShown(modifying)
     SetRunSetupEnabled(frame, (not active) or modifying)
+    if frame.start.deathAnnounceDropdown and UIDropDownMenu_EnableDropDown then
+        UIDropDownMenu_EnableDropDown(frame.start.deathAnnounceDropdown)
+    end
     if active and not modifying then
         frame.start.casualBtn:SetEnabled(false)
         frame.start.ironmanBtn:SetEnabled(false)

@@ -13,6 +13,36 @@ local function Print(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r " .. tostring(message))
 end
 
+local function NormalizeDeathAnnouncementMode(value)
+    value = string.lower(tostring(value or ""))
+    if value == "" or value == "off" or value == "none" or value == "disabled" then
+        return "OFF"
+    end
+    if value == "chat" or value == "local" then
+        return "CHAT"
+    end
+    if value == "party" or value == "group" then
+        return "PARTY"
+    end
+    if value == "guild" then
+        return "GUILD"
+    end
+    return nil
+end
+
+local function GetGroupAnnouncementChannel()
+    if IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then
+        return "INSTANCE_CHAT"
+    end
+    if IsInRaid() then
+        return "RAID"
+    end
+    if IsInGroup() then
+        return "PARTY"
+    end
+    return nil
+end
+
 function SC:PlayUISound(event)
     if not PlaySound then return end
     local SK = _G["SOUNDKIT"] or {}
@@ -262,6 +292,8 @@ local function EnsureDatabase()
     SoftcoreDB.pendingProposalId = SoftcoreDB.pendingProposalId or nil
     SoftcoreDB.acceptedRunId = SoftcoreDB.acceptedRunId or nil
     SoftcoreDB.acceptedRulesetHash = SoftcoreDB.acceptedRulesetHash or nil
+    SoftcoreDB.settings = SoftcoreDB.settings or {}
+    SoftcoreDB.settings.deathAnnouncements = SoftcoreDB.settings.deathAnnouncements or "OFF"
     SoftcoreDB.sync = SoftcoreDB.sync or {}
     SoftcoreDB.sync.remoteSequences = SoftcoreDB.sync.remoteSequences or {}
     SoftcoreDB.sync.localSequence = SoftcoreDB.sync.localSequence or 0
@@ -1301,6 +1333,73 @@ function SC:PrintRun()
     Print("governance: " .. tostring(db.run.governance.mode))
 end
 
+function SC:GetDeathAnnouncementMode()
+    local db = EnsureDatabase()
+    local mode = NormalizeDeathAnnouncementMode(db.settings and db.settings.deathAnnouncements) or "OFF"
+    db.settings.deathAnnouncements = mode
+    return mode
+end
+
+function SC:SetDeathAnnouncementMode(mode)
+    local normalized = NormalizeDeathAnnouncementMode(mode)
+    if not normalized then
+        return false, "usage: /sc announce off|chat|party|guild"
+    end
+
+    local db = EnsureDatabase()
+    db.settings.deathAnnouncements = normalized
+    return true, "death announcements: " .. string.lower(normalized)
+end
+
+function SC:PrintDeathAnnouncementSettings()
+    Print("death announcements: " .. string.lower(self:GetDeathAnnouncementMode()))
+    Print("usage: /sc announce off|chat|party|guild")
+end
+
+function SC:AnnounceLocalDeath(detail)
+    local db = EnsureDatabase()
+    local mode = self:GetDeathAnnouncementMode()
+    if mode == "OFF" then
+        return false
+    end
+
+    local character = db.character or GetPlayerSnapshot()
+    local run = db.run or {}
+    local message = "Softcore death: " .. tostring(character.name or "Unknown")
+        .. " level " .. tostring(character.level or UnitLevel("player") or "?")
+        .. " in " .. tostring(character.zone or GetRealZoneText() or "Unknown")
+        .. " - " .. tostring(detail or "character died.")
+    if run.runName then
+        message = message .. " (" .. tostring(run.runName) .. ")"
+    end
+
+    if mode == "CHAT" then
+        Print(message)
+        return true
+    end
+
+    if mode == "PARTY" then
+        local channel = GetGroupAnnouncementChannel()
+        if not channel then
+            Print("death announcement skipped: not in a group.")
+            return false
+        end
+        SendChatMessage(message, channel)
+        return true
+    end
+
+    if mode == "GUILD" then
+        if not IsInGuild() then
+            Print("death announcement skipped: not in a guild.")
+            return false
+        end
+        SendChatMessage(message, "GUILD")
+        return true
+    end
+
+    return false
+end
+
 function SC:PrintConflicts()
     local db = EnsureDatabase()
     local found = false
@@ -1408,6 +1507,7 @@ function SC:PrintHelp()
     Print("  /sc accept | decline")
     Print("  /sc propose       propose a grouped run")
     Print("  /sc propose-add Player-Realm")
+    Print("  /sc announce off|chat|party|guild")
     Print("  /sc resync        re-sync state with party")
     Print("  /sc hud | minimap toggle UI surfaces")
     Print("  /sc reset | retire")
@@ -1498,6 +1598,14 @@ function SC:HandleSlash(input)
         end
     elseif command == "conflicts" then
         self:PrintConflicts()
+    elseif command == "announce" or command == "deathannounce" then
+        local mode = string.lower(strtrim(rest or ""))
+        if mode == "" then
+            self:PrintDeathAnnouncementSettings()
+        else
+            local _, message = self:SetDeathAnnouncementMode(mode)
+            Print(message)
+        end
     elseif command == "resync" then
         if self.Sync_RequestFullState then
             self:Sync_RequestFullState()

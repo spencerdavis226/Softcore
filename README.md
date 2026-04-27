@@ -74,6 +74,7 @@ Common commands:
 | `/sc propose-add Player-Realm` | Invite a party member into the current run |
 | `/sc access` | Print access/storage rules |
 | `/sc run chat` | Print run integrity summary |
+| `/sc announce off\|chat\|party\|guild` | Configure optional local death announcements |
 | `/sc rule name value` | Change or propose a single rule value |
 
 ## Starting Runs
@@ -141,6 +142,8 @@ Non-death disallowed actions generally create violations. Examples include disal
 Clearing a violation marks it cleared, records who cleared it and when, and preserves the audit trail. Death and fatal/character-fail violations are not clearable.
 
 Remote violations may be displayed and shared as audit records for the same synced run, but they do not directly mutate local character validity.
+
+Optional death announcements are local-player only and default to off. Use `/sc announce chat`, `/sc announce party`, or `/sc announce guild` if you want Softcore to announce your own deaths; incoming announcements never change your local run state.
 
 ## Persistence And Safety
 

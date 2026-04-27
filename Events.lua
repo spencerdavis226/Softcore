@@ -47,6 +47,7 @@ local function HandlePlayerDead()
 
     db.run.deathCount = (db.run.deathCount or 0) + 1
     participant.deathCount = (participant.deathCount or 0) + 1
+    local announcementDetail
 
     local maxDeaths = db.run.ruleset and db.run.ruleset.maxDeaths
     local maxDeathsValue = tonumber(db.run.ruleset and db.run.ruleset.maxDeathsValue) or 1
@@ -54,6 +55,7 @@ local function HandlePlayerDead()
     if maxDeaths and maxDeathsValue > 1 then
         if participant.deathCount >= maxDeathsValue then
             local detail = "Death limit reached (" .. participant.deathCount .. "/" .. maxDeathsValue .. " deaths)."
+            announcementDetail = detail
             SC:AddLog("DEATH", detail)
             SC:MarkParticipantFailed(playerKey, detail)
             SC:AddViolation("death", detail, "FATAL", playerKey)
@@ -61,6 +63,7 @@ local function HandlePlayerDead()
         else
             local remaining = maxDeathsValue - participant.deathCount
             local detail = "Died (" .. participant.deathCount .. "/" .. maxDeathsValue .. " deaths, " .. remaining .. " remaining)."
+            announcementDetail = detail
             SC:AddLog("DEATH", detail)
             db.run.warningCount = (db.run.warningCount or 0) + 1
             if participant.status == "ACTIVE" then
@@ -70,14 +73,18 @@ local function HandlePlayerDead()
             DEFAULT_CHAT_FRAME:AddMessage("|cfffbbf24Softcore: death recorded — " .. remaining .. " life/lives remaining.|r")
         end
     else
+        announcementDetail = "Character died. Character failed permanently."
         SC:AddLog("DEATH", "Character died. Run failed permanently.")
         SC:ApplyRuleOutcome("death", {
             playerKey = playerKey,
-            detail = "Character died. Character failed permanently.",
+            detail = announcementDetail,
         })
         DEFAULT_CHAT_FRAME:AddMessage("|cffff5555Softcore: character failed due to death.|r")
     end
 
+    if SC.AnnounceLocalDeath then
+        SC:AnnounceLocalDeath(announcementDetail)
+    end
     Broadcast("PLAYER_DEAD")
 end
 
