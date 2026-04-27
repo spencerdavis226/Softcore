@@ -202,12 +202,12 @@ function SC:GetAchievementDefinitions()
     AddDefinition(result, "acct_first_run", "ACCOUNT", "Account", "First Steps", "Start your first Softcore run on this account.", "BINARY")
 
     for level = 10, maxLevel, 10 do
-        AddDefinition(result, "char_level_" .. tostring(level), "ACCOUNT", "Leveling", "Still Breathing: " .. tostring(level), "Reach level " .. tostring(level) .. " during an active Softcore run.", "LEVEL", level)
+        AddDefinition(result, "char_level_" .. tostring(level), "ACCOUNT", "Leveling", "Still Breathing: " .. tostring(level), "Reach level " .. tostring(level) .. " in an active run started at level 10 or below.", "LEVEL", level)
     end
 
     for level = 30, maxLevel, 10 do
         local name = CLEAN_LEVEL_NAMES[level] or ("Clean Climb: " .. tostring(level))
-        AddDefinition(result, "char_clean_level_" .. tostring(level), "ACCOUNT", "Leveling", name, "Reach level " .. tostring(level) .. " on an eligible run with no violations.", "LEVEL_CLEAN", level)
+        AddDefinition(result, "char_clean_level_" .. tostring(level), "ACCOUNT", "Leveling", name, "Reach level " .. tostring(level) .. " with no violations in a run started at level 10 or below.", "LEVEL_CLEAN", level)
     end
 
     AddDefinition(result, "char_max_level", "ACCOUNT", "Max Level", "Softcore Champion", "Reach max level after starting the run at level 10 or below.", "MAX_LEVEL")
@@ -247,6 +247,9 @@ local function BuildProgress(definition, earned)
         if not eligibility or not eligibility.createdAtRunStart then
             return 0, "Start an active run"
         end
+        if not eligibility.startedAtOrBelow10 then
+            return 0, "Started above level 10"
+        end
         if eligibility.failed then
             return 0, "Failed this run"
         end
@@ -261,6 +264,9 @@ local function BuildProgress(definition, earned)
         if target <= 0 then return 0, "Not earned" end
         if not eligibility or not eligibility.createdAtRunStart then
             return 0, "Start an active run"
+        end
+        if not eligibility.startedAtOrBelow10 then
+            return 0, "Started above level 10"
         end
         if eligibility.failed then
             return 0, "Failed this run"
@@ -502,13 +508,13 @@ function SC:Achievements_OnLevelChanged(level)
     local startLevel = tonumber(eligibility.startLevel or db.run.startLevel or 0) or 0
 
     for milestone = 10, maxLevel, 10 do
-        if level >= milestone and milestone >= startLevel then
+        if eligibility.startedAtOrBelow10 and level >= milestone and milestone >= startLevel then
             Earn("char_level_" .. tostring(milestone), "CHARACTER", "Still Breathing: " .. tostring(milestone))
         end
     end
 
     for milestone = 30, maxLevel, 10 do
-        if level >= milestone and milestone >= startLevel and not eligibility.hadViolation then
+        if eligibility.startedAtOrBelow10 and level >= milestone and milestone >= startLevel and not eligibility.hadViolation then
             Earn("char_clean_level_" .. tostring(milestone), "CHARACTER", CLEAN_LEVEL_NAMES[milestone] or ("Clean Climb: " .. tostring(milestone)))
         end
     end
