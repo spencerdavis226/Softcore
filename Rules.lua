@@ -133,6 +133,34 @@ local function GetDB()
     return SoftcoreDB
 end
 
+local function GetCurrentPartyKeys()
+    local keys = {}
+    local playerKey = SC.GetPlayerKey and SC:GetPlayerKey()
+    if playerKey then
+        keys[playerKey] = true
+    end
+
+    if IsInRaid() then
+        for index = 1, GetNumGroupMembers() do
+            local name, realm = UnitFullName("raid" .. index)
+            if name then
+                if not realm or realm == "" then realm = GetRealmName() end
+                keys[name .. "-" .. realm] = true
+            end
+        end
+    elseif IsInGroup() then
+        for index = 1, GetNumSubgroupMembers() do
+            local name, realm = UnitFullName("party" .. index)
+            if name then
+                if not realm or realm == "" then realm = GetRealmName() end
+                keys[name .. "-" .. realm] = true
+            end
+        end
+    end
+
+    return keys
+end
+
 local function IsAmendmentExpired(amendment)
     return time() - (tonumber(amendment and amendment.proposedAt) or time()) > AMENDMENT_TIMEOUT_SECONDS
 end
@@ -219,6 +247,9 @@ end
 
 function SC:IsRunFailed()
     local db = self.db or SoftcoreDB
+    if self.IsLocalCharacterFailed then
+        return self:IsLocalCharacterFailed()
+    end
     return db and db.run and db.run.failed == true
 end
 
@@ -245,6 +276,16 @@ function SC:SetRule(ruleName, value)
 
     if self:GetRule(ruleName) == normalized then
         return true, "rule unchanged: " .. ruleName .. " is already " .. tostring(normalized)
+    end
+
+    local db = GetDB()
+    if not db.run.active then
+        db.run.ruleset[ruleName] = normalized
+        if self.ApplyGroupingMode then
+            self:ApplyGroupingMode(db.run.ruleset)
+        end
+        db.run.ruleset.version = (tonumber(db.run.ruleset.version) or 1) + 1
+        return true, "rule updated: " .. ruleName .. " = " .. tostring(normalized)
     end
 
     local amendment = self:ProposeRuleAmendment({
@@ -331,7 +372,10 @@ function SC:ProposeRuleAmendment(newRules, reason)
         declinedAt = nil,
         declinedBy = nil,
         appliedAt = nil,
+        acceptances = {},
+        partyAtProposalTime = GetCurrentPartyKeys(),
     }
+    amendment.acceptances[amendment.proposedBy] = true
 
     for ruleName in pairs(newRules or {}) do
         amendment.previousRules[ruleName] = db.run.ruleset[ruleName]
@@ -365,6 +409,8 @@ function SC:AcceptRuleAmendment(amendmentId)
                 amendment.status = "ACCEPTED"
                 amendment.acceptedAt = time()
                 amendment.acceptedBy = self:GetPlayerKey()
+                amendment.acceptances = amendment.acceptances or {}
+                amendment.acceptances[amendment.acceptedBy] = true
                 self:AddLog("RULE_AMENDMENT_ACCEPTED", "Rule amendment accepted.", {
                     amendmentId = amendment.id,
                 })
@@ -470,8 +516,17 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
         if existing.id == amendmentId then return end
     end
 
+    for _, existing in ipairs(db.ruleAmendments) do
+        if existing.status == "PENDING" then return end
+    end
+
     local newRules = self.DeserializePartialRules and self:DeserializePartialRules(payload.newRules) or {}
     local previousRules = self.DeserializePartialRules and self:DeserializePartialRules(payload.previousRules) or {}
+    for ruleName, value in pairs(newRules) do
+        if db.run.ruleset[ruleName] == nil or not IsValidRuleValue(ruleName, value) then
+            return
+        end
+    end
 
     local amendment = {
         id = amendmentId,
@@ -481,7 +536,7 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
         reason = payload.reason or "Rule amendment proposed.",
         status = "PENDING",
         proposedAt = tonumber(payload.proposedAt) or time(),
-        proposedBy = payload.proposedBy or senderKey,
+        proposedBy = senderKey,
         remote = true,
     }
 
@@ -505,6 +560,9 @@ function SC:ReceiveRuleAmendmentResponse(payload, senderKey)
     for _, amendment in ipairs(db.ruleAmendments) do
         if amendment.id == amendmentId and amendment.status == "PENDING" then
             if amendment.proposedBy ~= localKey then return end
+            if payload.runId and amendment.runId and payload.runId ~= amendment.runId then return end
+            local currentParty = GetCurrentPartyKeys()
+            if not currentParty[senderKey] then return end
             if IsAmendmentExpired(amendment) then
                 amendment.status = "EXPIRED"
                 amendment.expiredAt = time()
@@ -516,10 +574,10 @@ function SC:ReceiveRuleAmendmentResponse(payload, senderKey)
                 amendment.acceptances = amendment.acceptances or {}
                 amendment.acceptances[senderKey] = true
 
-                local syncRows = self.Sync_GetGroupRows and self:Sync_GetGroupRows() or {}
+                local partyAtProposalTime = amendment.partyAtProposalTime or currentParty
                 local allAccepted = true
-                for _, peer in ipairs(syncRows) do
-                    if peer.playerKey and not amendment.acceptances[peer.playerKey] then
+                for memberKey in pairs(partyAtProposalTime) do
+                    if currentParty[memberKey] and not amendment.acceptances[memberKey] then
                         allAccepted = false
                         break
                     end
@@ -551,13 +609,15 @@ function SC:ReceiveRuleAmendmentResponse(payload, senderKey)
     end
 end
 
-function SC:ReceiveRuleAmendmentApplied(payload)
+function SC:ReceiveRuleAmendmentApplied(payload, senderKey)
     local db = GetDB()
     local amendmentId = payload.amendmentId
     if not amendmentId then return end
 
     for _, amendment in ipairs(db.ruleAmendments) do
-        if amendment.id == amendmentId and (amendment.status == "PENDING" or amendment.status == "ACCEPTED") then
+        if amendment.id == amendmentId and amendment.status == "ACCEPTED" then
+            if senderKey ~= amendment.proposedBy then return end
+            if payload.runId and amendment.runId and payload.runId ~= amendment.runId then return end
             if IsAmendmentExpired(amendment) then
                 amendment.status = "EXPIRED"
                 amendment.expiredAt = time()
@@ -574,21 +634,27 @@ function SC:ReceiveRuleAmendmentApplied(payload)
     if self.MasterUI_Refresh then self:MasterUI_Refresh() end
 end
 
-function SC:ReceiveRuleAmendmentCancelled(payload)
+function SC:ReceiveRuleAmendmentCancelled(payload, senderKey)
     local db = GetDB()
     local amendmentId = payload.amendmentId
     if not amendmentId then return end
+    local cancelled = false
 
     for _, amendment in ipairs(db.ruleAmendments) do
         if amendment.id == amendmentId and amendment.status == "PENDING" then
+            if senderKey ~= amendment.proposedBy then return end
+            if payload.runId and amendment.runId and payload.runId ~= amendment.runId then return end
             amendment.status = "DECLINED"
             amendment.declinedAt = time()
+            cancelled = true
             break
         end
     end
 
-    DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r |cfffbbf24Rule amendment was cancelled.|r")
-    if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+    if cancelled then
+        DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r |cfffbbf24Rule amendment was cancelled.|r")
+        if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+    end
 end
 
 function SC:GetRuleOrder()

@@ -229,6 +229,11 @@ function SC:GetPendingProposal()
     if db.pendingProposalId then
         local proposal = db.proposals[db.pendingProposalId]
         if proposal and (proposal.status == "PENDING" or proposal.status == "ACCEPTED") then
+            if db.run and db.run.active and db.run.runId and proposal.runId and proposal.runId ~= db.run.runId then
+                proposal.status = "EXPIRED"
+                db.pendingProposalId = nil
+                return nil
+            end
             local createdAt = tonumber(proposal.proposedAt) or time()
             if time() - createdAt > PROPOSAL_TIMEOUT_SECONDS then
                 proposal.status = "EXPIRED"
@@ -608,6 +613,8 @@ function SC:AcceptPendingProposal()
     end
 
     Print("accepted proposal: " .. proposal.runName .. ". Waiting for all members to accept.")
+    if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+    if self.HUD_Refresh then self:HUD_Refresh() end
 end
 
 function SC:CancelPendingProposal()
@@ -665,6 +672,8 @@ function SC:DeclinePendingProposal()
     end
 
     Print("declined proposal: " .. proposal.runName)
+    if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+    if self.HUD_Refresh then self:HUD_Refresh() end
 end
 
 function SC:ReceiveProposalResponse(payload, playerKey)
@@ -760,6 +769,8 @@ function SC:ReceiveRunConfirmed(payload, confirmerKey)
     local db = GetDB()
     local proposal = db.proposals[payload.proposalId]
     if not proposal then return end
+    if confirmerKey ~= proposal.proposedBy then return end
+    if payload.runId and proposal.runId and payload.runId ~= proposal.runId then return end
     if proposal.status ~= "PENDING" and proposal.status ~= "ACCEPTED" then return end
     if time() - (tonumber(proposal.proposedAt) or time()) > PROPOSAL_TIMEOUT_SECONDS then
         proposal.status = "EXPIRED"

@@ -37,11 +37,12 @@ end
 
 local function HandlePlayerDead()
     local db = SC.db or SoftcoreDB
-    if not db or not db.run then return end
+    if not db or not db.run or not db.run.active then return end
+    if SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed() then return end
 
     local playerKey = SC:GetPlayerKey()
     local participant = SC:GetOrCreateParticipant(playerKey)
-    if not db.run.active or participant.status == "FAILED" then return end
+    if participant.status == "FAILED" then return end
 
     db.run.deathCount = (db.run.deathCount or 0) + 1
     participant.deathCount = (participant.deathCount or 0) + 1
@@ -60,6 +61,10 @@ local function HandlePlayerDead()
             local remaining = maxDeathsValue - participant.deathCount
             local detail = "Died (" .. participant.deathCount .. "/" .. maxDeathsValue .. " deaths, " .. remaining .. " remaining)."
             SC:AddLog("DEATH", detail)
+            db.run.warningCount = (db.run.warningCount or 0) + 1
+            if participant.status == "ACTIVE" then
+                participant.status = "WARNING"
+            end
             SC:AddViolation("death", detail, "WARNING", playerKey)
             DEFAULT_CHAT_FRAME:AddMessage("|cfffbbf24Softcore: death recorded — " .. remaining .. " life/lives remaining.|r")
         end
@@ -82,6 +87,10 @@ local function HandleLevelUp(level)
     end
 
     db.character.level = level or UnitLevel("player") or db.character.level
+    if not db.run or not db.run.active or (SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed()) then
+        return
+    end
+
     SC:GetOrCreateParticipant(SC:GetPlayerKey()).currentLevel = db.character.level
     SC:AddLog("LEVEL_UP", "Reached level " .. tostring(db.character.level) .. ".")
     if SC.Achievements_OnLevelChanged then
@@ -95,6 +104,10 @@ local function HandleZoneChanged()
     if not db then return end
 
     db.character.zone = GetRealZoneText() or db.character.zone or "Unknown"
+    if not db.run or not db.run.active or (SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed()) then
+        return
+    end
+
     SC:AddLog("ZONE_CHANGED", "Entered " .. tostring(db.character.zone) .. ".")
 end
 
@@ -104,6 +117,7 @@ local PVP_WARNING_THROTTLE = 60
 local function CheckInstancedPvP()
     local db = SC.db or SoftcoreDB
     if not db or not db.run or not db.run.active then return end
+    if SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed() then return end
 
     local _, instanceType = GetInstanceInfo()
     if instanceType ~= "pvp" and instanceType ~= "arena" then return end
@@ -121,7 +135,7 @@ end
 
 local function HandleWarning(event)
     local db = SC.db or SoftcoreDB
-    if not db or not db.run or not db.run.active or db.run.failed then
+    if not db or not db.run or not db.run.active or (SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed()) then
         return
     end
 
@@ -135,7 +149,7 @@ end
 
 local function ApplyAccessRule(ruleName, detail)
     local db = SC.db or SoftcoreDB
-    if not db or not db.run or not db.run.active or db.run.failed then
+    if not db or not db.run or not db.run.active or (SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed()) then
         return
     end
 
@@ -202,6 +216,9 @@ local function CheckMovementRules()
     if not db or not db.run or not db.run.active then
         return
     end
+    if SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed() then
+        return
+    end
 
     local mounted = IsMounted and IsMounted()
     -- In-game verification note: IsFlying() should catch mounted flight and Druid flight form
@@ -220,6 +237,10 @@ local function CheckMovementRules()
     movementState.flying = flying and true or false
 end
 
+function SC:CheckMovementRules()
+    CheckMovementRules()
+end
+
 function SC:Events_Register()
     if eventFrame then
         return
@@ -231,6 +252,7 @@ function SC:Events_Register()
     eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
     eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
+    SafeRegisterEvent(eventFrame, "GET_ITEM_INFO_RECEIVED")
     eventFrame:RegisterEvent("TRADE_SHOW")
     eventFrame:RegisterEvent("MAIL_SHOW")
     eventFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
@@ -269,6 +291,10 @@ function SC:Events_Register()
             if SC.ScanEquippedGear then
                 SC:ScanEquippedGear(false)
             end
+        elseif event == "GET_ITEM_INFO_RECEIVED" then
+            if SC.ScanEquippedGear then
+                SC:ScanEquippedGear(true)
+            end
         elseif WARNING_EVENTS[event] then
             HandleWarning(event)
         elseif ACCESS_EVENTS[event] then
@@ -280,7 +306,10 @@ function SC:Events_Register()
             -- display or aura events depending on mount type, shapeshift form, and client build.
             CheckMovementRules()
         elseif event == "GROUP_ROSTER_UPDATE" then
-            SC:AddLog("GROUP_ROSTER", "Group roster changed.")
+            local db = SC.db or SoftcoreDB
+            if db and db.run and db.run.active then
+                SC:AddLog("GROUP_ROSTER", "Group roster changed.")
+            end
             if SC.ClearStalePendingProposal then
                 SC:ClearStalePendingProposal()
             end
@@ -340,27 +369,45 @@ function SC:Events_Register()
 
     -- Consumable detection: hook bag item use, flag Consumable-type items.
     -- Subtype "Other" is skipped because it includes toys and misc one-use items.
-    local function OnUseContainerItem(bag, slot)
+    local function ApplyConsumableRule(itemRef)
         if not SC:IsRunActive() then return end
+        if SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed() then return end
         local rule = SC:GetRule("consumables")
         if not rule or rule == "ALLOWED" then return end
 
-        if not (C_Container and C_Container.GetContainerItemLink) then return end
-        local link = C_Container.GetContainerItemLink(bag, slot)
-        if not link then return end
-
-        local itemName, _, _, _, _, itemType, itemSubType = C_Item.GetItemInfo(link)
+        local itemName, link, _, _, _, itemType, itemSubType
+        if C_Item and C_Item.GetItemInfo then
+            itemName, link, _, _, _, itemType, itemSubType = C_Item.GetItemInfo(itemRef)
+        elseif GetItemInfo then
+            itemName, link, _, _, _, itemType, itemSubType = GetItemInfo(itemRef)
+        end
         if itemType ~= "Consumable" or itemSubType == "Other" then return end
 
         SC:ApplyRuleOutcome("consumables", {
             playerKey = SC:GetPlayerKey(),
-            detail = "Used consumable: " .. tostring(itemName or "?") .. " (" .. tostring(itemSubType or "?") .. ").",
+            detail = "Used consumable: " .. tostring(itemName or link or itemRef or "?") .. " (" .. tostring(itemSubType or "?") .. ").",
         })
+    end
+
+    local function OnUseContainerItem(bag, slot)
+        if not (C_Container and C_Container.GetContainerItemLink) then return end
+        ApplyConsumableRule(C_Container.GetContainerItemLink(bag, slot))
+    end
+
+    local function OnUseAction(slot)
+        if not GetActionInfo then return end
+        local actionType, itemId = GetActionInfo(slot)
+        if actionType == "item" and itemId then
+            ApplyConsumableRule(itemId)
+        end
     end
 
     if C_Container and C_Container.UseContainerItem then
         hooksecurefunc(C_Container, "UseContainerItem", OnUseContainerItem)
     else
         hooksecurefunc("UseContainerItem", OnUseContainerItem)
+    end
+    if UseAction then
+        hooksecurefunc("UseAction", OnUseAction)
     end
 end

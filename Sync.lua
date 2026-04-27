@@ -265,7 +265,7 @@ end
 local function ShouldIgnoreStale(payload, playerKey)
     local sequence = tonumber(payload.sequence)
     if not sequence then
-        return false
+        return true
     end
 
     local db = GetDB()
@@ -361,6 +361,7 @@ function SC:Sync_MarkRoster()
             self.groupStatuses[key] = {
                 name = name,
                 realm = realm,
+                playerKey = key,
                 level = "?",
                 warnings = 0,
                 unsynced = true,
@@ -680,13 +681,7 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
 
     local payload = Decode(message)
 
-    local name = payload.name
-    local realm = payload.realm
-
-    if not name or name == "" then
-        name, realm = SplitFullName(sender)
-    end
-
+    local name, realm = SplitFullName(sender)
     local key = PlayerKey(name, realm)
     if key == LocalPlayerKey() then
         return
@@ -758,11 +753,15 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
 
     if payload.type == "PARTY_VIOLATION" then
         if CanImportSharedAudit(payload) and self.ImportSharedViolation then
+            local ownerKey = payload.violationPlayerKey or payload.playerKey or key
+            if ownerKey ~= key then
+                return
+            end
             self:ImportSharedViolation({
                 id = payload.violationId,
                 violationId = payload.violationId,
                 runId = payload.runId,
-                playerKey = payload.violationPlayerKey or payload.playerKey or key,
+                playerKey = ownerKey,
                 type = payload.violationType,
                 detail = payload.violationDetail,
                 severity = payload.violationSeverity or "WARNING",
@@ -860,7 +859,7 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
         name = name,
         realm = realm,
         runId = payload.runId,
-        playerKey = payload.playerKey or key,
+        playerKey = key,
         class = payload.class,
         level = tonumber(payload.level) or payload.level or "?",
         zone = payload.zone,
@@ -875,7 +874,7 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
             type = payload.latestViolationType,
             detail = payload.latestViolationDetail,
             createdAt = tonumber(payload.latestViolationAt) or nil,
-            playerKey = payload.playerKey or key,
+            playerKey = key,
         },
         participantStatus = participantStatus,
         partyStatus = payload.partyStatus,
@@ -918,6 +917,9 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
 
     if self.HUD_Refresh then
         self:HUD_Refresh()
+    end
+    if self.MasterUI_Refresh then
+        self:MasterUI_Refresh()
     end
 end
 

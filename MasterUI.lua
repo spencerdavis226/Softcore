@@ -932,6 +932,7 @@ local function RefreshRunPanel(frame)
     local active = IsActiveRun()
     local db = SC.db or SoftcoreDB
     local modifying = active and frame.start.isModifyingRules
+    local rulesConflict = GetPendingRulesConflict()
 
     -- Amendment panel takes over the whole tab when one is pending
     local pendingAmendment = GetPendingAmendment()
@@ -1096,6 +1097,8 @@ local function RefreshRunPanel(frame)
         else
             if confirmingStop then
                 frame.start.activeText:SetText("|cfffbbf24End run requested.|r This will reset local run progress.")
+            elseif rulesConflict then
+                frame.start.activeText:SetText("|cfffbbf24Rules conflict detected with " .. FormatPlayerLabel(rulesConflict.playerKey) .. ".|r Use Propose Sync only when everyone has intentionally aligned rules.")
             else
                 frame.start.activeText:SetText("Active run rules are locked. Camera mode can be switched anytime without a rule amendment.")
             end
@@ -1352,11 +1355,20 @@ function SC:MasterUI_Refresh()
         panel:SetShown(tabName == frame.activeTab)
     end
 
-    frame.overviewTab:SetEnabled(frame.activeTab ~= TAB_OVERVIEW)
-    frame.runTab:SetEnabled(frame.activeTab ~= TAB_RUN)
-    frame.violationsTab:SetEnabled(frame.activeTab ~= TAB_VIOLATIONS)
-    frame.logTab:SetEnabled(frame.activeTab ~= TAB_LOG)
-    frame.achievementsTab:SetEnabled(frame.activeTab ~= TAB_ACHIEVEMENTS)
+    local function SetTabSelected(tab, selected)
+        tab:SetEnabled(true)
+        if selected then
+            tab:LockHighlight()
+        else
+            tab:UnlockHighlight()
+        end
+    end
+
+    SetTabSelected(frame.overviewTab, frame.activeTab == TAB_OVERVIEW)
+    SetTabSelected(frame.runTab, frame.activeTab == TAB_RUN)
+    SetTabSelected(frame.violationsTab, frame.activeTab == TAB_VIOLATIONS)
+    SetTabSelected(frame.logTab, frame.activeTab == TAB_LOG)
+    SetTabSelected(frame.achievementsTab, frame.activeTab == TAB_ACHIEVEMENTS)
 
     RefreshOverviewPanel(frame)
     RefreshRunPanel(frame)

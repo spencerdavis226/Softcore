@@ -36,7 +36,11 @@ end
 
 local function IsRunActive()
     local db = GetDB()
-    return db and db.run and db.run.active
+    if not db or not db.run or not db.run.active then
+        return false
+    end
+
+    return not (SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed())
 end
 
 local function GetItemInfoCompat(itemLink)
@@ -156,6 +160,14 @@ function SC:ScanEquippedGear(force)
                     detail = "Heirloom equipped: " .. tostring(item.link),
                 })
             else
+                local db = GetDB()
+                if db and db.run then
+                    db.run.warningCount = (db.run.warningCount or 0) + 1
+                end
+                local participant = self:GetOrCreateParticipant(self:GetPlayerKey())
+                if participant.status == "ACTIVE" then
+                    participant.status = "WARNING"
+                end
                 self:AddViolation("gearQuality", "Invalid equipped item: " .. tostring(item.link), "WARNING", self:GetPlayerKey())
             end
         end
@@ -190,7 +202,15 @@ local function GetCurrentPartyLevels()
 end
 
 function SC:CheckMaxLevelGap(force)
-    if not IsRunActive() or self:GetRule("maxLevelGap") == "ALLOWED" then
+    local db = GetDB()
+    if not IsRunActive() then
+        return
+    end
+
+    if self:GetRule("maxLevelGap") == "ALLOWED" then
+        if db and db.run then
+            db.run.levelGapBlocked = false
+        end
         return
     end
 
@@ -202,6 +222,9 @@ function SC:CheckMaxLevelGap(force)
 
     local levels = GetCurrentPartyLevels()
     if #levels < 2 then
+        if db and db.run then
+            db.run.levelGapBlocked = false
+        end
         return
     end
 
@@ -214,7 +237,6 @@ function SC:CheckMaxLevelGap(force)
 
     local gap = highest - lowest
     local allowedGap = tonumber(self:GetRule("maxLevelGapValue")) or 3
-    local db = GetDB()
 
     if gap > allowedGap then
         db.run.levelGapBlocked = true
@@ -241,7 +263,7 @@ end
 
 function SC:CheckInstanceIntegrity()
     local db = GetDB()
-    if not db or not db.run or not db.run.active then
+    if not IsRunActive() then
         return
     end
 
@@ -290,7 +312,10 @@ function SC:CheckInstanceIntegrity()
     end
 
     if HasUnsyncedPartyMembers() then
-        self:AddLog("INSTANCE_BLOCKER", "Entered instance with unsynced or unconfirmed party members: " .. instanceName)
+        self:ApplyRuleOutcome("instanceWithUnsyncedPlayers", {
+            playerKey = self:GetPlayerKey(),
+            detail = "Entered instance with unsynced or unconfirmed party members: " .. instanceName,
+        })
     end
 end
 

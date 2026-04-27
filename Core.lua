@@ -618,6 +618,21 @@ function SC:GetRemotePeerStatus(playerKey)
     return self.groupStatuses[playerKey]
 end
 
+function SC:IsLocalCharacterFailed()
+    local db = EnsureDatabase()
+    local playerKey = GetPlayerKey(db.character)
+    local participant = db.run.participants and db.run.participants[playerKey]
+
+    return db.run.failed == true
+        or db.run.valid == false
+        or (participant and participant.status == "FAILED")
+end
+
+function SC:CanRecordLocalRunEvent()
+    local db = EnsureDatabase()
+    return db.run.active == true and not self:IsLocalCharacterFailed()
+end
+
 function SC:IsRemoteStateCompatible(peer)
     local db = EnsureDatabase()
 
@@ -659,6 +674,7 @@ function SC:ShouldApplyGroupViolationLocally(reason)
 end
 
 function SC:MarkParticipantFailed(playerKey, reason)
+    local db = EnsureDatabase()
     local participant = self:GetOrCreateParticipant(playerKey)
 
     if participant.status ~= "FAILED" then
@@ -671,6 +687,11 @@ function SC:MarkParticipantFailed(playerKey, reason)
         if self.Achievements_OnParticipantFailed then
             self:Achievements_OnParticipantFailed(playerKey)
         end
+    end
+
+    if playerKey == GetPlayerKey(db.character) then
+        db.run.failed = true
+        db.run.valid = false
     end
 
     return participant
@@ -1077,6 +1098,8 @@ function SC:StartRun(runOptions)
         return false
     end
 
+    local startingRuleset = runOptions.ruleset and CopyTable(runOptions.ruleset) or CopyTable(db.run.ruleset or CreateDefaultRuleset())
+
     ArchiveCurrentRun(db, "Starting new run")
 
     db.character = GetPlayerSnapshot()
@@ -1089,7 +1112,7 @@ function SC:StartRun(runOptions)
     db.run.startLevel = db.character.level
     db.run.deathCount = 0
     db.run.warningCount = 0
-    db.run.ruleset = runOptions.ruleset and CopyTable(runOptions.ruleset) or CreateDefaultRuleset()
+    db.run.ruleset = startingRuleset
     db.run.ruleset.achievementPreset = runOptions.preset or db.run.ruleset.achievementPreset or "CUSTOM"
     ApplyGroupingModeRules(db.run.ruleset)
     db.run.cameraMode = runOptions.cameraMode or DefaultCameraModeForRules(db.run.ruleset)
@@ -1103,6 +1126,11 @@ function SC:StartRun(runOptions)
     db.run.levelGapBlocked = false
     db.eventLog = {}
     db.violations = {}
+    db.proposals = {}
+    db.pendingProposalId = nil
+    db.acceptedRunId = nil
+    db.acceptedRulesetHash = nil
+    db.ruleAmendments = {}
     local participant = self:GetOrCreateParticipant(GetPlayerKey(db.character))
     participant.status = "ACTIVE"
     participant.joinedAt = db.run.startTime
@@ -1116,6 +1144,9 @@ function SC:StartRun(runOptions)
     end
     if self.ScanEquippedGear then
         self:ScanEquippedGear(true)
+    end
+    if self.CheckMovementRules then
+        self:CheckMovementRules()
     end
     if db.run.ruleset and db.run.ruleset.firstPersonOnly ~= "ALLOWED" and db.run.ruleset.firstPersonOnly ~= nil and db.run.ruleset.firstPersonOnly ~= false then
         if self.SnapCameraToFirstPerson then
@@ -1173,6 +1204,8 @@ function SC:ResetRun()
     db.pendingProposalId = nil
     db.acceptedRunId = nil
     db.acceptedRulesetHash = nil
+    db.proposals = {}
+    db.ruleAmendments = {}
 
     if self.RestoreActionCamSettings then
         self:RestoreActionCamSettings()
