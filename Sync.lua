@@ -318,6 +318,14 @@ local function ShouldIgnoreStale(payload, playerKey)
     return false
 end
 
+local function IsProposalControlMessage(messageType)
+    return messageType == "PROPOSAL"
+        or messageType == "PROPOSAL_ACCEPT"
+        or messageType == "PROPOSAL_DECLINE"
+        or messageType == "PROPOSAL_CONFIRMED"
+        or messageType == "PROPOSAL_CANCELLED"
+end
+
 local function GetDisplayStatus(status)
     if not status or status.unsynced then
         return "UNSYNCED"
@@ -725,7 +733,7 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
         return
     end
 
-    if ShouldIgnoreStale(payload, key) then
+    if not IsProposalControlMessage(payload.type) and ShouldIgnoreStale(payload, key) then
         return
     end
 
@@ -932,6 +940,10 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
         lastSeen = time(),
         unsynced = false,
     }
+
+    if payload.active == "1" and payload.runId and self.ConfirmAcceptedProposalFromStatus then
+        self:ConfirmAcceptedProposalFromStatus(key, payload.runId)
+    end
 
     if self.RefreshParticipantsFromRoster then
         self:RefreshParticipantsFromRoster()

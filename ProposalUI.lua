@@ -5,6 +5,8 @@ local SC = Softcore
 local SEPARATOR = "\031"
 local PAIR_SEPARATOR = "\030"
 local PROPOSAL_TIMEOUT_SECONDS = 30 * 60
+local ACCEPT_RETRY_SECONDS = 5
+local ACCEPT_RETRY_LIMIT = 6
 
 local RULE_KEYS = {
     "death",
@@ -610,6 +612,7 @@ function SC:AcceptPendingProposal()
 
     proposal.acceptedBy[playerKey] = true
     proposal.status = "ACCEPTED"
+    proposal.acceptRetryCount = 0
     db.acceptedRunId = proposal.runId
     db.acceptedRulesetHash = proposal.rulesetHash
 
@@ -657,9 +660,54 @@ function SC:AcceptPendingProposal()
         self:Sync_SendProposalResponse("PROPOSAL_ACCEPT", proposal)
     end
 
+    if C_Timer and C_Timer.After then
+        local proposalId = proposal.proposalId
+        C_Timer.After(ACCEPT_RETRY_SECONDS, function()
+            if SC.RetryAcceptedProposal then
+                SC:RetryAcceptedProposal(proposalId)
+            end
+        end)
+    end
+
     Print("accepted proposal: " .. proposal.runName .. ". Waiting for all members to accept.")
     if self.MasterUI_Refresh then self:MasterUI_Refresh() end
     if self.HUD_Refresh then self:HUD_Refresh() end
+end
+
+function SC:RetryAcceptedProposal(proposalId)
+    local db = GetDB()
+    local proposal = db.proposals and db.proposals[proposalId]
+    if not proposal or proposal.status ~= "ACCEPTED" then
+        return
+    end
+    if time() - (tonumber(proposal.proposedAt) or time()) > PROPOSAL_TIMEOUT_SECONDS then
+        proposal.status = "EXPIRED"
+        if db.pendingProposalId == proposal.proposalId then
+            db.pendingProposalId = nil
+        end
+        if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+        return
+    end
+
+    proposal.acceptRetryCount = (proposal.acceptRetryCount or 0) + 1
+    if proposal.acceptRetryCount > ACCEPT_RETRY_LIMIT then
+        return
+    end
+
+    if self.Sync_SendProposalResponse then
+        self:Sync_SendProposalResponse("PROPOSAL_ACCEPT", proposal)
+    end
+    if self.Sync_BroadcastStatus then
+        self:Sync_BroadcastStatus("PROPOSAL_ACCEPT_RETRY")
+    end
+
+    if C_Timer and C_Timer.After then
+        C_Timer.After(ACCEPT_RETRY_SECONDS, function()
+            if SC.RetryAcceptedProposal then
+                SC:RetryAcceptedProposal(proposalId)
+            end
+        end)
+    end
 end
 
 function SC:CancelPendingProposal()
@@ -882,6 +930,63 @@ function SC:ReceiveRunConfirmed(payload, confirmerKey)
     if self.MasterUI_Refresh then
         self:MasterUI_Refresh()
     end
+end
+
+function SC:ConfirmAcceptedProposalFromStatus(proposerKey, runId)
+    local db = GetDB()
+    local proposal = self:GetPendingProposal()
+    if not proposal or proposal.status ~= "ACCEPTED" then return false end
+    if proposal.proposedBy ~= proposerKey then return false end
+    if not runId or proposal.runId ~= runId then return false end
+    if time() - (tonumber(proposal.proposedAt) or time()) > PROPOSAL_TIMEOUT_SECONDS then
+        proposal.status = "EXPIRED"
+        if db.pendingProposalId == proposal.proposalId then
+            db.pendingProposalId = nil
+        end
+        return false
+    end
+
+    local playerKey = self:GetPlayerKey()
+    if not proposal.acceptedBy[playerKey] then return false end
+
+    proposal.status = "CONFIRMED"
+    if db.pendingProposalId == proposal.proposalId then
+        db.pendingProposalId = nil
+    end
+
+    if proposal.proposalType == "SYNC_RUN" then
+        self:ApplyRunSyncProposal(proposal, proposerKey)
+    elseif proposal.proposalType == "ADD_PARTICIPANT" then
+        if not db.run.active then
+            self:StartRun({
+                runId = proposal.runId,
+                runName = proposal.runName,
+                ruleset = proposal.ruleset,
+                preset = proposal.preset,
+            })
+        else
+            local participant = self:GetOrCreateParticipant(playerKey)
+            participant.status = "ACTIVE"
+            participant.joinedAt = participant.joinedAt or time()
+        end
+    elseif not db.run.active then
+        self:StartRun({
+            runId = proposal.runId,
+            runName = proposal.runName,
+            ruleset = proposal.ruleset,
+            preset = proposal.preset,
+        })
+    end
+
+    self:AddLog("PROPOSAL_CONFIRMED", "Run confirmed from proposer status: " .. tostring(proposal.runName), {
+        proposalId = proposal.proposalId,
+        runId = proposal.runId,
+    })
+
+    Print("run started: proposer status confirmed accepted run.")
+    if self.HUD_Refresh then self:HUD_Refresh() end
+    if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+    return true
 end
 
 -- Called when a player receives PROPOSAL_CANCELLED from the proposer.
