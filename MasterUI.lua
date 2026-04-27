@@ -1296,79 +1296,36 @@ end
 
 local function AnchorRunFooterButtons(frame)
     local start = frame.start
-    local first
+    local previous
 
-    if start.primaryBtn:IsShown() then
-        first = start.primaryBtn
-    elseif start.stopBtn:IsShown() then
-        first = start.stopBtn
-    elseif start.confirmStopBtn and start.confirmStopBtn:IsShown() then
-        first = start.confirmStopBtn
-    elseif start.applyChangesBtn:IsShown() then
-        first = start.applyChangesBtn
-    elseif start.proposalAcceptBtn and start.proposalAcceptBtn:IsShown() then
-        first = start.proposalAcceptBtn
-    elseif start.proposalCancelBtn and start.proposalCancelBtn:IsShown() then
-        first = start.proposalCancelBtn
-    end
-
-    if not first then return end
-
-    first:ClearAllPoints()
-    first:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 32, 24)
-
-    if start.stopBtn:IsShown() and start.stopBtn ~= first then
-        start.stopBtn:ClearAllPoints()
-        start.stopBtn:SetPoint("LEFT", first, "RIGHT", 8, 0)
-    end
-    if start.cancelRunBox and start.cancelRunBox:IsShown() then
-        start.cancelRunBox:ClearAllPoints()
-        start.cancelRunBox:SetPoint("LEFT", first, "RIGHT", 14, -1)
-    end
-    if start.confirmStopBtn and start.confirmStopBtn:IsShown() and start.confirmStopBtn ~= first then
-        start.confirmStopBtn:ClearAllPoints()
-        if start.cancelRunBox and start.cancelRunBox:IsShown() then
-            start.confirmStopBtn:SetPoint("LEFT", start.cancelRunBox, "RIGHT", 8, 1)
-        else
-            start.confirmStopBtn:SetPoint("LEFT", first, "RIGHT", 8, 0)
+    local function anchor(control, xGap, yOffset)
+        if not control or not control:IsShown() then
+            return
         end
-    end
-    if start.cancelStopBtn and start.cancelStopBtn:IsShown() then
-        start.cancelStopBtn:ClearAllPoints()
-        if start.cancelRunBox and start.cancelRunBox:IsShown() then
-            start.cancelStopBtn:SetPoint("LEFT", start.cancelRunBox, "RIGHT", 8, 1)
+
+        control:ClearAllPoints()
+        if previous then
+            control:SetPoint("LEFT", previous, "RIGHT", xGap or 8, yOffset or 0)
         else
-            start.cancelStopBtn:SetPoint("LEFT", start.confirmStopBtn, "RIGHT", 8, 0)
+            control:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 32, 24)
         end
+        previous = control
     end
-    if start.cancelRunHint and start.cancelRunHint:IsShown() then
-        start.cancelRunHint:ClearAllPoints()
-        start.cancelRunHint:SetPoint("LEFT", start.cancelStopBtn, "RIGHT", 10, 0)
-    end
-    if start.modifyBtn:IsShown() then
-        start.modifyBtn:ClearAllPoints()
-        start.modifyBtn:SetPoint("LEFT", start.stopBtn, "RIGHT", 8, 0)
-    end
-    if start.syncBtn and start.syncBtn:IsShown() then
-        start.syncBtn:ClearAllPoints()
-        start.syncBtn:SetPoint("LEFT", start.modifyBtn, "RIGHT", 8, 0)
-    end
-    if start.inviteBtn and start.inviteBtn:IsShown() then
-        start.inviteBtn:ClearAllPoints()
-        start.inviteBtn:SetPoint("LEFT", start.syncBtn, "RIGHT", 8, 0)
-    end
-    if start.applyChangesBtn:IsShown() and start.applyChangesBtn ~= first then
-        start.applyChangesBtn:ClearAllPoints()
-        start.applyChangesBtn:SetPoint("LEFT", first, "RIGHT", 8, 0)
-    end
-    if start.cancelChangesBtn:IsShown() then
-        start.cancelChangesBtn:ClearAllPoints()
-        start.cancelChangesBtn:SetPoint("LEFT", start.applyChangesBtn, "RIGHT", 8, 0)
-    end
-    if start.proposalDeclineBtn and start.proposalDeclineBtn:IsShown() then
-        start.proposalDeclineBtn:ClearAllPoints()
-        start.proposalDeclineBtn:SetPoint("LEFT", first, "RIGHT", 8, 0)
-    end
+
+    anchor(start.primaryBtn)
+    anchor(start.stopBtn)
+    anchor(start.cancelRunBox, 14, -1)
+    anchor(start.confirmStopBtn, 8, 1)
+    anchor(start.cancelStopBtn, 8, 1)
+    anchor(start.cancelRunHint, 10, 0)
+    anchor(start.modifyBtn)
+    anchor(start.syncBtn)
+    anchor(start.inviteBtn)
+    anchor(start.applyChangesBtn)
+    anchor(start.cancelChangesBtn)
+    anchor(start.proposalAcceptBtn)
+    anchor(start.proposalDeclineBtn)
+    anchor(start.proposalCancelBtn)
 end
 
 local function RefreshRunPanel(frame)
@@ -1437,6 +1394,12 @@ local function RefreshRunPanel(frame)
         frame.start.stopBtn:Hide()
         if frame.start.confirmStopBtn then frame.start.confirmStopBtn:Hide() end
         if frame.start.cancelStopBtn then frame.start.cancelStopBtn:Hide() end
+        if frame.start.cancelRunBox then
+            frame.start.cancelRunBox:SetText("")
+            frame.start.cancelRunBox:Hide()
+        end
+        if frame.start.cancelRunHint then frame.start.cancelRunHint:Hide() end
+        frame.start.stopConfirmPending = false
         frame.start.modifyBtn:Hide()
         if frame.start.syncBtn then frame.start.syncBtn:Hide() end
         if frame.start.inviteBtn then frame.start.inviteBtn:Hide() end
@@ -1444,7 +1407,8 @@ local function RefreshRunPanel(frame)
         frame.start.cancelChangesBtn:Hide()
         frame.start.proposalAcceptBtn:SetShown((not isProposer) and not acceptedLocally)
         frame.start.proposalDeclineBtn:SetShown((not isProposer) and not acceptedLocally)
-        frame.start.proposalCancelBtn:SetShown(isProposer)
+        frame.start.proposalCancelBtn:SetShown(isProposer or acceptedLocally)
+        frame.start.proposalCancelBtn:SetText(isProposer and "Cancel Proposal" or "Cancel Wait")
         frame.start.proposalAcceptBtn:SetScript("OnClick", function()
             if SC.AcceptPendingProposal then SC:AcceptPendingProposal() end
             SC:MasterUI_Refresh()
@@ -1454,7 +1418,11 @@ local function RefreshRunPanel(frame)
             SC:MasterUI_Refresh()
         end)
         frame.start.proposalCancelBtn:SetScript("OnClick", function()
-            if SC.CancelPendingProposal then SC:CancelPendingProposal() end
+            if isProposer then
+                if SC.CancelPendingProposal then SC:CancelPendingProposal() end
+            else
+                if SC.DeclinePendingProposal then SC:DeclinePendingProposal() end
+            end
             SC:MasterUI_Refresh()
         end)
         if frame.start.RefreshControls then frame.start:RefreshControls() end
