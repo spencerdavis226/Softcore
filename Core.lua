@@ -30,6 +30,47 @@ local function NormalizeDeathAnnouncementMode(value)
     return nil
 end
 
+local DEATH_ANNOUNCEMENT_CHANNELS = {
+    CHAT = true,
+    PARTY = true,
+    GUILD = true,
+}
+
+local DEATH_ANNOUNCEMENT_ORDER = { "CHAT", "PARTY", "GUILD" }
+
+local function CopyDeathAnnouncementChannels(value)
+    local channels = {}
+
+    if type(value) == "table" then
+        for channel, enabled in pairs(value) do
+            local normalized = NormalizeDeathAnnouncementMode(channel)
+            if normalized and normalized ~= "OFF" and enabled then
+                channels[normalized] = true
+            end
+        end
+        return channels
+    end
+
+    local normalized = NormalizeDeathAnnouncementMode(value)
+    if normalized and normalized ~= "OFF" then
+        channels[normalized] = true
+    end
+    return channels
+end
+
+local function FormatDeathAnnouncementChannels(channels)
+    local labels = {}
+    for _, channel in ipairs(DEATH_ANNOUNCEMENT_ORDER) do
+        if channels[channel] then
+            table.insert(labels, string.lower(channel))
+        end
+    end
+    if #labels == 0 then
+        return "off"
+    end
+    return table.concat(labels, ", ")
+end
+
 local function GetGroupAnnouncementChannel()
     if IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then
         return "INSTANCE_CHAT"
@@ -293,7 +334,7 @@ local function EnsureDatabase()
     SoftcoreDB.acceptedRunId = SoftcoreDB.acceptedRunId or nil
     SoftcoreDB.acceptedRulesetHash = SoftcoreDB.acceptedRulesetHash or nil
     SoftcoreDB.settings = SoftcoreDB.settings or {}
-    SoftcoreDB.settings.deathAnnouncements = SoftcoreDB.settings.deathAnnouncements or "OFF"
+    SoftcoreDB.settings.deathAnnouncements = SoftcoreDB.settings.deathAnnouncements or {}
     SoftcoreDB.sync = SoftcoreDB.sync or {}
     SoftcoreDB.sync.remoteSequences = SoftcoreDB.sync.remoteSequences or {}
     SoftcoreDB.sync.localSequence = SoftcoreDB.sync.localSequence or 0
@@ -1333,11 +1374,32 @@ function SC:PrintRun()
     Print("governance: " .. tostring(db.run.governance.mode))
 end
 
-function SC:GetDeathAnnouncementMode()
+function SC:GetDeathAnnouncementChannels()
     local db = EnsureDatabase()
-    local mode = NormalizeDeathAnnouncementMode(db.settings and db.settings.deathAnnouncements) or "OFF"
-    db.settings.deathAnnouncements = mode
-    return mode
+    local channels = CopyDeathAnnouncementChannels(db.settings and db.settings.deathAnnouncements)
+    db.settings.deathAnnouncements = channels
+    return channels
+end
+
+function SC:IsDeathAnnouncementChannelEnabled(channel)
+    local normalized = NormalizeDeathAnnouncementMode(channel)
+    if not normalized or normalized == "OFF" then
+        return false
+    end
+    return self:GetDeathAnnouncementChannels()[normalized] == true
+end
+
+function SC:SetDeathAnnouncementChannel(channel, enabled)
+    local normalized = NormalizeDeathAnnouncementMode(channel)
+    if not normalized or normalized == "OFF" then
+        return false, "unknown announcement target: " .. tostring(channel)
+    end
+
+    local db = EnsureDatabase()
+    local channels = self:GetDeathAnnouncementChannels()
+    channels[normalized] = enabled and true or nil
+    db.settings.deathAnnouncements = channels
+    return true, "death announcements: " .. FormatDeathAnnouncementChannels(channels)
 end
 
 function SC:SetDeathAnnouncementMode(mode)
@@ -1347,19 +1409,57 @@ function SC:SetDeathAnnouncementMode(mode)
     end
 
     local db = EnsureDatabase()
-    db.settings.deathAnnouncements = normalized
-    return true, "death announcements: " .. string.lower(normalized)
+    local channels = {}
+    if normalized ~= "OFF" then
+        channels[normalized] = true
+    end
+    db.settings.deathAnnouncements = channels
+    return true, "death announcements: " .. FormatDeathAnnouncementChannels(channels)
+end
+
+function SC:SetDeathAnnouncementChannelsFromText(text)
+    local channels = {}
+    local sawValue = false
+
+    for token in string.gmatch(tostring(text or ""), "[^,%s/|]+") do
+        local normalized = NormalizeDeathAnnouncementMode(token)
+        if not normalized then
+            return false, "usage: /sc announce off|chat|party|guild"
+        end
+        sawValue = true
+        if normalized == "OFF" then
+            channels = {}
+        else
+            channels[normalized] = true
+        end
+    end
+
+    if not sawValue then
+        return false, "usage: /sc announce off|chat|party|guild"
+    end
+
+    local db = EnsureDatabase()
+    db.settings.deathAnnouncements = channels
+    return true, "death announcements: " .. FormatDeathAnnouncementChannels(channels)
 end
 
 function SC:PrintDeathAnnouncementSettings()
-    Print("death announcements: " .. string.lower(self:GetDeathAnnouncementMode()))
+    Print("death announcements: " .. FormatDeathAnnouncementChannels(self:GetDeathAnnouncementChannels()))
     Print("usage: /sc announce off|chat|party|guild")
 end
 
 function SC:AnnounceLocalDeath(detail)
     local db = EnsureDatabase()
-    local mode = self:GetDeathAnnouncementMode()
-    if mode == "OFF" then
+    local channels = self:GetDeathAnnouncementChannels()
+    local announced = false
+    local anyChannel = false
+    for _, channel in ipairs(DEATH_ANNOUNCEMENT_ORDER) do
+        if channels[channel] then
+            anyChannel = true
+            break
+        end
+    end
+    if not anyChannel then
         return false
     end
 
@@ -1373,31 +1473,31 @@ function SC:AnnounceLocalDeath(detail)
         message = message .. " (" .. tostring(run.runName) .. ")"
     end
 
-    if mode == "CHAT" then
+    if channels.CHAT then
         Print(message)
-        return true
+        announced = true
     end
 
-    if mode == "PARTY" then
+    if channels.PARTY then
         local channel = GetGroupAnnouncementChannel()
         if not channel then
             Print("death announcement skipped: not in a group.")
-            return false
+        else
+            SendChatMessage(message, channel)
+            announced = true
         end
-        SendChatMessage(message, channel)
-        return true
     end
 
-    if mode == "GUILD" then
+    if channels.GUILD then
         if not IsInGuild() then
             Print("death announcement skipped: not in a guild.")
-            return false
+        else
+            SendChatMessage(message, "GUILD")
+            announced = true
         end
-        SendChatMessage(message, "GUILD")
-        return true
     end
 
-    return false
+    return announced
 end
 
 function SC:PrintConflicts()
@@ -1603,7 +1703,7 @@ function SC:HandleSlash(input)
         if mode == "" then
             self:PrintDeathAnnouncementSettings()
         else
-            local _, message = self:SetDeathAnnouncementMode(mode)
+            local _, message = self:SetDeathAnnouncementChannelsFromText(mode)
             Print(message)
         end
     elseif command == "resync" then

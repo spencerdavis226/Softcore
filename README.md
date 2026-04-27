@@ -31,6 +31,7 @@ Open with `/sc menu`, the minimap button, or the HUD.
 - **Log**: audit history, newest first.
 
 When no run is active, the menu focuses on starting a run. When a run is active, it focuses on current status.
+The Run tab also includes compact own-character death announcement checkboxes beside the core death rules.
 
 ## HUD
 
@@ -74,7 +75,7 @@ Common commands:
 | `/sc propose-add Player-Realm` | Invite a party member into the current run |
 | `/sc access` | Print access/storage rules |
 | `/sc run chat` | Print run integrity summary |
-| `/sc announce off\|chat\|party\|guild` | Configure optional local death announcements |
+| `/sc announce off\|chat\|party\|guild` | Configure optional death announcements; combine targets with spaces |
 | `/sc rule name value` | Change or propose a single rule value |
 
 ## Starting Runs
@@ -143,7 +144,7 @@ Clearing a violation marks it cleared, records who cleared it and when, and pres
 
 Remote violations may be displayed and shared as audit records for the same synced run, but they do not directly mutate local character validity.
 
-Optional death announcements are local-player only and default to off. Use `/sc announce chat`, `/sc announce party`, or `/sc announce guild` if you want Softcore to announce your own deaths; incoming announcements never change your local run state.
+Optional death announcements are for your own character only and default to off. Use `/sc announce chat party`, `/sc announce guild`, or the Run-tab checkboxes if you want Softcore to announce your own deaths; incoming announcements never change your local run state.
 
 ## Persistence And Safety
 

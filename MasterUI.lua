@@ -26,7 +26,7 @@ local TAB_ACHIEVEMENTS = "ACHIEVEMENTS"
 
 local DISALLOWED_OUTCOME = "WARNING"
 local PANEL_WIDTH = 710
-local PANEL_HEIGHT = 500
+local PANEL_HEIGHT = 560
 local LOG_ROWS = 24
 local LOG_ROW_TOP = -66
 local LOG_ROW_HEIGHT = 18
@@ -46,13 +46,6 @@ local MENU_LOGO_TEXTURE = "Interface\\AddOns\\Softcore\\Assets\\SoftcoreLogoMenu
 local GROUPING_OPTIONS = {
     { text = "Group", value = "SYNCED_GROUP_ALLOWED" },
     { text = "Solo Only", value = "SOLO_SELF_FOUND" },
-}
-
-local DEATH_ANNOUNCE_OPTIONS = {
-    { text = "Off", value = "OFF" },
-    { text = "Chat", value = "CHAT" },
-    { text = "Party", value = "PARTY" },
-    { text = "Guild", value = "GUILD" },
 }
 
 local GEAR_OPTIONS = {
@@ -606,6 +599,25 @@ local function CreateAllowCheckbox(parent, rules, spec, x, y)
     return checkbox
 end
 
+local function CreateDeathAnnounceCheckbox(parent, channel, label, x, y)
+    local checkbox = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    checkbox:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    checkbox.channel = channel
+    checkbox.label = checkbox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    checkbox.label:SetPoint("LEFT", checkbox, "RIGHT", 2, 0)
+    checkbox.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+    checkbox.label:SetText(label)
+    checkbox:SetScript("OnClick", function(self)
+        if SC.SetDeathAnnouncementChannel then
+            SC:SetDeathAnnouncementChannel(self.channel, self:GetChecked())
+        end
+        if SC.MasterUI_Refresh then
+            SC:MasterUI_Refresh()
+        end
+    end)
+    return checkbox
+end
+
 local function ApplyStartPreset(frame, preset)
     local rules = frame.start.selectedRules
     frame.start.selectedPreset = preset
@@ -1097,7 +1109,6 @@ local function HideAllRunControls(frame)
     if frame.start.chefBtn then frame.start.chefBtn:Hide() end
     for _, control in ipairs(frame.start.controls) do control:Hide() end
     frame.start.groupingDropdown:Hide()
-    if frame.start.deathAnnounceDropdown then frame.start.deathAnnounceDropdown:Hide() end
     frame.start.gearDropdown:Hide()
     frame.start.maxGapBox:Hide()
     frame.start.primaryBtn:Hide()
@@ -1219,7 +1230,6 @@ local function RefreshRunPanel(frame)
         local proposer = FormatPlayerLabel(pendingProposal.proposedBy)
         CopyRulesInto(frame.start.selectedRules, pendingProposal.ruleset)
         frame.start.groupingDropdown:SetShown(true)
-        if frame.start.deathAnnounceDropdown then frame.start.deathAnnounceDropdown:SetShown(true) end
         frame.start.gearDropdown:SetShown(true)
         frame.start.maxGapBox:SetShown(true)
         if frame.start.presetLabel then frame.start.presetLabel:SetShown(false) end
@@ -1295,7 +1305,6 @@ local function RefreshRunPanel(frame)
     end
 
     frame.start.groupingDropdown:SetShown(true)
-    if frame.start.deathAnnounceDropdown then frame.start.deathAnnounceDropdown:SetShown(true) end
     frame.start.gearDropdown:SetShown(true)
     frame.start.maxGapBox:SetShown(true)
     if frame.start.presetLabel then frame.start.presetLabel:SetShown(true) end
@@ -1345,9 +1354,6 @@ local function RefreshRunPanel(frame)
     frame.start.applyChangesBtn:SetShown(modifying)
     frame.start.cancelChangesBtn:SetShown(modifying)
     SetRunSetupEnabled(frame, (not active) or modifying)
-    if frame.start.deathAnnounceDropdown and UIDropDownMenu_EnableDropDown then
-        UIDropDownMenu_EnableDropDown(frame.start.deathAnnounceDropdown)
-    end
     if active and not modifying then
         frame.start.casualBtn:SetEnabled(false)
         frame.start.ironmanBtn:SetEnabled(false)
@@ -1682,7 +1688,7 @@ function SC:OpenMasterWindow(focusTab)
     end
 
     local frame = CreateFrame("Frame", "SoftcoreMasterFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(760, 658)
+    frame:SetSize(760, 718)
     RestorePosition("master", frame)
     frame:SetMovable(true)
     frame:EnableMouse(true)
@@ -1748,7 +1754,7 @@ function SC:OpenMasterWindow(focusTab)
     AddTab("achievementsTab", "Achievements", TAB_ACHIEVEMENTS, logTab, 110)
 
     local startPanel = CreatePanel(frame)
-    startPanel:SetHeight(490)
+    startPanel:SetHeight(552)
     frame.panels[TAB_RUN] = startPanel
     frame.start = { controls = {}, selectedRules = SC:GetDefaultRuleset(), selectedPreset = "CASUAL" }
     frame.start.selectedRules.dungeonRepeat = "ALLOWED"
@@ -1791,8 +1797,17 @@ function SC:OpenMasterWindow(focusTab)
     end, 140)
     frame.start.groupingDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 82, -120)
 
-    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Economy and Storage", 0, -178, 300))
-    local y = -208
+    frame.start.deathAnnounceLabel = CreateLabel(startPanel, "Announce Death", 0, -158, "GameFontNormalSmall", 100)
+    table.insert(frame.start.controls, frame.start.deathAnnounceLabel)
+    frame.start.deathAnnounceChatCheck = CreateDeathAnnounceCheckbox(startPanel, "CHAT", "Chat", 112, -150)
+    table.insert(frame.start.controls, frame.start.deathAnnounceChatCheck)
+    frame.start.deathAnnouncePartyCheck = CreateDeathAnnounceCheckbox(startPanel, "PARTY", "Party", 178, -150)
+    table.insert(frame.start.controls, frame.start.deathAnnouncePartyCheck)
+    frame.start.deathAnnounceGuildCheck = CreateDeathAnnounceCheckbox(startPanel, "GUILD", "Guild", 252, -150)
+    table.insert(frame.start.controls, frame.start.deathAnnounceGuildCheck)
+
+    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Economy and Storage", 0, -196, 300))
+    local y = -226
     for _, spec in ipairs(ECONOMY_RULES) do
         local checkbox = CreateAllowCheckbox(startPanel, frame.start.selectedRules, spec, 0, y)
         table.insert(frame.start.controls, checkbox)
@@ -1859,14 +1874,15 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.instancedPvPCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 360, -450)
     table.insert(frame.start.controls, frame.start.instancedPvPCheck)
 
-    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Camera", 0, -398, 300))
+    local cameraHeader = CreateSectionHeader(startPanel, "Camera", 0, -416, 300)
+    table.insert(frame.start.controls, cameraHeader)
     frame.start.cameraHint = startPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.start.cameraHint:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 70, -398)
+    frame.start.cameraHint:SetPoint("TOPLEFT", cameraHeader, "TOPLEFT", 88, -1)
     frame.start.cameraHint:SetTextColor(MUTED_TEXT.r * 0.7, MUTED_TEXT.g * 0.7, MUTED_TEXT.b * 0.7)
-    frame.start.cameraHint:SetText("Mode can be switched anytime during a run.")
+    frame.start.cameraHint:SetText("Switch anytime.")
     table.insert(frame.start.controls, frame.start.cameraHint)
     frame.start.firstPersonCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
-    frame.start.firstPersonCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -428)
+    frame.start.firstPersonCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -446)
     frame.start.firstPersonCheck.label = frame.start.firstPersonCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.start.firstPersonCheck.label:SetPoint("LEFT", frame.start.firstPersonCheck, "RIGHT", 2, 0)
     frame.start.firstPersonCheck.label:SetWidth(280)
@@ -1896,7 +1912,7 @@ function SC:OpenMasterWindow(focusTab)
     table.insert(frame.start.controls, frame.start.firstPersonCheck)
 
     frame.start.actionCamCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
-    frame.start.actionCamCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -458)
+    frame.start.actionCamCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -476)
     frame.start.actionCamCheck.label = frame.start.actionCamCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.start.actionCamCheck.label:SetPoint("LEFT", frame.start.actionCamCheck, "RIGHT", 2, 0)
     frame.start.actionCamCheck.label:SetWidth(280)
@@ -1933,6 +1949,17 @@ function SC:OpenMasterWindow(focusTab)
         self.selectedRules.unsyncedMembers = "ALLOWED"
 
         UIDropDownMenu_SetText(self.groupingDropdown, GetOptionText(GROUPING_OPTIONS, self.selectedRules.groupingMode))
+        if SC.IsDeathAnnouncementChannelEnabled then
+            self.deathAnnounceChatCheck:SetChecked(SC:IsDeathAnnouncementChannelEnabled("CHAT"))
+            self.deathAnnouncePartyCheck:SetChecked(SC:IsDeathAnnouncementChannelEnabled("PARTY"))
+            self.deathAnnounceGuildCheck:SetChecked(SC:IsDeathAnnouncementChannelEnabled("GUILD"))
+            self.deathAnnounceChatCheck:SetEnabled(true)
+            self.deathAnnouncePartyCheck:SetEnabled(true)
+            self.deathAnnounceGuildCheck:SetEnabled(true)
+            SetFontStringRGB(self.deathAnnounceChatCheck.label, BODY_TEXT)
+            SetFontStringRGB(self.deathAnnouncePartyCheck.label, BODY_TEXT)
+            SetFontStringRGB(self.deathAnnounceGuildCheck.label, BODY_TEXT)
+        end
         UIDropDownMenu_SetText(self.gearDropdown, GetOptionText(GEAR_OPTIONS, self.selectedRules.gearQuality))
         local isSolo = self.selectedRules.groupingMode == "SOLO_SELF_FOUND"
         if isSolo then
