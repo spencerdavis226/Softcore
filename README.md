@@ -106,6 +106,16 @@ Party state is display and compatibility data. Remote state should not reset, fa
 
 If a party converts to a raid, Softcore stops party sync, clears remote roster display, and expires pending group proposals/amendments instead of applying them late. The local run remains active and locally tracked.
 
+## Dungeon Handling
+
+Softcore treats dungeon entry as an audit event, not as a protected gate. Manual entrances, Group Finder dungeon instances, and follower dungeons are recorded in the local run ledger and shown by `/sc dungeons`.
+
+Follower dungeons are allowed by default. Follower NPCs are not treated as unsynced party members; only real player party members can create synced-run compatibility issues.
+
+Group Finder dungeons are allowed when the resulting player group is compatible with the run. If Group Finder adds unsynced, unconfirmed, or run-mismatched players, Softcore records that as an instance-with-unsynced-players rule outcome according to the active rules. This affects the ledger and party status, but it does not directly fail or reset the local character unless the accepted rules explicitly make that outcome fatal.
+
+Repeated instance entries are tracked by instance name and governed by the repeated-dungeon rule.
+
 ## Separate Runs
 
 If two players started separate runs, matching rules are not enough by themselves because each run has a different run ID.

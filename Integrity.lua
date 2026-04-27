@@ -262,6 +262,61 @@ local function HasUnsyncedPartyMembers()
     return false
 end
 
+local function SafeCallBoolean(owner, methodName)
+    local method = owner and owner[methodName]
+    if not method then return false end
+
+    local ok, result = pcall(method)
+    return ok and result == true
+end
+
+local function IsFollowerDungeon()
+    return SafeCallBoolean(C_LFGInfo, "IsInLFGFollowerDungeon")
+end
+
+local function IsLFGInstance()
+    if IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then
+        return true
+    end
+
+    if IsInLFGDungeon then
+        local ok, result = pcall(IsInLFGDungeon)
+        return ok and result == true
+    end
+
+    return false
+end
+
+local function GetInstanceEntrySource()
+    if IsFollowerDungeon() then
+        return "FOLLOWER"
+    end
+
+    if IsLFGInstance() then
+        return "GROUP_FINDER"
+    end
+
+    return "MANUAL"
+end
+
+local function FormatInstanceSource(source)
+    if source == "FOLLOWER" then return "Follower" end
+    if source == "GROUP_FINDER" then return "Group Finder" end
+    return "Manual"
+end
+
+local function BuildInstanceEntryMessage(instanceName, entrySource)
+    if entrySource == "FOLLOWER" then
+        return "Entered follower dungeon: " .. instanceName
+    end
+
+    if entrySource == "GROUP_FINDER" then
+        return "Entered group finder instance: " .. instanceName
+    end
+
+    return "Entered instance: " .. instanceName
+end
+
 function SC:CheckInstanceIntegrity()
     local db = GetDB()
     if not IsRunActive() then
@@ -274,11 +329,12 @@ function SC:CheckInstanceIntegrity()
         return
     end
 
-    local instanceName = GetInstanceInfo()
+    local instanceName, _, difficultyID, difficultyName, _, _, _, _, instanceGroupSize, lfgDungeonID = GetInstanceInfo()
     if not instanceName or instanceName == "" or currentInstanceName == instanceName then
         return
     end
 
+    local entrySource = GetInstanceEntrySource()
     currentInstanceName = instanceName
     db.run.dungeons = db.run.dungeons or {}
     db.run.dungeonOrder = db.run.dungeonOrder or {}
@@ -291,6 +347,7 @@ function SC:CheckInstanceIntegrity()
             count = 0,
             firstEnteredAt = time(),
             lastEnteredAt = nil,
+            firstEntrySource = entrySource,
         }
         db.run.dungeons[instanceName] = entry
         table.insert(db.run.dungeonOrder, instanceName)
@@ -298,10 +355,25 @@ function SC:CheckInstanceIntegrity()
 
     entry.count = entry.count + 1
     entry.lastEnteredAt = time()
+    entry.lastEntrySource = entrySource
+    entry.instanceType = instanceType
+    entry.difficultyID = difficultyID
+    entry.difficultyName = difficultyName
+    entry.instanceGroupSize = instanceGroupSize
+    entry.lfgDungeonID = lfgDungeonID
+    entry.isFollowerDungeon = entrySource == "FOLLOWER" or nil
+    entry.isGroupFinder = entrySource == "GROUP_FINDER" or nil
 
-    self:AddLog("INSTANCE_ENTERED", "Entered instance: " .. instanceName, {
+    self:AddLog("INSTANCE_ENTERED", BuildInstanceEntryMessage(instanceName, entrySource), {
         instanceName = instanceName,
         instanceType = instanceType,
+        entrySource = entrySource,
+        difficultyID = difficultyID,
+        difficultyName = difficultyName,
+        instanceGroupSize = instanceGroupSize,
+        lfgDungeonID = lfgDungeonID,
+        isFollowerDungeon = entrySource == "FOLLOWER",
+        isGroupFinder = entrySource == "GROUP_FINDER",
         count = entry.count,
     })
 
@@ -629,7 +701,9 @@ function SC:PrintDungeons()
     for _, name in ipairs(db.run.dungeonOrder) do
         local entry = db.run.dungeons[name]
         if entry then
-            Print(entry.name .. " - entries: " .. tostring(entry.count))
+            local source = FormatInstanceSource(entry.lastEntrySource or entry.firstEntrySource)
+            local difficulty = entry.difficultyName and entry.difficultyName ~= "" and (" - " .. entry.difficultyName) or ""
+            Print(entry.name .. " - entries: " .. tostring(entry.count) .. " - " .. source .. difficulty)
         end
     end
 end
