@@ -3,6 +3,7 @@
 ## Notes: Group accountability tracker for hardcore-style retail runs.
 ## Author: Spencer
 ## Version: 0.5.0
+## IconTexture: Interface/AddOns/Softcore/Assets/SoftcoreLogoMinimap
 ## SavedVariables: SoftcoreDB, SoftcoreAchievementsDB
 ## SavedVariablesPerCharacter: SoftcoreCharDB
 
