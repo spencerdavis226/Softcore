@@ -38,14 +38,13 @@ The Ironman preset follows the common WoW Challenges shape and allows flight pat
 
 ## HUD
 
-The HUD appears when a run is active unless hidden with `/sc hud`.
+The HUD is a compact glance view shown during active runs.
 
-- Green: valid/active
-- Yellow: blocked, conflict, or violation
-- Red: failed
-- Grey: unsynced or inactive
-
-Solo runs show local run status. Grouped runs show party status plus synced party members. Clicking the HUD opens the Violations tab if local active violations exist, otherwise Overview.
+- Toggle visibility with `/sc hud`.
+- Starting a new run always shows the HUD by default.
+- Lamp colors: green (valid), yellow (warning/conflict/blocked), orange (party member failed, local character still valid), red (local failed), gray (no run/pending).
+- The text is intentionally short and single-line.
+- Clicking the HUD opens the most relevant main tab (typically Overview, Violations, or Run).
 
 ## Slash Commands
 

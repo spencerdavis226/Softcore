@@ -1306,6 +1306,10 @@ function SC:StartRun(runOptions)
         self:Sync_BroadcastStatus("RUN_START")
     end
 
+    SoftcoreDB = SoftcoreDB or {}
+    SoftcoreDB.ui = SoftcoreDB.ui or {}
+    SoftcoreDB.ui.hudHidden = false
+
     if self.HUD_Refresh then
         self:HUD_Refresh()
     end
@@ -1870,7 +1874,8 @@ function SC:PrintHelp()
     Print("  /sc propose-add Player-Realm")
     Print("  /sc announce off|chat|party|guild")
     Print("  /sc resync        re-sync state with party")
-    Print("  /sc hud | minimap toggle UI surfaces")
+    Print("  /sc hud          toggle the HUD")
+    Print("  /sc minimap      toggle the minimap button")
     Print("  /sc reset | retire")
     Print("  /sc access        print access rules")
     Print("  /sc rule name value")
