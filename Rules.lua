@@ -71,8 +71,6 @@ local HASH_RULE_ORDER = {
     "instancedPvP",
     "maxDeaths",
     "maxDeathsValue",
-    "firstPersonOnly",
-    "actionCam",
 }
 
 local BOOLEAN_RULES = {

@@ -1489,6 +1489,12 @@ local function RefreshRunPanel(frame)
     end
     frame.start.applyChangesBtn:SetShown(modifying)
     frame.start.cancelChangesBtn:SetShown(modifying)
+    if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:Hide() end
+    if frame.start.proposalDeclineBtn then frame.start.proposalDeclineBtn:Hide() end
+    if frame.start.proposalCancelBtn then
+        frame.start.proposalCancelBtn:Hide()
+        frame.start.proposalCancelBtn:SetText("Cancel Proposal")
+    end
     SetRunSetupEnabled(frame, (not active) or modifying)
     if active and not modifying then
         frame.start.casualBtn:SetEnabled(false)
