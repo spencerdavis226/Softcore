@@ -21,6 +21,9 @@ local RULE_KEYS = {
     "bank",
     "warbandBank",
     "guildBank",
+    "voidStorage",
+    "craftingOrders",
+    "vendor",
     "mounts",
     "flying",
     "flightPaths",
@@ -36,8 +39,6 @@ local RULE_KEYS = {
     "instancedPvP",
     "maxDeaths",
     "maxDeathsValue",
-    "firstPersonOnly",
-    "actionCam",
 }
 
 local function FriendlyGroupingMode(value)
