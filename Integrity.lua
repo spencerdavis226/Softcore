@@ -305,6 +305,42 @@ local function FormatInstanceSource(source)
     return "Manual"
 end
 
+local function GetTrackedInstanceKind(instanceType, entrySource)
+    if entrySource == "FOLLOWER" then
+        return "DUNGEON"
+    end
+
+    if instanceType == "party" then
+        return "DUNGEON"
+    end
+
+    if instanceType == "raid" then
+        return "RAID"
+    end
+
+    if instanceType == "scenario" then
+        return "SCENARIO"
+    end
+
+    if instanceType == "pvp" or instanceType == "arena" then
+        return "PVP"
+    end
+
+    return "INSTANCE"
+end
+
+local function FormatInstanceKind(kind)
+    if kind == "DUNGEON" then return "Dungeon" end
+    if kind == "RAID" then return "Raid" end
+    if kind == "SCENARIO" then return "Scenario" end
+    if kind == "PVP" then return "Instanced PvP" end
+    return "Instance"
+end
+
+local function ShouldApplyDungeonRepeatRule(instanceKind)
+    return instanceKind == "DUNGEON"
+end
+
 local function BuildInstanceEntryMessage(instanceName, entrySource)
     if entrySource == "FOLLOWER" then
         return "Entered follower dungeon: " .. instanceName
@@ -335,6 +371,7 @@ function SC:CheckInstanceIntegrity()
     end
 
     local entrySource = GetInstanceEntrySource()
+    local instanceKind = GetTrackedInstanceKind(instanceType, entrySource)
     currentInstanceName = instanceName
     db.run.dungeons = db.run.dungeons or {}
     db.run.dungeonOrder = db.run.dungeonOrder or {}
@@ -348,6 +385,7 @@ function SC:CheckInstanceIntegrity()
             firstEnteredAt = time(),
             lastEnteredAt = nil,
             firstEntrySource = entrySource,
+            instanceKind = instanceKind,
         }
         db.run.dungeons[instanceName] = entry
         table.insert(db.run.dungeonOrder, instanceName)
@@ -356,6 +394,7 @@ function SC:CheckInstanceIntegrity()
     entry.count = entry.count + 1
     entry.lastEnteredAt = time()
     entry.lastEntrySource = entrySource
+    entry.instanceKind = instanceKind
     entry.instanceType = instanceType
     entry.difficultyID = difficultyID
     entry.difficultyName = difficultyName
@@ -367,6 +406,7 @@ function SC:CheckInstanceIntegrity()
     self:AddLog("INSTANCE_ENTERED", BuildInstanceEntryMessage(instanceName, entrySource), {
         instanceName = instanceName,
         instanceType = instanceType,
+        instanceKind = instanceKind,
         entrySource = entrySource,
         difficultyID = difficultyID,
         difficultyName = difficultyName,
@@ -377,10 +417,10 @@ function SC:CheckInstanceIntegrity()
         count = entry.count,
     })
 
-    if entry.count > 1 then
+    if entry.count > 1 and ShouldApplyDungeonRepeatRule(instanceKind) then
         self:ApplyRuleOutcome("dungeonRepeat", {
             playerKey = self:GetPlayerKey(),
-            detail = "Repeated instance during this run: " .. instanceName,
+            detail = "Repeated dungeon during this run: " .. instanceName,
         })
     end
 
@@ -702,8 +742,9 @@ function SC:PrintDungeons()
         local entry = db.run.dungeons[name]
         if entry then
             local source = FormatInstanceSource(entry.lastEntrySource or entry.firstEntrySource)
+            local kind = FormatInstanceKind(entry.instanceKind or GetTrackedInstanceKind(entry.instanceType, entry.lastEntrySource or entry.firstEntrySource))
             local difficulty = entry.difficultyName and entry.difficultyName ~= "" and (" - " .. entry.difficultyName) or ""
-            Print(entry.name .. " - entries: " .. tostring(entry.count) .. " - " .. source .. difficulty)
+            Print(entry.name .. " - entries: " .. tostring(entry.count) .. " - " .. kind .. " - " .. source .. difficulty)
         end
     end
 end

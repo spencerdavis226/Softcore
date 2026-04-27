@@ -21,6 +21,8 @@ local ACCESS_EVENTS = {
 local movementState = {
     mounted = false,
     flying = false,
+    vehicleActive = false,
+    vehicleReason = nil,
     mountWarnedAt = 0,
     flyingWarnedAt = 0,
     flightPathWarnedAt = 0,
@@ -29,6 +31,7 @@ local movementState = {
 local MOVEMENT_WARNING_THROTTLE = 30
 local ACCESS_WARNING_THROTTLE = 30
 local accessWarnedAt = {}
+local petBattleActive = false
 
 local function Broadcast(reason)
     if SC.Sync_BroadcastStatus then
@@ -127,6 +130,35 @@ local function IsRunActiveForPvpAdvisory()
     if not db or not db.run or not db.run.active then return false end
     if SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed() then return false end
     return true
+end
+
+local function IsRunActiveForLocalAudit()
+    local db = SC.db or SoftcoreDB
+    if not db or not db.run or not db.run.active then return false end
+    if SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed() then return false end
+    return true
+end
+
+local function SafeUnitBoolean(func, unit)
+    if not func then return false end
+
+    local ok, result = pcall(func, unit)
+    return ok and result == true
+end
+
+local function SafeGlobalBoolean(func)
+    if not func then return false end
+
+    local ok, result = pcall(func)
+    return ok and result == true
+end
+
+local function AddLocalAudit(kind, message, extra)
+    if not IsRunActiveForLocalAudit() then return end
+
+    extra = extra or {}
+    extra.suppressAuditSync = true
+    SC:AddLog(kind, message, extra)
 end
 
 local function IsWarModeActive()
@@ -264,7 +296,36 @@ local function SafeRegisterEvent(frame, event)
     pcall(frame.RegisterEvent, frame, event)
 end
 
+local function GetForcedMovementReason()
+    if SafeUnitBoolean(UnitOnTaxi, "player") then
+        return "taxi"
+    end
+
+    if SafeUnitBoolean(UnitInVehicle, "player")
+        or SafeUnitBoolean(UnitUsingVehicle, "player")
+        or SafeUnitBoolean(UnitHasVehicleUI, "player")
+        or SafeGlobalBoolean(CanExitVehicle) then
+        return "vehicle"
+    end
+
+    if SafeGlobalBoolean(HasOverrideActionBar) then
+        return "override"
+    end
+
+    return nil
+end
+
+local function FormatForcedMovementReason(reason)
+    if reason == "taxi" then return "taxi or forced flight" end
+    if reason == "override" then return "override action bar" end
+    return "vehicle"
+end
+
 local function ApplyMovementRule(ruleName, detail, throttleField)
+    if not IsRunActiveForLocalAudit() then
+        return
+    end
+
     local now = time()
     if now - (movementState[throttleField] or 0) < MOVEMENT_WARNING_THROTTLE then
         return
@@ -287,6 +348,28 @@ local function CheckMovementRules()
         return
     end
 
+    local forcedReason = GetForcedMovementReason()
+    if forcedReason then
+        if not movementState.vehicleActive or movementState.vehicleReason ~= forcedReason then
+            AddLocalAudit("FORCED_MOVEMENT", "Vehicle or forced movement active: " .. FormatForcedMovementReason(forcedReason) .. ".", {
+                reason = forcedReason,
+            })
+        end
+        movementState.vehicleActive = true
+        movementState.vehicleReason = forcedReason
+        movementState.mounted = false
+        movementState.flying = false
+        return
+    elseif movementState.vehicleActive then
+        AddLocalAudit("FORCED_MOVEMENT_ENDED", "Vehicle or forced movement ended.", {
+            reason = movementState.vehicleReason,
+        })
+        movementState.vehicleActive = false
+        movementState.vehicleReason = nil
+        movementState.mounted = false
+        movementState.flying = false
+    end
+
     local mounted = IsMounted and IsMounted()
     -- In-game verification note: IsFlying() should catch mounted flight and Druid flight form
     -- in modern clients, but shapeshift edge cases may need live testing.
@@ -306,6 +389,24 @@ end
 
 local function ApplyFlightPathRule(detail)
     ApplyMovementRule("flightPaths", detail or "Used a flight path while on a Softcore run.", "flightPathWarnedAt")
+end
+
+local function HandlePetBattleStarted()
+    if petBattleActive then return end
+
+    petBattleActive = true
+    AddLocalAudit("PET_BATTLE_STARTED", "Pet battle started.", {
+        allowedByDefault = true,
+    })
+end
+
+local function HandlePetBattleEnded()
+    if not petBattleActive then return end
+
+    petBattleActive = false
+    AddLocalAudit("PET_BATTLE_ENDED", "Pet battle ended.", {
+        allowedByDefault = true,
+    })
 end
 
 function SC:CheckMovementRules()
@@ -342,6 +443,16 @@ function SC:Events_Register()
     SafeRegisterEvent(eventFrame, "PLAYER_FLAGS_CHANGED")
     SafeRegisterEvent(eventFrame, "TAXIMAP_OPENED")
     SafeRegisterEvent(eventFrame, "TAXIMAP_CLOSED")
+    SafeRegisterEvent(eventFrame, "UNIT_ENTERING_VEHICLE")
+    SafeRegisterEvent(eventFrame, "UNIT_ENTERED_VEHICLE")
+    SafeRegisterEvent(eventFrame, "UNIT_EXITING_VEHICLE")
+    SafeRegisterEvent(eventFrame, "UNIT_EXITED_VEHICLE")
+    SafeRegisterEvent(eventFrame, "UPDATE_OVERRIDE_ACTIONBAR")
+    SafeRegisterEvent(eventFrame, "VEHICLE_UPDATE")
+    SafeRegisterEvent(eventFrame, "PLAYER_CONTROL_LOST")
+    SafeRegisterEvent(eventFrame, "PLAYER_CONTROL_GAINED")
+    SafeRegisterEvent(eventFrame, "PET_BATTLE_OPENING_START")
+    SafeRegisterEvent(eventFrame, "PET_BATTLE_CLOSE")
     eventFrame:RegisterUnitEvent("UNIT_AURA", "player")
     eventFrame:RegisterUnitEvent("UNIT_FACTION", "player", "target")
 
@@ -378,10 +489,14 @@ function SC:Events_Register()
             HandleAccessEvent(event)
         elseif IsWarbandBankAccessEvent(event, ...) then
             ApplyAccessRule("warbandBank", "Warband bank opened or accessed.")
-        elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" or event == "UNIT_AURA" then
+        elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" or event == "UNIT_AURA" or event == "UNIT_ENTERING_VEHICLE" or event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITING_VEHICLE" or event == "UNIT_EXITED_VEHICLE" or event == "UPDATE_OVERRIDE_ACTIONBAR" or event == "VEHICLE_UPDATE" or event == "PLAYER_CONTROL_LOST" or event == "PLAYER_CONTROL_GAINED" then
             -- In-game verification note: mount/flying state updates can arrive through either
-            -- display or aura events depending on mount type, shapeshift form, and client build.
+            -- display, aura, vehicle, or override-bar events depending on client build and quest mechanics.
             CheckMovementRules()
+        elseif event == "PET_BATTLE_OPENING_START" then
+            HandlePetBattleStarted()
+        elseif event == "PET_BATTLE_CLOSE" then
+            HandlePetBattleEnded()
         elseif event == "PLAYER_TARGET_CHANGED" then
             CheckTargetPvpAdvisory()
         elseif event == "PLAYER_FLAGS_CHANGED" or event == "UNIT_FACTION" then

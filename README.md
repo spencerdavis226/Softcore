@@ -108,13 +108,21 @@ If a party converts to a raid, Softcore stops party sync, clears remote roster d
 
 ## Dungeon Handling
 
-Softcore treats dungeon entry as an audit event, not as a protected gate. Manual entrances, Group Finder dungeon instances, and follower dungeons are recorded in the local run ledger and shown by `/sc dungeons`.
+Softcore treats instance entry as an audit event, not as a protected gate. Manual entrances, Group Finder dungeon instances, follower dungeons, raids, scenarios, and instanced PvP are recorded in the local run ledger and shown by `/sc dungeons`.
 
 Follower dungeons are allowed by default. Follower NPCs are not treated as unsynced party members; only real player party members can create synced-run compatibility issues.
 
 Group Finder dungeons are allowed when the resulting player group is compatible with the run. If Group Finder adds unsynced, unconfirmed, or run-mismatched players, Softcore records that as an instance-with-unsynced-players rule outcome according to the active rules. This affects the ledger and party status, but it does not directly fail or reset the local character unless the accepted rules explicitly make that outcome fatal.
 
-Repeated instance entries are tracked by instance name and governed by the repeated-dungeon rule.
+Raid groups remain local-only. Raid and scenario entries are logged as audit context, but they do not count as repeated dungeons. Repeated dungeon entries are tracked by instance name and governed by the repeated-dungeon rule.
+
+## Graceful World Mechanics
+
+Pet battles are allowed by default. Starting and ending a pet battle is logged locally for audit context and does not create a violation.
+
+Quest vehicles, vehicle UI, override action bars, taxis, and forced movement are allowed by default. While those states are active, Softcore suppresses mount/flying rule outcomes so normal quest mechanics and forced flights do not create false violations. Player-selected flight paths are still detected through the taxi-node action when that rule is enabled.
+
+Summons, portals, quest teleports, Chromie Time, Timewalking, level scaling, and similar world systems are treated as normal game context unless a future rule explicitly governs them.
 
 ## Separate Runs
 
