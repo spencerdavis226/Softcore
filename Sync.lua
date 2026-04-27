@@ -944,6 +944,9 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
     if payload.active == "1" and payload.runId and self.ConfirmAcceptedProposalFromStatus then
         self:ConfirmAcceptedProposalFromStatus(key, payload.runId)
     end
+    if payload.active == "1" and payload.runId and self.ConfirmPendingProposalPeerActive then
+        self:ConfirmPendingProposalPeerActive(key, payload.runId)
+    end
 
     if self.RefreshParticipantsFromRoster then
         self:RefreshParticipantsFromRoster()

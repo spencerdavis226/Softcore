@@ -369,6 +369,59 @@ function SC:CheckPendingProposalOnRosterUpdate()
     end
 end
 
+function SC:ConfirmPendingProposalPeerActive(playerKey, runId)
+    local db = GetDB()
+    local proposal = self:GetPendingProposal()
+    if not proposal or proposal.status ~= "PENDING" then return false end
+    if proposal.proposedBy ~= self:GetPlayerKey() then return false end
+    if proposal.proposalType ~= "RUN" and proposal.proposalType ~= "SYNC_RUN" and proposal.proposalType ~= "ADD_PARTICIPANT" then return false end
+    if not playerKey or not runId or proposal.runId ~= runId then return false end
+
+    proposal.acceptedBy[playerKey] = true
+
+    if not self:CheckAllProposalMembersAccepted(proposal) then
+        return false
+    end
+
+    proposal.status = "CONFIRMED"
+    db.pendingProposalId = nil
+
+    if proposal.proposalType == "RUN" and not db.run.active then
+        self:StartRun({
+            runId = proposal.runId,
+            runName = proposal.runName,
+            ruleset = proposal.ruleset,
+            preset = proposal.preset,
+        })
+    end
+
+    if proposal.proposalType == "RUN" or proposal.proposalType == "ADD_PARTICIPANT" then
+        ActivateAcceptedProposalParticipants(self, proposal)
+    end
+
+    if self.Sync_SendRunProposalConfirmed then
+        self:Sync_SendRunProposalConfirmed(proposal)
+    end
+
+    self:AddLog("PROPOSAL_CONFIRMED", "Proposal confirmed from active peer status: " .. tostring(playerKey), {
+        proposalId = proposal.proposalId,
+        playerKey = playerKey,
+        runId = proposal.runId,
+    })
+
+    if proposal.proposalType == "SYNC_RUN" then
+        Print("run sync confirmed from party status.")
+    elseif proposal.proposalType == "ADD_PARTICIPANT" then
+        Print("party invite confirmed from party status.")
+    else
+        Print("run started from party acceptance.")
+    end
+
+    if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+    if self.HUD_Refresh then self:HUD_Refresh() end
+    return true
+end
+
 function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, runId)
     if IsInRaid() then
         Print("raid groups are not supported for run proposals.")
@@ -611,44 +664,40 @@ function SC:AcceptPendingProposal()
     end
 
     proposal.acceptedBy[playerKey] = true
-    proposal.status = "ACCEPTED"
+    proposal.status = "CONFIRMED"
     proposal.acceptRetryCount = 0
     db.acceptedRunId = proposal.runId
     db.acceptedRulesetHash = proposal.rulesetHash
+    if db.pendingProposalId == proposal.proposalId then
+        db.pendingProposalId = nil
+    end
 
-    if proposal.proposalType == "ADD_PARTICIPANT" then
-        -- Wait for proposer confirmation while grouped so all accepted players
-        -- join the same run together.
-        if not IsInGroup() then
-            if not db.run.active then
-                self:StartRun({
-                    runId = proposal.runId,
-                    runName = proposal.runName,
-                    ruleset = proposal.ruleset,
-                    preset = proposal.preset,
-                })
-            end
+    if proposal.proposalType == "SYNC_RUN" then
+        self:ApplyRunSyncProposal(proposal, proposal.proposedBy)
+    elseif proposal.proposalType == "ADD_PARTICIPANT" then
+        if not db.run.active then
+            self:StartRun({
+                runId = proposal.runId,
+                runName = proposal.runName,
+                ruleset = proposal.ruleset,
+                preset = proposal.preset,
+            })
+        else
+            local participant = self:GetOrCreateParticipant(playerKey)
+            participant.status = "ACTIVE"
+            participant.joinedAt = participant.joinedAt or time()
         end
-    elseif proposal.proposalType == "SYNC_RUN" then
-        -- Keep the proposal visible until the proposer confirms that everyone
-        -- currently present has accepted.
+    elseif not db.run.active then
+        self:StartRun({
+            runId = proposal.runId,
+            runName = proposal.runName,
+            ruleset = proposal.ruleset,
+            preset = proposal.preset,
+        })
     else
-        -- When in a group, wait for PROPOSAL_CONFIRMED from the proposer.
-        -- When not in a group (edge case), start immediately.
-        if not IsInGroup() then
-            if not db.run.active then
-                self:StartRun({
-                    runId = proposal.runId,
-                    runName = proposal.runName,
-                    ruleset = proposal.ruleset,
-                    preset = proposal.preset,
-                })
-            else
-                local participant = self:GetOrCreateParticipant(playerKey)
-                participant.status = "ACTIVE"
-            end
-        end
-        -- else: run will start when ReceiveRunConfirmed fires
+        local participant = self:GetOrCreateParticipant(playerKey)
+        participant.status = "ACTIVE"
+        participant.joinedAt = participant.joinedAt or time()
     end
 
     self:AddLog("PROPOSAL_ACCEPTED", "Accepted proposal: " .. proposal.runName, {
@@ -660,16 +709,11 @@ function SC:AcceptPendingProposal()
         self:Sync_SendProposalResponse("PROPOSAL_ACCEPT", proposal)
     end
 
-    if C_Timer and C_Timer.After then
-        local proposalId = proposal.proposalId
-        C_Timer.After(ACCEPT_RETRY_SECONDS, function()
-            if SC.RetryAcceptedProposal then
-                SC:RetryAcceptedProposal(proposalId)
-            end
-        end)
+    if self.Sync_BroadcastStatus then
+        self:Sync_BroadcastStatus("PROPOSAL_ACCEPTED")
     end
 
-    Print("accepted proposal: " .. proposal.runName .. ". Waiting for all members to accept.")
+    Print("accepted proposal: " .. proposal.runName .. ".")
     if self.MasterUI_Refresh then self:MasterUI_Refresh() end
     if self.HUD_Refresh then self:HUD_Refresh() end
 end
