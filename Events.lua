@@ -119,6 +119,67 @@ end
 
 local pvpWarnedAt = 0
 local PVP_WARNING_THROTTLE = 60
+local PVP_ADVISORY_THROTTLE = 300
+local pvpAdvisoryWarnedAt = {}
+
+local function IsRunActiveForPvpAdvisory()
+    local db = SC.db or SoftcoreDB
+    if not db or not db.run or not db.run.active then return false end
+    if SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed() then return false end
+    return true
+end
+
+local function IsWarModeActive()
+    if not C_PvP then return false end
+
+    if C_PvP.IsWarModeActive then
+        local ok, active = pcall(C_PvP.IsWarModeActive)
+        if ok and active then return true end
+    end
+
+    if C_PvP.IsWarModeDesired then
+        local ok, desired = pcall(C_PvP.IsWarModeDesired)
+        if ok and desired then return true end
+    end
+
+    return false
+end
+
+local function WarnPvpAdvisory(key, detail)
+    if not IsRunActiveForPvpAdvisory() then return end
+
+    local now = time()
+    if now - (pvpAdvisoryWarnedAt[key] or 0) < PVP_ADVISORY_THROTTLE then
+        return
+    end
+    pvpAdvisoryWarnedAt[key] = now
+
+    DEFAULT_CHAT_FRAME:AddMessage("|cfffbbf24Softcore: " .. tostring(detail) .. "|r")
+    SC:AddLog("PVP_ADVISORY", detail, {
+        suppressAuditSync = true,
+    })
+end
+
+local function CheckPlayerPvpAdvisory()
+    if not IsRunActiveForPvpAdvisory() then return end
+
+    if IsWarModeActive() then
+        WarnPvpAdvisory("warMode", "War Mode is enabled during this run.")
+    elseif UnitIsPVP and UnitIsPVP("player") then
+        WarnPvpAdvisory("playerPvpFlag", "Your character is PvP flagged during this run.")
+    end
+end
+
+local function CheckTargetPvpAdvisory()
+    if not IsRunActiveForPvpAdvisory() then return end
+    if not UnitExists or not UnitExists("target") then return end
+    if UnitIsUnit and UnitIsUnit("target", "player") then return end
+    if UnitIsPlayer and not UnitIsPlayer("target") then return end
+    if not UnitIsPVP or not UnitIsPVP("target") then return end
+
+    local name = UnitName and UnitName("target") or "target"
+    WarnPvpAdvisory("targetPvpFlag:" .. tostring(name or "?"), "Target is PvP flagged: " .. tostring(name or "unknown") .. ".")
+end
 
 local function CheckInstancedPvP()
     local db = SC.db or SoftcoreDB
@@ -276,10 +337,13 @@ function SC:Events_Register()
     SafeRegisterEvent(eventFrame, "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED")
     eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
     eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+    eventFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
     eventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
+    SafeRegisterEvent(eventFrame, "PLAYER_FLAGS_CHANGED")
     SafeRegisterEvent(eventFrame, "TAXIMAP_OPENED")
     SafeRegisterEvent(eventFrame, "TAXIMAP_CLOSED")
     eventFrame:RegisterUnitEvent("UNIT_AURA", "player")
+    eventFrame:RegisterUnitEvent("UNIT_FACTION", "player", "target")
 
     eventFrame:SetScript("OnEvent", function(_, event, ...)
         if event == "PLAYER_DEAD" then
@@ -292,6 +356,7 @@ function SC:Events_Register()
         elseif event == "ZONE_CHANGED_NEW_AREA" then
             HandleZoneChanged()
             CheckInstancedPvP()
+            CheckPlayerPvpAdvisory()
             if SC.CheckInstanceIntegrity then
                 SC:CheckInstanceIntegrity()
             end
@@ -317,6 +382,16 @@ function SC:Events_Register()
             -- In-game verification note: mount/flying state updates can arrive through either
             -- display or aura events depending on mount type, shapeshift form, and client build.
             CheckMovementRules()
+        elseif event == "PLAYER_TARGET_CHANGED" then
+            CheckTargetPvpAdvisory()
+        elseif event == "PLAYER_FLAGS_CHANGED" or event == "UNIT_FACTION" then
+            local unit = ...
+            if not unit or unit == "player" then
+                CheckPlayerPvpAdvisory()
+            end
+            if not unit or unit == "target" then
+                CheckTargetPvpAdvisory()
+            end
         elseif event == "TAXIMAP_OPENED" then
             -- Presence of the map alone is not a violation; the taxi API hook below
             -- records actual flight path use.
@@ -372,6 +447,8 @@ function SC:Events_Register()
             if SC.EnforceActionCamSettings then
                 SC:EnforceActionCamSettings()
             end
+            CheckPlayerPvpAdvisory()
+            CheckTargetPvpAdvisory()
             Broadcast("PLAYER_ENTERING_WORLD")
         end
 

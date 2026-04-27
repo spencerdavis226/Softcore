@@ -149,6 +149,8 @@ Remote violations may be displayed and shared as audit records for the same sync
 
 Optional death announcements are for your own character only and default to off. Use `/sc announce chat party`, `/sc announce guild`, or the Run-tab checkboxes if you want Softcore to announce your own deaths; incoming announcements never change your local run state.
 
+PvP safety checks are advisory only. During an active run, Softcore warns locally and records a local log entry when War Mode/player PvP flagging is detected or when you target a PvP-flagged player; these warnings do not fail the run, add violations, or sync to party members.
+
 ## Persistence And Safety
 
 Run data is stored per character in `SoftcoreCharDB`. This protects alts and replacement characters from inheriting another character's active run.
@@ -179,6 +181,7 @@ Boundary behavior:
 - Dungeon repeat state
 - Equipped gear quality and heirloom checks
 - Economy/storage/movement/access rule events, including flight path use
+- Local PvP advisory warnings for War Mode, player PvP flagging, and PvP-flagged targets
 - Audit log entries and shared same-run audit events
 
 ## Testing Checklist

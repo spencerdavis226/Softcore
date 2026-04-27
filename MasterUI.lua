@@ -190,6 +190,7 @@ local LOG_EVENT_DISPLAY = {
     PROPOSAL_OBSERVED = { label = "Proposal Seen", group = "proposal" },
     PROPOSAL_RESPONSE_UNKNOWN = { label = "Unknown Reply", group = "proposal" },
     PROPOSAL_VERSION_MISMATCH = { label = "Version Mismatch", group = "proposal" },
+    PVP_ADVISORY = { label = "PvP Advisory", group = "world" },
     RULE_AMENDMENT_ACCEPTED = { label = "Rule Accepted", group = "rules" },
     RULE_AMENDMENT_APPLIED = { label = "Rules Applied", group = "rules" },
     RULE_AMENDMENT_DECLINED = { label = "Rule Declined", group = "rules" },
