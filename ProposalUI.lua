@@ -126,6 +126,30 @@ local function IsGroupProposal(proposal)
         or proposal.proposalType == "ADD_PARTICIPANT"
 end
 
+local function ActivateAcceptedProposalParticipants(self, proposal)
+    if not proposal or not proposal.acceptedBy then
+        return
+    end
+
+    local db = GetDB()
+    if not db.run or not db.run.active then
+        return
+    end
+
+    local localKey = self:GetPlayerKey()
+    local currentParty = GetCurrentPartyKeys()
+    for playerKey, accepted in pairs(proposal.acceptedBy) do
+        if accepted and playerKey ~= localKey and currentParty[playerKey] then
+            local participant = self:GetOrCreateParticipant(playerKey)
+            if participant.status ~= "FAILED" and participant.status ~= "RETIRED" then
+                participant.status = "ACTIVE"
+                participant.joinedAt = participant.joinedAt or time()
+                participant.leftAt = nil
+            end
+        end
+    end
+end
+
 function SC:SerializeRuleset(ruleset)
     local parts = {}
 
@@ -735,6 +759,10 @@ function SC:ReceiveProposalResponse(payload, playerKey)
                         ruleset = proposal.ruleset,
                         preset = proposal.preset,
                     })
+                end
+
+                if proposal.proposalType == "RUN" or proposal.proposalType == "ADD_PARTICIPANT" then
+                    ActivateAcceptedProposalParticipants(self, proposal)
                 end
 
                 if self.Sync_SendRunProposalConfirmed then

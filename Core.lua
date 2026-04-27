@@ -842,6 +842,35 @@ function SC:MarkParticipantLeft(playerKey)
     return participant
 end
 
+function SC:CanAutoDiscoverParticipant(playerKey, remoteStatus)
+    local db = EnsureDatabase()
+    if not db.run.active or not playerKey or not remoteStatus then
+        return false
+    end
+
+    local ruleset = db.run.ruleset or {}
+    if not ruleset.allowLateJoin or ruleset.requireLeaderApprovalForJoin then
+        return false
+    end
+
+    local localHash = self.GetRulesetHash and self:GetRulesetHash() or ""
+    if remoteStatus.runId ~= db.run.runId then
+        return false
+    end
+    if not remoteStatus.rulesetHash or remoteStatus.rulesetHash ~= localHash then
+        return false
+    end
+    if remoteStatus.participantStatus == "FAILED"
+        or remoteStatus.participantStatus == "RUN_MISMATCH"
+        or remoteStatus.participantStatus == "RULESET_MISMATCH"
+        or remoteStatus.participantStatus == "ADDON_VERSION_MISMATCH"
+        or remoteStatus.participantStatus == "NOT_IN_RUN" then
+        return false
+    end
+
+    return true
+end
+
 function SC:RefreshParticipantsFromRoster()
     local db = EnsureDatabase()
     local partyKeys = GetCurrentPartyKeys()
@@ -883,11 +912,7 @@ function SC:RefreshParticipantsFromRoster()
                 end
             elseif ruleset.allowLateJoin then
                 local remoteStatus = self.groupStatuses and self.groupStatuses[playerKey]
-                local localHash = self.GetRulesetHash and self:GetRulesetHash() or ""
-                local matchingRun = remoteStatus and remoteStatus.runId == db.run.runId
-                local matchingRules = remoteStatus and remoteStatus.rulesetHash and remoteStatus.rulesetHash == localHash
-
-                if matchingRun and matchingRules and remoteStatus.participantStatus ~= "FAILED" and remoteStatus.participantStatus ~= "RUN_MISMATCH" then
+                if self:CanAutoDiscoverParticipant(playerKey, remoteStatus) then
                     local participant = self:GetOrCreateParticipant(playerKey)
                     participant.status = "ACTIVE"
                     participant.joinedAt = participant.joinedAt or time()

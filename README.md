@@ -171,6 +171,7 @@ Boundary behavior:
 - Stale proposals expire after 30 minutes.
 - Stale rule amendments expire after 30 minutes.
 - Simultaneous incoming proposals are declined if another proposal is already pending.
+- Remote status heartbeats update peer display/conflict data, but they do not add run participants unless normal late-join rules allow it.
 - Remote violation-clear messages can only clear imported shared violations, not local authoritative violations.
 - Remote deaths, failures, mismatches, or resets do not fail or reset the local character.
 
@@ -178,7 +179,7 @@ Boundary behavior:
 
 - [x] Make sync stale-message protection tolerate peer sequence resets.
 - [x] Keep raids explicitly local-only and expire pending group governance when a party converts to raid.
-- [ ] Audit remote status participant writes so same-run display remains useful without bypassing proposal, invite, late-join, or leader-approval rules.
+- [x] Audit remote status participant writes so same-run display remains useful without bypassing proposal, invite, late-join, or leader-approval rules.
 - [ ] Add in-game party test passes for disconnect/reload, non-addon members, members joining/leaving during pending proposals, and rule amendment expiry.
 
 ## What Softcore Tracks

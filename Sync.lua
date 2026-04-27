@@ -915,15 +915,18 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
         unsynced = false,
     }
 
+    if self.RefreshParticipantsFromRoster then
+        self:RefreshParticipantsFromRoster()
+    end
+
     -- Remote sync is advisory/display-only. A peer payload may update that peer's
     -- display record, but it must never fail, reset, or otherwise invalidate the
-    -- local character's individual run state.
-    if self.db and self.db.run and self.db.run.active and self.GetOrCreateParticipant then
+    -- local character's individual run state or bypass run join rules.
+    if self.db and self.db.run and self.db.run.active then
         local run = self.db.run
-        local ruleset = run.ruleset or {}
+        local participant = run.participants and run.participants[key]
 
-        if not (ruleset.groupingMode == "SOLO_SELF_FOUND" and not run.participants[key]) then
-            local participant = self:GetOrCreateParticipant(key)
+        if participant then
             participant.name = name
             participant.realm = realm
             participant.class = payload.class
