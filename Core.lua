@@ -1663,11 +1663,202 @@ function SC:PrintLog()
     end
 end
 
+local function CountActiveViolations(violations)
+    local count = 0
+    for _, violation in ipairs(violations or {}) do
+        if violation.status ~= "CLEARED" then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function CountActiveConflicts(conflicts)
+    local count = 0
+    for _, conflict in pairs(conflicts or {}) do
+        if conflict.active then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function CsvValue(value)
+    local text = tostring(value == nil and "" or value)
+    text = string.gsub(text, "[\t\r\n]+", " ")
+    text = string.gsub(text, "\"", "\"\"")
+    if string.find(text, "[,\"]") then
+        text = "\"" .. text .. "\""
+    end
+    return text
+end
+
+local function AddCsvLine(lines, section, field, value, timeValue, actor, kind, message)
+    table.insert(lines, table.concat({
+        CsvValue(section),
+        CsvValue(field),
+        CsvValue(value),
+        CsvValue(timeValue),
+        CsvValue(actor),
+        CsvValue(kind),
+        CsvValue(message),
+    }, ","))
+end
+
+local function BuildRunExportText()
+    local db = EnsureDatabase()
+    local run = db.run or {}
+    local character = db.character or GetPlayerSnapshot()
+    local lines = {}
+
+    table.insert(lines, "Section,Field,Value,Time,Actor,Kind,Message")
+    AddCsvLine(lines, "Info", "Format", "Softcore CSV export - comma-delimited for spreadsheets")
+    AddCsvLine(lines, "Info", "Exported", FormatTime(time()))
+    AddCsvLine(lines, "Character", "Name", tostring(character.name or "Unknown") .. "-" .. tostring(character.realm or "Unknown"))
+    AddCsvLine(lines, "Character", "Class", character.class or "?")
+    AddCsvLine(lines, "Character", "Level", character.level or "?")
+    AddCsvLine(lines, "Character", "Zone", character.zone or "?")
+    AddCsvLine(lines, "Run", "Name", run.runName or "none")
+    AddCsvLine(lines, "Run", "Run ID", run.runId or "none")
+    AddCsvLine(lines, "Run", "Status", SC:GetStatusText())
+    AddCsvLine(lines, "Run", "Active", run.active == true)
+    AddCsvLine(lines, "Run", "Valid", run.valid ~= false)
+    AddCsvLine(lines, "Run", "Failed", run.failed == true)
+    AddCsvLine(lines, "Run", "Started", FormatTime(run.startTime))
+    AddCsvLine(lines, "Run", "Observed Time", FormatDuration(SC:GetActiveRunTimeSeconds()))
+    AddCsvLine(lines, "Run", "Deaths", run.deathCount or 0)
+    AddCsvLine(lines, "Run", "Active Violations", CountActiveViolations(db.violations))
+    AddCsvLine(lines, "Run", "Active Conflicts", CountActiveConflicts(run.conflicts))
+    AddCsvLine(lines, "Run", "Ruleset Version", run.ruleset and run.ruleset.version or "?")
+    AddCsvLine(lines, "Run", "Ruleset Hash", SC.GetRulesetHash and SC:GetRulesetHash() or "unknown")
+    AddCsvLine(lines, "Run", "Party Status", SC:GetPartyStatus())
+
+    if #(run.participantOrder or {}) > 0 then
+        for _, playerKey in ipairs(run.participantOrder) do
+            local participant = run.participants and run.participants[playerKey]
+            if participant then
+                AddCsvLine(lines, "Participant", participant.playerKey or playerKey, participant.status or "?", nil, nil, "Level", participant.currentLevel or participant.levelAtJoin or "?")
+            end
+        end
+    end
+
+    if #(db.eventLog or {}) > 0 then
+        for index = 1, #db.eventLog do
+            local entry = db.eventLog[index]
+            AddCsvLine(lines, "Log", tostring(index), "", FormatTime(entry.time), entry.actorKey or entry.playerKey or "", entry.kind or "?", entry.message or "")
+        end
+    end
+
+    return table.concat(lines, "\n")
+end
+
+function SC:GetRunExportText()
+    return BuildRunExportText()
+end
+
+local exportFrame
+
+local function EnsureRunExportFrame()
+    if exportFrame then
+        return exportFrame
+    end
+
+    local frame = CreateFrame("Frame", "SoftcoreRunExportFrame", UIParent, "BackdropTemplate")
+    frame:SetSize(760, 520)
+    frame:SetPoint("CENTER")
+    frame:SetFrameStrata("DIALOG")
+    frame:EnableMouse(true)
+    frame:SetMovable(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+    if frame.SetBackdrop then
+        frame:SetBackdrop({
+            bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile = true,
+            tileSize = 32,
+            edgeSize = 32,
+            insets = { left = 8, right = 8, top = 8, bottom = 8 },
+        })
+        frame:SetBackdropColor(0, 0, 0, 0.96)
+    end
+
+    frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    frame.title:SetPoint("TOP", 0, -18)
+    frame.title:SetText("Softcore CSV Export")
+
+    frame.hint = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.hint:SetPoint("TOP", frame.title, "BOTTOM", 0, -8)
+    frame.hint:SetText("Comma-delimited for spreadsheets. Highlighted text is ready to copy.")
+
+    frame.close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    frame.close:SetPoint("TOPRIGHT", -6, -6)
+
+    frame.scroll = CreateFrame("ScrollFrame", "SoftcoreRunExportScrollFrame", frame, "UIPanelScrollFrameTemplate")
+    frame.scroll:SetPoint("TOPLEFT", 22, -64)
+    frame.scroll:SetPoint("BOTTOMRIGHT", -34, 24)
+
+    frame.editBox = CreateFrame("EditBox", nil, frame.scroll)
+    frame.editBox:SetMultiLine(true)
+    frame.editBox:SetAutoFocus(false)
+    frame.editBox:SetFontObject(ChatFontNormal or GameFontHighlightSmall)
+    frame.editBox:SetMaxLetters(0)
+    frame.editBox:SetWidth(690)
+    frame.editBox:SetScript("OnEscapePressed", function(editBox)
+        editBox:ClearFocus()
+    end)
+    frame.editBox:SetScript("OnTextChanged", function(editBox)
+        local height = editBox:GetStringHeight() + 20
+        if height < frame.scroll:GetHeight() then
+            height = frame.scroll:GetHeight()
+        end
+        editBox:SetHeight(height)
+    end)
+    frame.scroll:SetScrollChild(frame.editBox)
+
+    frame:Hide()
+    exportFrame = frame
+    return exportFrame
+end
+
+local function ShowRunExportWindow(text)
+    if not CreateFrame or not UIParent then
+        return false
+    end
+
+    local frame = EnsureRunExportFrame()
+    frame.editBox:SetText(text or "")
+    frame.editBox:SetCursorPosition(0)
+    frame.editBox:HighlightText()
+    frame.editBox:SetFocus()
+    frame.scroll:SetVerticalScroll(0)
+    frame:Show()
+    return true
+end
+
+function SC:PrintRunExport()
+    local text = BuildRunExportText()
+    for line in string.gmatch(text, "([^\n]+)") do
+        Print(line)
+    end
+end
+
+function SC:ShowRunExport()
+    local text = BuildRunExportText()
+    if ShowRunExportWindow(text) then
+        Print("CSV export opened for copy.")
+    else
+        self:PrintRunExport()
+    end
+end
+
 function SC:PrintHelp()
     Print("Softcore commands:")
     Print("  /sc menu | status | rules | violations | log")
     Print("  /sc status chat | rules chat | log chat")
     Print("  /sc run chat      print run integrity summary")
+    Print("  /sc export        copy CSV run summary")
     Print("  /sc participants  show current participants")
     Print("  /sc conflicts     print active party conflicts")
     Print("  /sc gear          print equipped gear rule status")
@@ -1764,6 +1955,13 @@ function SC:HandleSlash(input)
             self:OpenMasterWindow("OVERVIEW")
         else
             self:PrintRun()
+        end
+    elseif command == "export" or command == "summary" then
+        local sub = string.lower(strtrim(rest or ""))
+        if sub == "chat" or sub == "print" then
+            self:PrintRunExport()
+        else
+            self:ShowRunExport()
         end
     elseif command == "conflicts" then
         self:PrintConflicts()
