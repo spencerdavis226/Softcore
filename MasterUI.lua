@@ -1,4 +1,4 @@
-﻿-- Master menu for the main Softcore UI.
+-- Master menu for the main Softcore UI.
 
 local SC = Softcore
 
