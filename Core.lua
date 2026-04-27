@@ -140,11 +140,6 @@ local function CreateDefaultRuleset()
         instancedPvP = "ALLOWED",
         firstPersonOnly = "ALLOWED",
         actionCam = "ALLOWED",
-        actionCamShoulderOffset = 1.5,
-        actionCamDynamicPitch = true,
-        actionCamEnemyFocus = true,
-        actionCamInteractFocus = true,
-        actionCamHeadMovementStrength = 0.5,
         maxDeaths = false,
         maxDeathsValue = 3,
     }
@@ -197,6 +192,17 @@ local function ShouldThrottleRunNotice(run, bucketName, playerKey, seconds)
     return false
 end
 
+local function IsCameraRuleEnforcedValue(value)
+    return value ~= nil and value ~= "ALLOWED" and value ~= "LOG_ONLY" and value ~= false
+end
+
+local function DefaultCameraModeForRules(ruleset)
+    if not ruleset then return nil end
+    if IsCameraRuleEnforcedValue(ruleset.actionCam) then return "CINEMATIC" end
+    if IsCameraRuleEnforcedValue(ruleset.firstPersonOnly) then return "FIRST_PERSON" end
+    return nil
+end
+
 local function EnsureRunDefaults(run)
     if run.active == nil then run.active = false end
     if run.valid == nil then run.valid = true end
@@ -223,6 +229,7 @@ local function EnsureRunDefaults(run)
     end
 
     ApplyGroupingModeRules(run.ruleset)
+    run.cameraMode = run.cameraMode or DefaultCameraModeForRules(run.ruleset)
 
     for key, value in pairs(CreateDefaultGovernance()) do
         if run.governance[key] == nil then
@@ -1085,6 +1092,7 @@ function SC:StartRun(runOptions)
     db.run.ruleset = runOptions.ruleset and CopyTable(runOptions.ruleset) or CreateDefaultRuleset()
     db.run.ruleset.achievementPreset = runOptions.preset or db.run.ruleset.achievementPreset or "CUSTOM"
     ApplyGroupingModeRules(db.run.ruleset)
+    db.run.cameraMode = runOptions.cameraMode or DefaultCameraModeForRules(db.run.ruleset)
     db.run.governance = CreateDefaultGovernance()
     db.run.participants = {}
     db.run.participantOrder = {}
@@ -1151,6 +1159,7 @@ function SC:ResetRun()
     db.run.deathCount = 0
     db.run.warningCount = 0
     db.run.ruleset = CreateDefaultRuleset()
+    db.run.cameraMode = nil
     db.run.governance = CreateDefaultGovernance()
     db.run.participants = {}
     db.run.participantOrder = {}

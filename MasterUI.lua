@@ -80,11 +80,6 @@ local EDITABLE_RULE_ORDER = {
     "instancedPvP",
     "firstPersonOnly",
     "actionCam",
-    "actionCamShoulderOffset",
-    "actionCamDynamicPitch",
-    "actionCamEnemyFocus",
-    "actionCamInteractFocus",
-    "actionCamHeadMovementStrength",
 }
 
 local function Print(message)
@@ -162,7 +157,7 @@ end
 local function CreatePanel(parent)
     local panel = CreateFrame("Frame", nil, parent)
     panel:SetSize(PANEL_WIDTH, PANEL_HEIGHT)
-    panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 24, -102)
+    panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 24, -110)
     return panel
 end
 
@@ -310,8 +305,52 @@ local function SetDisallowedRule(rules, key, checked)
     rules[key] = checked and "ALLOWED" or DISALLOWED_OUTCOME
 end
 
+local function IsCameraRuleEnforced(rules)
+    return IsDisallowed(rules and rules.firstPersonOnly) or IsDisallowed(rules and rules.actionCam)
+end
+
+local function SetCameraRules(rules, mode)
+    if mode == "FIRST_PERSON" then
+        rules.firstPersonOnly = DISALLOWED_OUTCOME
+        rules.actionCam = "ALLOWED"
+    elseif mode == "CINEMATIC" then
+        rules.firstPersonOnly = "ALLOWED"
+        rules.actionCam = DISALLOWED_OUTCOME
+    else
+        rules.firstPersonOnly = "ALLOWED"
+        rules.actionCam = "ALLOWED"
+    end
+end
+
+local function GetSelectedCameraMode(start)
+    if start.selectedCameraMode then return start.selectedCameraMode end
+    if IsDisallowed(start.selectedRules.actionCam) then return "CINEMATIC" end
+    if IsDisallowed(start.selectedRules.firstPersonOnly) then return "FIRST_PERSON" end
+    return nil
+end
+
 local function SetFontStringRGB(fontString, color)
     fontString:SetTextColor(color.r, color.g, color.b)
+end
+
+local function ClearCheckboxPressVisual(checkbox)
+    if not checkbox then return end
+    if checkbox.SetButtonState then
+        checkbox:SetButtonState("NORMAL", false)
+    end
+    if checkbox.UnlockHighlight then
+        checkbox:UnlockHighlight()
+    end
+    if checkbox.GetHighlightTexture then
+        local texture = checkbox:GetHighlightTexture()
+        if texture then texture:Hide() end
+    end
+end
+
+local function ClearCameraCheckboxVisuals(start)
+    if not start then return end
+    ClearCheckboxPressVisual(start.firstPersonCheck)
+    ClearCheckboxPressVisual(start.actionCamCheck)
 end
 
 local function IsCheckedRuleValue(ruleName, value)
@@ -320,9 +359,6 @@ local function IsCheckedRuleValue(ruleName, value)
     end
     if ruleName == "maxLevelGap" or ruleName == "firstPersonOnly" or ruleName == "actionCam" then
         return value ~= "ALLOWED"
-    end
-    if ruleName == "actionCamDynamicPitch" or ruleName == "actionCamEnemyFocus" or ruleName == "actionCamInteractFocus" then
-        return value ~= false
     end
     return not IsDisallowed(value)
 end
@@ -351,32 +387,49 @@ local function ApplyStartPreset(frame, preset)
     local rules = frame.start.selectedRules
     frame.start.selectedPreset = preset
 
-    rules.groupingMode = preset == "IRONMAN" and "SOLO_SELF_FOUND" or "SYNCED_GROUP_ALLOWED"
-    rules.gearQuality = preset == "IRONMAN" and "WHITE_GRAY_ONLY" or "ALLOWED"
-    rules.maxLevelGap = preset == "IRONMAN" and DISALLOWED_OUTCOME or "ALLOWED"
+    local ironman = preset == "IRONMAN"
+    local chef = preset == "CHEF_SPECIAL"
+
+    rules.groupingMode = ironman and "SOLO_SELF_FOUND" or "SYNCED_GROUP_ALLOWED"
+    rules.gearQuality = ironman and "WHITE_GRAY_ONLY" or (chef and "GREEN_OR_LOWER" or "ALLOWED")
+    rules.maxLevelGap = ironman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.maxLevelGapValue = 3
     rules.heirlooms = DISALLOWED_OUTCOME
-    rules.dungeonRepeat = preset == "IRONMAN" and DISALLOWED_OUTCOME or "ALLOWED"
+    rules.dungeonRepeat = ironman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.instanceWithUnsyncedPlayers = "ALLOWED"
     rules.unsyncedMembers = "ALLOWED"
 
     for _, spec in ipairs(ECONOMY_RULES) do
-        SetDisallowedRule(rules, spec.key, not (preset == "IRONMAN" or spec.key == "auctionHouse" or spec.key == "mailbox" or spec.key == "trade" or spec.key == "bank" or spec.key == "warbandBank" or spec.key == "guildBank"))
+        SetDisallowedRule(rules, spec.key, not (ironman or spec.key == "auctionHouse" or spec.key == "mailbox" or spec.key == "trade" or spec.key == "bank" or spec.key == "warbandBank" or spec.key == "guildBank"))
     end
 
     for _, spec in ipairs(MOVEMENT_RULES) do
-        SetDisallowedRule(rules, spec.key, preset ~= "IRONMAN")
+        SetDisallowedRule(rules, spec.key, not ironman)
     end
 
-    SetDisallowedRule(rules, "consumables", preset ~= "IRONMAN")
+    SetDisallowedRule(rules, "consumables", not ironman)
     SetDisallowedRule(rules, "instancedPvP", false)
     rules.firstPersonOnly = "ALLOWED"
     rules.actionCam = "ALLOWED"
-    rules.actionCamShoulderOffset = 1.5
-    rules.actionCamDynamicPitch = true
-    rules.actionCamEnemyFocus = true
-    rules.actionCamInteractFocus = true
-    rules.actionCamHeadMovementStrength = 0.5
+    frame.start.selectedCameraMode = nil
+
+    if chef then
+        rules.auctionHouse = DISALLOWED_OUTCOME
+        rules.mailbox = DISALLOWED_OUTCOME
+        rules.trade = DISALLOWED_OUTCOME
+        rules.bank = DISALLOWED_OUTCOME
+        rules.warbandBank = DISALLOWED_OUTCOME
+        rules.guildBank = DISALLOWED_OUTCOME
+        rules.mounts = "ALLOWED"
+        rules.flying = DISALLOWED_OUTCOME
+        rules.heirlooms = DISALLOWED_OUTCOME
+        rules.consumables = "ALLOWED"
+        rules.dungeonRepeat = "ALLOWED"
+        rules.instancedPvP = DISALLOWED_OUTCOME
+        frame.start.selectedCameraMode = "CINEMATIC"
+        SetCameraRules(rules, frame.start.selectedCameraMode)
+    end
+
     rules.maxDeaths = false
     rules.maxDeathsValue = rules.maxDeathsValue or 3
     rules.achievementPreset = preset
@@ -444,12 +497,7 @@ local RULE_DISPLAY_NAMES = {
     consumables    = "Consumables",
     instancedPvP   = "Instanced PvP",
     firstPersonOnly = "First Person Camera",
-    actionCam      = "ActionCam",
-    actionCamShoulderOffset = "ActionCam shoulder offset",
-    actionCamDynamicPitch = "ActionCam dynamic pitch",
-    actionCamEnemyFocus = "ActionCam focus on enemies",
-    actionCamInteractFocus = "ActionCam focus on interact",
-    actionCamHeadMovementStrength = "ActionCam head motion",
+    actionCam      = "Cinematic Camera",
 }
 
 local function FriendlyRuleValue(ruleName, value)
@@ -463,12 +511,6 @@ local function FriendlyRuleValue(ruleName, value)
     end
     if ruleName == "maxLevelGapValue" or ruleName == "maxDeathsValue" then
         return tostring(value)
-    end
-    if ruleName == "actionCamShoulderOffset" or ruleName == "actionCamHeadMovementStrength" then
-        return tostring(value)
-    end
-    if ruleName == "actionCamDynamicPitch" or ruleName == "actionCamEnemyFocus" or ruleName == "actionCamInteractFocus" then
-        return value and "on" or "off"
     end
     if ruleName == "maxDeaths" then
         return value and "enabled" or "disabled"
@@ -689,6 +731,7 @@ local function SetRunSetupEnabled(frame, enabled)
 
     start.casualBtn:SetEnabled(enabled)
     start.ironmanBtn:SetEnabled(enabled)
+    if start.chefBtn then start.chefBtn:SetEnabled(enabled) end
 
     for _, control in ipairs(start.controls) do
         if control.Enable and control.Disable then
@@ -784,14 +827,20 @@ end
 local function HideAllRunControls(frame)
     frame.start.inactiveText:Hide()
     frame.start.activeText:Hide()
+    if frame.start.presetLabel then frame.start.presetLabel:Hide() end
+    if frame.start.cancelRunHint then frame.start.cancelRunHint:Hide() end
     frame.start.casualBtn:Hide()
     frame.start.ironmanBtn:Hide()
+    if frame.start.chefBtn then frame.start.chefBtn:Hide() end
     for _, control in ipairs(frame.start.controls) do control:Hide() end
     frame.start.groupingDropdown:Hide()
     frame.start.gearDropdown:Hide()
     frame.start.maxGapBox:Hide()
     frame.start.primaryBtn:Hide()
     frame.start.stopBtn:Hide()
+    if frame.start.confirmStopBtn then frame.start.confirmStopBtn:Hide() end
+    if frame.start.cancelStopBtn then frame.start.cancelStopBtn:Hide() end
+    if frame.start.cancelRunBox then frame.start.cancelRunBox:Hide() end
     frame.start.modifyBtn:Hide()
     if frame.start.syncBtn then frame.start.syncBtn:Hide() end
     if frame.start.inviteBtn then frame.start.inviteBtn:Hide() end
@@ -810,6 +859,8 @@ local function AnchorRunFooterButtons(frame)
         first = start.primaryBtn
     elseif start.stopBtn:IsShown() then
         first = start.stopBtn
+    elseif start.confirmStopBtn and start.confirmStopBtn:IsShown() then
+        first = start.confirmStopBtn
     elseif start.applyChangesBtn:IsShown() then
         first = start.applyChangesBtn
     elseif start.proposalAcceptBtn and start.proposalAcceptBtn:IsShown() then
@@ -826,6 +877,30 @@ local function AnchorRunFooterButtons(frame)
     if start.stopBtn:IsShown() and start.stopBtn ~= first then
         start.stopBtn:ClearAllPoints()
         start.stopBtn:SetPoint("LEFT", first, "RIGHT", 8, 0)
+    end
+    if start.cancelRunBox and start.cancelRunBox:IsShown() then
+        start.cancelRunBox:ClearAllPoints()
+        start.cancelRunBox:SetPoint("LEFT", first, "RIGHT", 14, -1)
+    end
+    if start.confirmStopBtn and start.confirmStopBtn:IsShown() and start.confirmStopBtn ~= first then
+        start.confirmStopBtn:ClearAllPoints()
+        if start.cancelRunBox and start.cancelRunBox:IsShown() then
+            start.confirmStopBtn:SetPoint("LEFT", start.cancelRunBox, "RIGHT", 8, 1)
+        else
+            start.confirmStopBtn:SetPoint("LEFT", first, "RIGHT", 8, 0)
+        end
+    end
+    if start.cancelStopBtn and start.cancelStopBtn:IsShown() then
+        start.cancelStopBtn:ClearAllPoints()
+        if start.cancelRunBox and start.cancelRunBox:IsShown() then
+            start.cancelStopBtn:SetPoint("LEFT", start.cancelRunBox, "RIGHT", 8, 1)
+        else
+            start.cancelStopBtn:SetPoint("LEFT", start.confirmStopBtn, "RIGHT", 8, 0)
+        end
+    end
+    if start.cancelRunHint and start.cancelRunHint:IsShown() then
+        start.cancelRunHint:ClearAllPoints()
+        start.cancelRunHint:SetPoint("LEFT", start.cancelStopBtn, "RIGHT", 10, 0)
     end
     if start.modifyBtn:IsShown() then
         start.modifyBtn:ClearAllPoints()
@@ -881,8 +956,10 @@ local function RefreshRunPanel(frame)
         frame.start.groupingDropdown:SetShown(true)
         frame.start.gearDropdown:SetShown(true)
         frame.start.maxGapBox:SetShown(true)
+        if frame.start.presetLabel then frame.start.presetLabel:SetShown(false) end
         frame.start.casualBtn:SetShown(false)
         frame.start.ironmanBtn:SetShown(false)
+        if frame.start.chefBtn then frame.start.chefBtn:SetShown(false) end
         for _, control in ipairs(frame.start.controls) do control:SetShown(true) end
         SetRunSetupEnabled(frame, false)
         frame.start.inactiveText:SetShown(false)
@@ -914,6 +991,8 @@ local function RefreshRunPanel(frame)
         end
         frame.start.primaryBtn:Hide()
         frame.start.stopBtn:Hide()
+        if frame.start.confirmStopBtn then frame.start.confirmStopBtn:Hide() end
+        if frame.start.cancelStopBtn then frame.start.cancelStopBtn:Hide() end
         frame.start.modifyBtn:Hide()
         if frame.start.syncBtn then frame.start.syncBtn:Hide() end
         if frame.start.inviteBtn then frame.start.inviteBtn:Hide() end
@@ -944,6 +1023,7 @@ local function RefreshRunPanel(frame)
 
     if active and db and db.run and db.run.ruleset and not modifying then
         CopyRulesInto(frame.start.selectedRules, db.run.ruleset)
+        frame.start.selectedCameraMode = nil
     elseif not frame.start.selectedRules then
         frame.start.selectedRules = SC:GetDefaultRuleset()
     end
@@ -951,23 +1031,58 @@ local function RefreshRunPanel(frame)
     frame.start.groupingDropdown:SetShown(true)
     frame.start.gearDropdown:SetShown(true)
     frame.start.maxGapBox:SetShown(true)
-    frame.start.casualBtn:SetShown(not active)
-    frame.start.ironmanBtn:SetShown(not active)
+    if frame.start.presetLabel then frame.start.presetLabel:SetShown(true) end
+    frame.start.casualBtn:SetShown(true)
+    frame.start.ironmanBtn:SetShown(true)
+    if frame.start.chefBtn then frame.start.chefBtn:SetShown(true) end
     for _, control in ipairs(frame.start.controls) do
         control:SetShown(true)
     end
     frame.start.primaryBtn:SetShown(not active)
-    frame.start.stopBtn:SetShown(active and not modifying)
-    frame.start.modifyBtn:SetShown(active and not modifying)
+    local confirmingStop = active and frame.start.stopConfirmPending
+    local stopReady = confirmingStop and frame.start.cancelRunBox and string.lower(strtrim(frame.start.cancelRunBox:GetText() or "")) == "end run"
+    if not active then
+        frame.start.stopConfirmPending = false
+        if frame.start.cancelRunBox then
+            frame.start.cancelRunBox:SetText("")
+            frame.start.cancelRunBox:Hide()
+        end
+    end
+    frame.start.stopBtn:SetShown(active and not modifying and not confirmingStop)
+    if frame.start.confirmStopBtn then
+        frame.start.confirmStopBtn:SetShown(confirmingStop)
+        frame.start.confirmStopBtn:SetEnabled(stopReady)
+    end
+    if frame.start.cancelStopBtn then
+        frame.start.cancelStopBtn:SetShown(confirmingStop)
+        frame.start.cancelStopBtn:SetEnabled(true)
+    end
+    if frame.start.cancelRunBox then
+        frame.start.cancelRunBox:SetShown(confirmingStop)
+        if confirmingStop then
+            frame.start.cancelRunBox:Enable()
+        else
+            frame.start.cancelRunBox:Disable()
+        end
+    end
+    if frame.start.cancelRunHint then
+        frame.start.cancelRunHint:SetShown(confirmingStop)
+    end
+    frame.start.modifyBtn:SetShown(active and not modifying and not confirmingStop)
     if frame.start.syncBtn then
-        frame.start.syncBtn:SetShown(active and not modifying and IsInGroup())
+        frame.start.syncBtn:SetShown(active and not modifying and not confirmingStop and IsInGroup())
     end
     if frame.start.inviteBtn then
-        frame.start.inviteBtn:SetShown(active and not modifying and IsInGroup())
+        frame.start.inviteBtn:SetShown(active and not modifying and not confirmingStop and IsInGroup())
     end
     frame.start.applyChangesBtn:SetShown(modifying)
     frame.start.cancelChangesBtn:SetShown(modifying)
     SetRunSetupEnabled(frame, (not active) or modifying)
+    if active and not modifying then
+        frame.start.casualBtn:SetEnabled(false)
+        frame.start.ironmanBtn:SetEnabled(false)
+        if frame.start.chefBtn then frame.start.chefBtn:SetEnabled(false) end
+    end
 
     if active then
         if modifying then
@@ -979,7 +1094,11 @@ local function RefreshRunPanel(frame)
                 frame.start.activeText:SetText("Draft rule amendment. Changes apply going forward and will be logged.")
             end
         else
-            frame.start.activeText:SetText("Active run rules are locked. Use Modify Rules to draft a logged amendment.")
+            if confirmingStop then
+                frame.start.activeText:SetText("|cfffbbf24End run requested.|r This will reset local run progress.")
+            else
+                frame.start.activeText:SetText("Active run rules are locked. Camera mode can be switched anytime without a rule amendment.")
+            end
         end
     end
 
@@ -1183,9 +1302,40 @@ end
 local function ConfirmStopRun()
     SC:ResetRun()
     if SC.masterFrame then
+        if SC.masterFrame.start then
+            SC.masterFrame.start.stopConfirmPending = false
+            if SC.masterFrame.start.cancelRunBox then
+                SC.masterFrame.start.cancelRunBox:SetText("")
+                SC.masterFrame.start.cancelRunBox:ClearFocus()
+            end
+        end
         SC.masterFrame.activeTab = TAB_RUN
         SC:MasterUI_Refresh()
     end
+end
+
+local function ArmStopRunConfirmation(frame)
+    local start = frame and frame.start
+    if not start then return end
+
+    start.stopConfirmPending = true
+    if start.cancelRunBox then
+        start.cancelRunBox:SetText("")
+        start.cancelRunBox:SetFocus()
+    end
+    SC:MasterUI_Refresh()
+end
+
+local function CancelStopRunConfirmation(frame)
+    local start = frame and frame.start
+    if not start then return end
+
+    start.stopConfirmPending = false
+    if start.cancelRunBox then
+        start.cancelRunBox:SetText("")
+        start.cancelRunBox:ClearFocus()
+    end
+    SC:MasterUI_Refresh()
 end
 
 function SC:ConfirmStopRun()
@@ -1236,7 +1386,7 @@ function SC:OpenMasterWindow(focusTab)
     end
 
     local frame = CreateFrame("Frame", "SoftcoreMasterFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(760, 750)
+    frame:SetSize(760, 658)
     RestorePosition("master", frame)
     frame:SetMovable(true)
     frame:EnableMouse(true)
@@ -1285,7 +1435,7 @@ function SC:OpenMasterWindow(focusTab)
         if relativeTo then
             tab:SetPoint("LEFT", relativeTo, "RIGHT", 6, 0)
         else
-            tab:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -66)
+            tab:SetPoint("TOPLEFT", frame, "TOPLEFT", 24, -72)
         end
         tab:SetScript("OnClick", function()
             frame.activeTab = tabName
@@ -1302,7 +1452,7 @@ function SC:OpenMasterWindow(focusTab)
     AddTab("achievementsTab", "Achievements", TAB_ACHIEVEMENTS, logTab, 110)
 
     local startPanel = CreatePanel(frame)
-    startPanel:SetHeight(600)
+    startPanel:SetHeight(490)
     frame.panels[TAB_RUN] = startPanel
     frame.start = { controls = {}, selectedRules = SC:GetDefaultRuleset(), selectedPreset = "CASUAL" }
     frame.start.selectedRules.dungeonRepeat = "ALLOWED"
@@ -1313,21 +1463,29 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.activeText = CreateField(startPanel, 0, 0, 620)
     frame.start.activeText:SetText("Active run rules are locked. Future rule changes will use a visible amendment flow.")
 
+    frame.start.presetLabel = CreateLabel(startPanel, "Presets", 0, -30, "GameFontNormalSmall", 60)
+    frame.start.presetLabel:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
     frame.start.casualBtn = CreateButton(startPanel, "Casual", 86, 22)
-    frame.start.casualBtn:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -32)
+    frame.start.casualBtn:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 58, -24)
     frame.start.casualBtn:SetScript("OnClick", function()
         ApplyStartPreset(frame, "CASUAL")
     end)
 
+    frame.start.chefBtn = CreateButton(startPanel, "Chef's Special", 116, 22)
+    frame.start.chefBtn:SetPoint("LEFT", frame.start.casualBtn, "RIGHT", 8, 0)
+    frame.start.chefBtn:SetScript("OnClick", function()
+        ApplyStartPreset(frame, "CHEF_SPECIAL")
+    end)
+
     frame.start.ironmanBtn = CreateButton(startPanel, "Ironman", 86, 22)
-    frame.start.ironmanBtn:SetPoint("LEFT", frame.start.casualBtn, "RIGHT", 8, 0)
+    frame.start.ironmanBtn:SetPoint("LEFT", frame.start.chefBtn, "RIGHT", 8, 0)
     frame.start.ironmanBtn:SetScript("OnClick", function()
         ApplyStartPreset(frame, "IRONMAN")
     end)
 
-    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Core Rules", 0, -72, 300))
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Death is permanent. A death fails this character only.", 0, -102, "GameFontHighlightSmall", 320))
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Mode", 0, -138, "GameFontNormalSmall", 70))
+    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Core Rules", 0, -62, 300))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Death is permanent. A death fails this character only.", 0, -92, "GameFontHighlightSmall", 320))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Mode", 0, -128, "GameFontNormalSmall", 70))
     frame.start.groupingDropdown = CreateDropdown(startPanel, "SoftcoreMasterGroupingDropdown", GROUPING_OPTIONS, frame.start.selectedRules.groupingMode, function(value)
         frame.start.selectedRules.groupingMode = value
         if SC.ApplyGroupingMode then
@@ -1335,18 +1493,18 @@ function SC:OpenMasterWindow(focusTab)
         end
         SC:MasterUI_Refresh()
     end, 140)
-    frame.start.groupingDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 82, -130)
+    frame.start.groupingDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 82, -120)
 
-    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Economy and Storage", 0, -188, 300))
-    local y = -218
+    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Economy and Storage", 0, -178, 300))
+    local y = -208
     for _, spec in ipairs(ECONOMY_RULES) do
         local checkbox = CreateAllowCheckbox(startPanel, frame.start.selectedRules, spec, 0, y)
         table.insert(frame.start.controls, checkbox)
         y = y - 30
     end
 
-    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Movement", 360, -72, 300))
-    y = -102
+    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Movement", 360, -62, 300))
+    y = -92
     for _, spec in ipairs(MOVEMENT_RULES) do
         local checkbox = CreateAllowCheckbox(startPanel, frame.start.selectedRules, spec, 360, y)
         table.insert(frame.start.controls, checkbox)
@@ -1360,21 +1518,21 @@ function SC:OpenMasterWindow(focusTab)
         y = y - 30
     end
 
-    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Gear and Items", 360, -168, 300))
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Gear limit", 360, -198, "GameFontNormalSmall", 82))
+    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Gear and Items", 360, -158, 300))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Gear limit", 360, -188, "GameFontNormalSmall", 82))
     frame.start.gearDropdown = CreateDropdown(startPanel, "SoftcoreMasterGearDropdown", GEAR_OPTIONS, frame.start.selectedRules.gearQuality, function(value)
         frame.start.selectedRules.gearQuality = value
         SC:MasterUI_Refresh()
     end, 145)
-    frame.start.gearDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 452, -190)
-    frame.start.heirloomCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Heirlooms", key = "heirlooms" }, 360, -232)
+    frame.start.gearDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 452, -180)
+    frame.start.heirloomCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Heirlooms", key = "heirlooms" }, 360, -222)
     table.insert(frame.start.controls, frame.start.heirloomCheck)
-    frame.start.consumablesCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Consumables", key = "consumables" }, 360, -262)
+    frame.start.consumablesCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Consumables", key = "consumables" }, 360, -252)
     table.insert(frame.start.controls, frame.start.consumablesCheck)
 
-    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Group and Dungeon", 360, -308, 300))
+    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Group and Dungeon", 360, -292, 300))
     frame.start.maxGapCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
-    frame.start.maxGapCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 360, -338)
+    frame.start.maxGapCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 360, -322)
     frame.start.maxGapCheck.label = frame.start.maxGapCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.start.maxGapCheck.label:SetPoint("LEFT", frame.start.maxGapCheck, "RIGHT", 2, 0)
     frame.start.maxGapCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
@@ -1384,11 +1542,11 @@ function SC:OpenMasterWindow(focusTab)
         SC:MasterUI_Refresh()
     end)
     table.insert(frame.start.controls, frame.start.maxGapCheck)
-    frame.start.maxGapLabel = CreateLabel(startPanel, "Max gap", 388, -374, "GameFontNormalSmall", 70)
+    frame.start.maxGapLabel = CreateLabel(startPanel, "Max gap", 388, -358, "GameFontNormalSmall", 70)
     table.insert(frame.start.controls, frame.start.maxGapLabel)
     frame.start.maxGapBox = CreateFrame("EditBox", nil, startPanel, "InputBoxTemplate")
     frame.start.maxGapBox:SetSize(42, 22)
-    frame.start.maxGapBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 460, -368)
+    frame.start.maxGapBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 460, -352)
     frame.start.maxGapBox:SetAutoFocus(false)
     frame.start.maxGapBox:SetNumeric(true)
     frame.start.maxGapBox:SetScript("OnTextChanged", function(self)
@@ -1400,12 +1558,17 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.maxGapBox:SetScript("OnEditFocusLost", function()
         SC:MasterUI_Refresh()
     end)
-    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Repeated Dungeons", key = "dungeonRepeat" }, 360, -406)
+    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Repeated Dungeons", key = "dungeonRepeat" }, 360, -390)
     table.insert(frame.start.controls, frame.start.dungeonRepeatCheck)
-    frame.start.instancedPvPCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 360, -436)
+    frame.start.instancedPvPCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 360, -420)
     table.insert(frame.start.controls, frame.start.instancedPvPCheck)
 
     table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Camera", 0, -398, 300))
+    frame.start.cameraHint = startPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.start.cameraHint:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 70, -398)
+    frame.start.cameraHint:SetTextColor(MUTED_TEXT.r * 0.7, MUTED_TEXT.g * 0.7, MUTED_TEXT.b * 0.7)
+    frame.start.cameraHint:SetText("Mode can be switched anytime during a run.")
+    table.insert(frame.start.controls, frame.start.cameraHint)
     frame.start.firstPersonCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
     frame.start.firstPersonCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -428)
     frame.start.firstPersonCheck.label = frame.start.firstPersonCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -1413,10 +1576,25 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.firstPersonCheck.label:SetWidth(280)
     frame.start.firstPersonCheck.label:SetJustifyH("LEFT")
     frame.start.firstPersonCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
-    frame.start.firstPersonCheck.label:SetText("Enforce First Person Camera")
+    frame.start.firstPersonCheck.label:SetText("Use First Person Camera")
     frame.start.firstPersonCheck.ruleKey = "firstPersonOnly"
     frame.start.firstPersonCheck:SetScript("OnClick", function(btn)
-        frame.start.selectedRules.firstPersonOnly = btn:GetChecked() and DISALLOWED_OUTCOME or "ALLOWED"
+        if IsActiveRun() and not frame.start.isModifyingRules then
+            if btn:GetChecked() and SC.SetCameraMode then
+                SC:SetCameraMode("FIRST_PERSON")
+            end
+            if C_Timer and C_Timer.After then
+                C_Timer.After(0, function()
+                    ClearCameraCheckboxVisuals(frame.start)
+                end)
+            else
+                ClearCameraCheckboxVisuals(frame.start)
+            end
+            SC:MasterUI_Refresh()
+            return
+        end
+        frame.start.selectedCameraMode = btn:GetChecked() and "FIRST_PERSON" or nil
+        SetCameraRules(frame.start.selectedRules, frame.start.selectedCameraMode)
         SC:MasterUI_Refresh()
     end)
     table.insert(frame.start.controls, frame.start.firstPersonCheck)
@@ -1428,95 +1606,28 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.actionCamCheck.label:SetWidth(280)
     frame.start.actionCamCheck.label:SetJustifyH("LEFT")
     frame.start.actionCamCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
-    frame.start.actionCamCheck.label:SetText("Enforce ActionCam (full)")
+    frame.start.actionCamCheck.label:SetText("Use Cinematic Camera")
     frame.start.actionCamCheck.ruleKey = "actionCam"
     frame.start.actionCamCheck:SetScript("OnClick", function(btn)
-        frame.start.selectedRules.actionCam = btn:GetChecked() and DISALLOWED_OUTCOME or "ALLOWED"
+        if IsActiveRun() and not frame.start.isModifyingRules then
+            if btn:GetChecked() and SC.SetCameraMode then
+                SC:SetCameraMode("CINEMATIC")
+            end
+            if C_Timer and C_Timer.After then
+                C_Timer.After(0, function()
+                    ClearCameraCheckboxVisuals(frame.start)
+                end)
+            else
+                ClearCameraCheckboxVisuals(frame.start)
+            end
+            SC:MasterUI_Refresh()
+            return
+        end
+        frame.start.selectedCameraMode = btn:GetChecked() and "CINEMATIC" or nil
+        SetCameraRules(frame.start.selectedRules, frame.start.selectedCameraMode)
         SC:MasterUI_Refresh()
     end)
     table.insert(frame.start.controls, frame.start.actionCamCheck)
-
-    table.insert(frame.start.controls, CreateLabel(startPanel, "ActionCam tuning (when enforced)", 0, -482, "GameFontHighlightSmall", 300))
-    frame.start.actionCamShoulderLabel = CreateLabel(startPanel, "Shoulder", 0, -502, "GameFontNormalSmall", 54)
-    table.insert(frame.start.controls, frame.start.actionCamShoulderLabel)
-    frame.start.actionCamShoulderBox = CreateFrame("EditBox", nil, startPanel, "InputBoxTemplate")
-    frame.start.actionCamShoulderBox:SetSize(40, 22)
-    frame.start.actionCamShoulderBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 58, -498)
-    frame.start.actionCamShoulderBox:SetAutoFocus(false)
-    frame.start.actionCamShoulderBox:SetScript("OnTextChanged", function(self)
-        local n = tonumber(self:GetText())
-        if n then
-            frame.start.selectedRules.actionCamShoulderOffset = n
-        end
-    end)
-    frame.start.actionCamShoulderBox:SetScript("OnEditFocusLost", function()
-        SC:MasterUI_Refresh()
-    end)
-    table.insert(frame.start.controls, frame.start.actionCamShoulderBox)
-
-    frame.start.actionCamPitchCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
-    frame.start.actionCamPitchCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -528)
-    frame.start.actionCamPitchCheck.label = frame.start.actionCamPitchCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.start.actionCamPitchCheck.label:SetPoint("LEFT", frame.start.actionCamPitchCheck, "RIGHT", 2, 0)
-    frame.start.actionCamPitchCheck.label:SetWidth(200)
-    frame.start.actionCamPitchCheck.label:SetJustifyH("LEFT")
-    frame.start.actionCamPitchCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
-    frame.start.actionCamPitchCheck.label:SetText("Dynamic pitch")
-    frame.start.actionCamPitchCheck.ruleKey = "actionCamDynamicPitch"
-    frame.start.actionCamPitchCheck:SetScript("OnClick", function(btn)
-        frame.start.selectedRules.actionCamDynamicPitch = btn:GetChecked() and true or false
-        SC:MasterUI_Refresh()
-    end)
-    table.insert(frame.start.controls, frame.start.actionCamPitchCheck)
-
-    frame.start.actionCamEnemyFocusCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
-    frame.start.actionCamEnemyFocusCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -558)
-    frame.start.actionCamEnemyFocusCheck.label = frame.start.actionCamEnemyFocusCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.start.actionCamEnemyFocusCheck.label:SetPoint("LEFT", frame.start.actionCamEnemyFocusCheck, "RIGHT", 2, 0)
-    frame.start.actionCamEnemyFocusCheck.label:SetWidth(200)
-    frame.start.actionCamEnemyFocusCheck.label:SetJustifyH("LEFT")
-    frame.start.actionCamEnemyFocusCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
-    frame.start.actionCamEnemyFocusCheck.label:SetText("Focus enemies")
-    frame.start.actionCamEnemyFocusCheck.ruleKey = "actionCamEnemyFocus"
-    frame.start.actionCamEnemyFocusCheck:SetScript("OnClick", function(btn)
-        frame.start.selectedRules.actionCamEnemyFocus = btn:GetChecked() and true or false
-        SC:MasterUI_Refresh()
-    end)
-    table.insert(frame.start.controls, frame.start.actionCamEnemyFocusCheck)
-
-    frame.start.actionCamInteractFocusCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
-    frame.start.actionCamInteractFocusCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -588)
-    frame.start.actionCamInteractFocusCheck.label = frame.start.actionCamInteractFocusCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.start.actionCamInteractFocusCheck.label:SetPoint("LEFT", frame.start.actionCamInteractFocusCheck, "RIGHT", 2, 0)
-    frame.start.actionCamInteractFocusCheck.label:SetWidth(200)
-    frame.start.actionCamInteractFocusCheck.label:SetJustifyH("LEFT")
-    frame.start.actionCamInteractFocusCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
-    frame.start.actionCamInteractFocusCheck.label:SetText("Focus interact targets")
-    frame.start.actionCamInteractFocusCheck.ruleKey = "actionCamInteractFocus"
-    frame.start.actionCamInteractFocusCheck:SetScript("OnClick", function(btn)
-        frame.start.selectedRules.actionCamInteractFocus = btn:GetChecked() and true or false
-        SC:MasterUI_Refresh()
-    end)
-    table.insert(frame.start.controls, frame.start.actionCamInteractFocusCheck)
-
-    frame.start.actionCamHeadLabel = CreateLabel(startPanel, "Head motion", 0, -618, "GameFontNormalSmall", 72)
-    table.insert(frame.start.controls, frame.start.actionCamHeadLabel)
-    frame.start.actionCamHeadBox = CreateFrame("EditBox", nil, startPanel, "InputBoxTemplate")
-    frame.start.actionCamHeadBox:SetSize(40, 22)
-    frame.start.actionCamHeadBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 76, -614)
-    frame.start.actionCamHeadBox:SetAutoFocus(false)
-    frame.start.actionCamHeadBox:SetScript("OnTextChanged", function(self)
-        local n = tonumber(self:GetText())
-        if n then
-            frame.start.selectedRules.actionCamHeadMovementStrength = n
-        end
-    end)
-    frame.start.actionCamHeadBox:SetScript("OnEditFocusLost", function()
-        SC:MasterUI_Refresh()
-    end)
-    table.insert(frame.start.controls, frame.start.actionCamHeadBox)
-    local headHint = CreateLabel(startPanel, "0–1, lower = calmer", 118, -618, "GameFontHighlightSmall", 200)
-    table.insert(frame.start.controls, headHint)
 
     function frame.start:RefreshControls()
         if SC.ApplyGroupingMode then
@@ -1535,9 +1646,9 @@ function SC:OpenMasterWindow(focusTab)
         self.maxGapCheck:SetChecked(not isSolo and self.selectedRules.maxLevelGap ~= "ALLOWED")
         self.maxGapCheck:SetEnabled(canEdit and not isSolo)
         local locked = not canEdit or isSolo
-        self.maxGapCheck.label:SetFontObject(locked and GameFontDisableSmall or GameFontNormalSmall)
+        self.maxGapCheck.label:SetFontObject(GameFontNormalSmall)
         if locked then
-            SetFontStringRGB(self.maxGapCheck.label, MUTED_TEXT)
+            SetFontStringRGB(self.maxGapCheck.label, BODY_TEXT)
         elseif self.isModifyingRules and self.draftBaseRules then
             local baseVal = self.draftBaseRules.maxLevelGap
             local curVal = self.selectedRules.maxLevelGap
@@ -1554,7 +1665,7 @@ function SC:OpenMasterWindow(focusTab)
         self.maxGapBox:SetText(tostring(self.selectedRules.maxLevelGapValue or 3))
         if self.maxGapLabel then
             if locked then
-                SetFontStringRGB(self.maxGapLabel, MUTED_TEXT)
+                SetFontStringRGB(self.maxGapLabel, BODY_TEXT)
             elseif self.isModifyingRules and self.draftBaseRules then
                 local baseVal = self.draftBaseRules.maxLevelGapValue
                 local curVal  = self.selectedRules.maxLevelGapValue
@@ -1595,50 +1706,18 @@ function SC:OpenMasterWindow(focusTab)
         self.dungeonRepeatCheck:SetChecked(not IsDisallowed(self.selectedRules.dungeonRepeat))
         self.consumablesCheck:SetChecked(not IsDisallowed(self.selectedRules.consumables))
         self.instancedPvPCheck:SetChecked(not IsDisallowed(self.selectedRules.instancedPvP))
-        self.firstPersonCheck:SetChecked(IsDisallowed(self.selectedRules.firstPersonOnly))
-        self.actionCamCheck:SetChecked(IsDisallowed(self.selectedRules.actionCam))
-        self.actionCamShoulderBox:SetText(tostring(self.selectedRules.actionCamShoulderOffset or 1.5))
-        self.actionCamHeadBox:SetText(tostring(self.selectedRules.actionCamHeadMovementStrength or 0.5))
-        self.actionCamPitchCheck:SetChecked(self.selectedRules.actionCamDynamicPitch ~= false)
-        self.actionCamEnemyFocusCheck:SetChecked(self.selectedRules.actionCamEnemyFocus ~= false)
-        self.actionCamInteractFocusCheck:SetChecked(self.selectedRules.actionCamInteractFocus ~= false)
-        self.actionCamShoulderBox:SetEnabled(canEdit)
-        self.actionCamHeadBox:SetEnabled(canEdit)
-        self.actionCamPitchCheck:SetEnabled(canEdit)
-        self.actionCamEnemyFocusCheck:SetEnabled(canEdit)
-        self.actionCamInteractFocusCheck:SetEnabled(canEdit)
-        if self.actionCamShoulderLabel then
-            SetFontStringRGB(self.actionCamShoulderLabel, canEdit and BODY_TEXT or MUTED_TEXT)
-        end
-        if self.actionCamHeadLabel then
-            SetFontStringRGB(self.actionCamHeadLabel, canEdit and BODY_TEXT or MUTED_TEXT)
-        end
-        for _, camTune in ipairs({
-            self.actionCamPitchCheck,
-            self.actionCamEnemyFocusCheck,
-            self.actionCamInteractFocusCheck,
-        }) do
-            if camTune and camTune.label and self.isModifyingRules and self.draftBaseRules and camTune.ruleKey then
-                local baseVal = self.draftBaseRules[camTune.ruleKey]
-                local curVal = self.selectedRules[camTune.ruleKey]
-                if tostring(baseVal) ~= tostring(curVal) then
-                    local checked = IsCheckedRuleValue(camTune.ruleKey, curVal)
-                    SetFontStringRGB(camTune.label, checked == false and RED_TEXT or GREEN_TEXT)
-                else
-                    SetFontStringRGB(camTune.label, BODY_TEXT)
-                end
-            elseif camTune and camTune.label then
-                SetFontStringRGB(camTune.label, BODY_TEXT)
-            end
-        end
-        if self.isModifyingRules and self.draftBaseRules then
-            local b1 = tonumber(self.draftBaseRules.actionCamShoulderOffset) or 1.5
-            local c1 = tonumber(self.selectedRules.actionCamShoulderOffset) or 1.5
-            SetFontStringRGB(self.actionCamShoulderLabel, b1 ~= c1 and GREEN_TEXT or BODY_TEXT)
-            local b2 = tonumber(self.draftBaseRules.actionCamHeadMovementStrength) or 0.5
-            local c2 = tonumber(self.selectedRules.actionCamHeadMovementStrength) or 0.5
-            SetFontStringRGB(self.actionCamHeadLabel, b2 ~= c2 and GREEN_TEXT or BODY_TEXT)
-        end
+        local active = IsActiveRun()
+        local editingCamera = (not active) or self.isModifyingRules
+        local cameraRequired = active and (not self.isModifyingRules) and SC.IsCameraModeRequired and SC:IsCameraModeRequired()
+        local cameraMode = editingCamera and GetSelectedCameraMode(self) or (SC.GetCameraMode and SC:GetCameraMode())
+        local cameraAvailable = editingCamera or cameraRequired
+        self.firstPersonCheck:SetChecked((cameraRequired or IsCameraRuleEnforced(self.selectedRules)) and cameraMode == "FIRST_PERSON")
+        self.actionCamCheck:SetChecked((cameraRequired or IsCameraRuleEnforced(self.selectedRules)) and cameraMode == "CINEMATIC")
+        ClearCameraCheckboxVisuals(self)
+        self.firstPersonCheck:SetEnabled(cameraAvailable)
+        self.actionCamCheck:SetEnabled(cameraAvailable)
+        SetFontStringRGB(self.firstPersonCheck.label, BODY_TEXT)
+        SetFontStringRGB(self.actionCamCheck.label, BODY_TEXT)
         self.selectedRules.maxDeaths = false
         self.selectedRules.maxDeathsValue = self.selectedRules.maxDeathsValue or 3
     end
@@ -1664,24 +1743,53 @@ function SC:OpenMasterWindow(focusTab)
                 runName = "Softcore Run",
                 ruleset = ruleset,
                 preset = ruleset.achievementPreset,
+                cameraMode = frame.start.selectedCameraMode,
             })
             frame.activeTab = TAB_OVERVIEW
         end
         SC:MasterUI_Refresh()
     end)
     ApplyStartPreset(frame, "CASUAL")
-    frame.start.stopBtn = CreateButton(startPanel, "Stop Run", 100, 24)
+    frame.start.stopBtn = CreateButton(startPanel, "End Run", 100, 24)
     frame.start.stopBtn:SetPoint("LEFT", frame.start.primaryBtn, "RIGHT", 8, 0)
-    frame.start.stopBtn:SetScript("OnClick", ConfirmStopRun)
+    frame.start.stopBtn:SetScript("OnClick", function()
+        ArmStopRunConfirmation(frame)
+    end)
+    frame.start.confirmStopBtn = CreateButton(startPanel, "Confirm End", 110, 24)
+    frame.start.confirmStopBtn:SetPoint("LEFT", frame.start.stopBtn, "RIGHT", 8, 0)
+    frame.start.confirmStopBtn:SetScript("OnClick", ConfirmStopRun)
+    frame.start.cancelRunHint = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.start.cancelRunHint:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 32, 52)
+    frame.start.cancelRunHint:SetTextColor(MUTED_TEXT.r * 0.7, MUTED_TEXT.g * 0.7, MUTED_TEXT.b * 0.7)
+    frame.start.cancelRunHint:SetText("Type \"end run\" to enable Confirm End.")
+    frame.start.cancelRunBox = CreateFrame("EditBox", nil, startPanel, "InputBoxTemplate")
+    frame.start.cancelRunBox:SetSize(70, 22)
+    frame.start.cancelRunBox:SetAutoFocus(false)
+    frame.start.cancelRunBox:SetScript("OnTextChanged", function()
+        SC:MasterUI_Refresh()
+    end)
+    frame.start.cancelRunBox:SetScript("OnEnterPressed", function(self)
+        if string.lower(strtrim(self:GetText() or "")) == "end run" then
+            ConfirmStopRun()
+        end
+    end)
+    frame.start.cancelStopBtn = CreateButton(startPanel, "Cancel", 80, 24)
+    frame.start.cancelStopBtn:SetPoint("LEFT", frame.start.confirmStopBtn, "RIGHT", 8, 0)
+    frame.start.cancelStopBtn:SetScript("OnClick", function()
+        CancelStopRunConfirmation(frame)
+    end)
     frame.start.modifyBtn = CreateButton(startPanel, "Modify Rules", 110, 24)
     frame.start.modifyBtn:SetPoint("LEFT", frame.start.stopBtn, "RIGHT", 8, 0)
     frame.start.modifyBtn:SetScript("OnClick", function()
         local db = SC.db or SoftcoreDB
         if not db or not db.run or not db.run.ruleset then return end
 
+        frame.start.stopConfirmPending = false
+        frame.start.stopConfirmReadyAt = nil
         frame.start.isModifyingRules = true
         frame.start.draftBaseRules = SC:CopyTable(db.run.ruleset)
         CopyRulesInto(frame.start.selectedRules, db.run.ruleset)
+        frame.start.selectedCameraMode = nil
         SC:MasterUI_Refresh()
     end)
     frame.start.syncBtn = CreateButton(startPanel, "Propose Sync", 110, 24)

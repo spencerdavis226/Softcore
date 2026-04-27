@@ -328,33 +328,51 @@ local function GetCVarDefaultCompat(key)
 end
 
 local ACTIONCAM_CVARS = {
-    "ActionCam",
     "CameraKeepCharacterCentered",
+    "CameraReduceUnexpectedMovement",
     "test_cameraOverShoulder",
     "test_cameraDynamicPitch",
     "test_cameraTargetFocusEnemyEnable",
     "test_cameraTargetFocusInteractEnable",
+    "test_cameraTargetFocusEnemyStrengthPitch",
+    "test_cameraTargetFocusEnemyStrengthYaw",
+    "test_cameraTargetFocusInteractStrengthPitch",
+    "test_cameraTargetFocusInteractStrengthYaw",
     "test_cameraHeadMovementStrength",
 }
 
 local ACTIONCAM_CVAR_FALLBACK_DEFAULTS = {
-    ActionCam = "default",
     CameraKeepCharacterCentered = "1",
+    CameraReduceUnexpectedMovement = "0",
     test_cameraOverShoulder = "0",
     test_cameraDynamicPitch = "0",
-    test_cameraTargetFocusEnemyEnable = "1",
-    test_cameraTargetFocusInteractEnable = "1",
-    test_cameraHeadMovementStrength = "1",
+    test_cameraTargetFocusEnemyEnable = "0",
+    test_cameraTargetFocusInteractEnable = "0",
+    test_cameraTargetFocusEnemyStrengthPitch = "0.4",
+    test_cameraTargetFocusEnemyStrengthYaw = "0.5",
+    test_cameraTargetFocusInteractStrengthPitch = "0.75",
+    test_cameraTargetFocusInteractStrengthYaw = "1.0",
+    test_cameraHeadMovementStrength = "0",
 }
 
 local actionCamOriginals = nil
 
--- Zoom is re-checked every ~0.2s. test_cameraTargetFocus* modes change zoom to frame targets;
--- a fixed 5/7 lock fights that and causes snap oscillation, so we skip zoom lock while either
--- focus option is enabled. Pause correction during NPC UI when focus is off (optional safety).
-local actionCamZoomLastSample = nil
+local ACTION_CAM_SHOULDER_OFFSET = "0.7"
+local ACTION_CAM_MOUNTED_SHOULDER_OFFSET = "0"
+local ACTION_CAM_HEAD_MOVEMENT_STRENGTH = "1"
+local ACTION_CAM_ENEMY_FOCUS_YAW = "0.5"
+local ACTION_CAM_ENEMY_FOCUS_PITCH = "0.4"
+local ACTION_CAM_INTERACT_FOCUS_YAW = "0"
+local ACTION_CAM_INTERACT_FOCUS_PITCH = "0"
 
-local function IsNpcInteractionZoomPause()
+local function SetCVarIfChanged(key, value)
+    local str = tostring(value)
+    if GetCVarCompat(key) ~= str then
+        SetCVarCompat(key, str)
+    end
+end
+
+local function IsNpcInteractionActive()
     return (GossipFrame and GossipFrame:IsShown())
         or (MerchantFrame and MerchantFrame:IsShown())
         or (QuestFrame and QuestFrame:IsShown())
@@ -362,6 +380,35 @@ local function IsNpcInteractionZoomPause()
         or (ClassTrainerFrame and ClassTrainerFrame:IsShown())
         or (TaxiFrame and TaxiFrame:IsShown())
         or (GuildRegistrarFrame and GuildRegistrarFrame:IsShown())
+end
+
+local function HasHostileCameraTarget()
+    return UnitExists("target") and UnitCanAttack("player", "target")
+end
+
+local function IsCameraRuleEnforcedValue(value)
+    return value ~= nil and value ~= "ALLOWED" and value ~= "LOG_ONLY" and value ~= false
+end
+
+local function IsCameraModeRequired(ruleset)
+    return IsCameraRuleEnforcedValue(ruleset and ruleset.firstPersonOnly)
+        or IsCameraRuleEnforcedValue(ruleset and ruleset.actionCam)
+end
+
+local function DefaultCameraModeForRules(ruleset)
+    if IsCameraRuleEnforcedValue(ruleset and ruleset.actionCam) then return "CINEMATIC" end
+    if IsCameraRuleEnforcedValue(ruleset and ruleset.firstPersonOnly) then return "FIRST_PERSON" end
+    return nil
+end
+
+local function GetRunCameraMode()
+    if not IsRunActive() then return nil end
+    local db = GetDB()
+    local run = db and db.run
+    local ruleset = run and run.ruleset
+    if not IsCameraModeRequired(ruleset) then return nil end
+    run.cameraMode = run.cameraMode or DefaultCameraModeForRules(ruleset) or "CINEMATIC"
+    return run.cameraMode
 end
 
 local function CaptureActionCamOriginals()
@@ -387,19 +434,11 @@ local function CaptureActionCamOriginals()
 end
 
 local function IsFirstPersonEnforced()
-    if not IsRunActive() then return false end
-    local db = GetDB()
-    local rule = db and db.run and db.run.ruleset and db.run.ruleset.firstPersonOnly
-    return rule ~= nil and rule ~= "ALLOWED" and rule ~= false
+    return GetRunCameraMode() == "FIRST_PERSON"
 end
 
 local function GetActionCamZoomTarget()
-    if not IsRunActive() then return nil end
-    local db = GetDB()
-    local ruleset = db and db.run and db.run.ruleset
-    if not ruleset then return nil end
-    local rule = ruleset.actionCam
-    if rule == nil or rule == "ALLOWED" or rule == false then return nil end
+    if GetRunCameraMode() ~= "CINEMATIC" then return nil end
     return (IsMounted and IsMounted()) and 7 or 5
 end
 
@@ -409,6 +448,35 @@ end
 
 function SC:IsActionCamEnforced()
     return GetActionCamZoomTarget() ~= nil
+end
+
+function SC:IsCameraModeRequired()
+    local db = GetDB()
+    return IsRunActive() and IsCameraModeRequired(db and db.run and db.run.ruleset)
+end
+
+function SC:GetCameraMode()
+    return GetRunCameraMode()
+end
+
+function SC:SetCameraMode(mode)
+    if mode ~= "FIRST_PERSON" and mode ~= "CINEMATIC" then return false end
+    local db = GetDB()
+    if not db or not db.run or not db.run.active or not IsCameraModeRequired(db.run.ruleset) then
+        return false
+    end
+
+    db.run.cameraMode = mode
+    if mode == "FIRST_PERSON" then
+        if self.RestoreActionCamSettings then self:RestoreActionCamSettings() end
+        if self.SnapCameraToFirstPerson then self:SnapCameraToFirstPerson() end
+    elseif self.EnforceActionCamSettings then
+        self:EnforceActionCamSettings()
+    end
+
+    if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+    if self.HUD_Refresh then self:HUD_Refresh() end
+    return true
 end
 
 function SC:SnapCameraToFirstPerson()
@@ -432,7 +500,6 @@ function SC:RestoreActionCamSettings()
         if v ~= nil then SetCVarCompat(key, v) end
     end
     actionCamOriginals = nil
-    actionCamZoomLastSample = nil
     if db then
         db.actionCamCvarBackup = nil
     end
@@ -471,58 +538,27 @@ function SC:EnforceActionCamSettings()
 
     CaptureActionCamOriginals()
 
-    local db = GetDB()
-    local ruleset = db and db.run and db.run.ruleset or {}
+    local mounted = IsMounted and IsMounted()
 
-    if GetCVarCompat("ActionCam") ~= "full" then
-        SetCVarCompat("ActionCam", "full")
-    end
-    if GetCVarCompat("CameraKeepCharacterCentered") ~= "0" then
-        SetCVarCompat("CameraKeepCharacterCentered", "0")
-    end
+    SetCVarIfChanged("CameraKeepCharacterCentered", "0")
+    SetCVarIfChanged("CameraReduceUnexpectedMovement", "0")
+    SetCVarIfChanged("test_cameraOverShoulder", mounted and ACTION_CAM_MOUNTED_SHOULDER_OFFSET or ACTION_CAM_SHOULDER_OFFSET)
+    SetCVarIfChanged("test_cameraDynamicPitch", "1")
+    SetCVarIfChanged("test_cameraTargetFocusEnemyEnable", "1")
+    SetCVarIfChanged("test_cameraTargetFocusInteractEnable", "0")
+    SetCVarIfChanged("test_cameraTargetFocusEnemyStrengthYaw", ACTION_CAM_ENEMY_FOCUS_YAW)
+    SetCVarIfChanged("test_cameraTargetFocusEnemyStrengthPitch", ACTION_CAM_ENEMY_FOCUS_PITCH)
+    SetCVarIfChanged("test_cameraTargetFocusInteractStrengthYaw", ACTION_CAM_INTERACT_FOCUS_YAW)
+    SetCVarIfChanged("test_cameraTargetFocusInteractStrengthPitch", ACTION_CAM_INTERACT_FOCUS_PITCH)
+    SetCVarIfChanged("test_cameraHeadMovementStrength", ACTION_CAM_HEAD_MOVEMENT_STRENGTH)
 
-    local shoulderStr = tostring(tonumber(ruleset.actionCamShoulderOffset) or 1.5)
-    if GetCVarCompat("test_cameraOverShoulder") ~= shoulderStr then
-        SetCVarCompat("test_cameraOverShoulder", shoulderStr)
-    end
-
-    local pitchStr = (ruleset.actionCamDynamicPitch ~= false) and "1" or "0"
-    if GetCVarCompat("test_cameraDynamicPitch") ~= pitchStr then
-        SetCVarCompat("test_cameraDynamicPitch", pitchStr)
-    end
-
-    local enemyStr = (ruleset.actionCamEnemyFocus ~= false) and "1" or "0"
-    if GetCVarCompat("test_cameraTargetFocusEnemyEnable") ~= enemyStr then
-        SetCVarCompat("test_cameraTargetFocusEnemyEnable", enemyStr)
-    end
-
-    local interactStr = (ruleset.actionCamInteractFocus ~= false) and "1" or "0"
-    if GetCVarCompat("test_cameraTargetFocusInteractEnable") ~= interactStr then
-        SetCVarCompat("test_cameraTargetFocusInteractEnable", interactStr)
-    end
-
-    local headStr = tostring(tonumber(ruleset.actionCamHeadMovementStrength) or 0.5)
-    if GetCVarCompat("test_cameraHeadMovementStrength") ~= headStr then
-        SetCVarCompat("test_cameraHeadMovementStrength", headStr)
-    end
-
-    -- First-person rule owns zoom=0; skip zoom enforcement when it's active.
-    if not IsFirstPersonEnforced() then
+    if not IsFirstPersonEnforced() and not IsNpcInteractionActive() and not HasHostileCameraTarget() then
         local current = GetCameraZoom and GetCameraZoom() or target
-        local focusZoomBlend = (ruleset.actionCamInteractFocus ~= false) or (ruleset.actionCamEnemyFocus ~= false)
-
-        if focusZoomBlend then
-            actionCamZoomLastSample = nil
-        elseif IsNpcInteractionZoomPause() then
-            actionCamZoomLastSample = current
-        else
-            local delta = current - target
-            if delta > 0.5 then
-                CameraZoomIn(delta)
-            elseif delta < -0.5 then
-                CameraZoomOut(-delta)
-            end
-            actionCamZoomLastSample = GetCameraZoom and GetCameraZoom() or current
+        local delta = current - target
+        if delta > 0.5 then
+            CameraZoomIn(delta)
+        elseif delta < -0.5 then
+            CameraZoomOut(-delta)
         end
     end
 end

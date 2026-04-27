@@ -35,11 +35,6 @@ local RULE_KEYS = {
     "maxDeathsValue",
     "firstPersonOnly",
     "actionCam",
-    "actionCamShoulderOffset",
-    "actionCamDynamicPitch",
-    "actionCamEnemyFocus",
-    "actionCamInteractFocus",
-    "actionCamHeadMovementStrength",
 }
 
 local function FriendlyGroupingMode(value)
@@ -157,7 +152,7 @@ function SC:DeserializePartialRules(serialized)
                 rules[key] = true
             elseif value == "false" then
                 rules[key] = false
-            elseif (key == "maxLevelGapValue" or key == "maxDeathsValue" or key == "actionCamShoulderOffset" or key == "actionCamHeadMovementStrength") and tonumber(value) then
+            elseif (key == "maxLevelGapValue" or key == "maxDeathsValue") and tonumber(value) then
                 rules[key] = tonumber(value)
             else
                 rules[key] = value
@@ -179,7 +174,7 @@ function SC:DeserializeRuleset(serialized)
                 ruleset[key] = true
             elseif value == "false" then
                 ruleset[key] = false
-            elseif tonumber(value) and (key == "maxLevelGapValue" or key == "maxDeathsValue" or key == "actionCamShoulderOffset" or key == "actionCamHeadMovementStrength") then
+            elseif tonumber(value) and (key == "maxLevelGapValue" or key == "maxDeathsValue") then
                 ruleset[key] = tonumber(value)
             else
                 ruleset[key] = value

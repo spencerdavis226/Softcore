@@ -73,11 +73,6 @@ local HASH_RULE_ORDER = {
     "maxDeathsValue",
     "firstPersonOnly",
     "actionCam",
-    "actionCamShoulderOffset",
-    "actionCamDynamicPitch",
-    "actionCamEnemyFocus",
-    "actionCamInteractFocus",
-    "actionCamHeadMovementStrength",
 }
 
 local BOOLEAN_RULES = {
