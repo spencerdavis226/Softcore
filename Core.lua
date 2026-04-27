@@ -106,6 +106,18 @@ local function FormatTime(timestamp)
     return date("%Y-%m-%d %H:%M:%S", timestamp)
 end
 
+local function FormatDuration(seconds)
+    seconds = tonumber(seconds or 0) or 0
+    if seconds < 0 then seconds = 0 end
+
+    local hours = math.floor(seconds / 3600)
+    local minutes = math.floor((seconds % 3600) / 60)
+    if hours > 0 then
+        return string.format("%dh %02dm", hours, minutes)
+    end
+    return string.format("%dm", minutes)
+end
+
 local function GetPlayerSnapshot()
     local name, realm = UnitFullName("player")
 
@@ -282,6 +294,8 @@ local function EnsureRunDefaults(run)
     run.runId = run.runId or nil
     run.runName = run.runName or nil
     run.startTime = run.startTime or nil
+    run.activeTimeSeconds = tonumber(run.activeTimeSeconds or 0) or 0
+    run.activeTimeUpdatedAt = run.activeTimeUpdatedAt or nil
     run.deathCount = run.deathCount or 0
     run.warningCount = run.warningCount or 0
     run.ruleset = run.ruleset or CreateDefaultRuleset()
@@ -422,6 +436,10 @@ local function ArchiveCurrentRun(db, reason)
         return
     end
 
+    if SC.UpdateActiveRunTime then
+        SC:UpdateActiveRunTime()
+    end
+
     table.insert(db.runHistory, {
         archivedAt = time(),
         reason = reason or "Archived",
@@ -437,6 +455,51 @@ function SC:RefreshCharacter()
     local db = EnsureDatabase()
     db.character = GetPlayerSnapshot()
     return db.character
+end
+
+function SC:ResumeActiveRunTimer()
+    local db = EnsureDatabase()
+    if db.run and db.run.active then
+        db.run.activeTimeSeconds = tonumber(db.run.activeTimeSeconds or 0) or 0
+        db.run.activeTimeUpdatedAt = time()
+    end
+end
+
+function SC:UpdateActiveRunTime()
+    local db = EnsureDatabase()
+    local run = db.run
+    if not run or not run.active then
+        return tonumber(run and run.activeTimeSeconds or 0) or 0
+    end
+
+    local now = time()
+    local last = tonumber(run.activeTimeUpdatedAt)
+    run.activeTimeSeconds = tonumber(run.activeTimeSeconds or 0) or 0
+    if last and now >= last then
+        run.activeTimeSeconds = run.activeTimeSeconds + (now - last)
+    end
+    run.activeTimeUpdatedAt = now
+    return run.activeTimeSeconds
+end
+
+function SC:GetActiveRunTimeSeconds()
+    local db = EnsureDatabase()
+    local run = db.run
+    if not run then return 0 end
+
+    local seconds = tonumber(run.activeTimeSeconds or 0) or 0
+    if run.active then
+        local last = tonumber(run.activeTimeUpdatedAt)
+        local now = time()
+        if last and now >= last then
+            seconds = seconds + (now - last)
+        end
+    end
+    return seconds
+end
+
+function SC:FormatDuration(seconds)
+    return FormatDuration(seconds)
 end
 
 function SC:GetPlayerKey()
@@ -1182,6 +1245,8 @@ function SC:StartRun(runOptions)
     db.run.valid = true
     db.run.failed = false
     db.run.startTime = time()
+    db.run.activeTimeSeconds = 0
+    db.run.activeTimeUpdatedAt = db.run.startTime
     db.run.startLevel = db.character.level
     db.run.deathCount = 0
     db.run.warningCount = 0
@@ -1263,6 +1328,8 @@ function SC:ResetRun()
     db.run.valid = true
     db.run.failed = false
     db.run.startTime = nil
+    db.run.activeTimeSeconds = 0
+    db.run.activeTimeUpdatedAt = nil
     db.run.deathCount = 0
     db.run.warningCount = 0
     db.run.ruleset = CreateDefaultRuleset()
@@ -1327,6 +1394,7 @@ function SC:PrintStatus()
     Print("character: " .. character.name .. "-" .. character.realm .. " " .. character.class .. " level " .. tostring(character.level))
     Print("zone: " .. tostring(character.zone))
     Print("started: " .. FormatTime(run.startTime))
+    Print("active time: " .. FormatDuration(self:GetActiveRunTimeSeconds()))
     Print("party: " .. self:GetPartyStatus())
     local participant = run.participants[GetPlayerKey(character)]
     Print("participant: " .. tostring(participant and participant.status or "INACTIVE"))
@@ -1365,6 +1433,7 @@ function SC:PrintRun()
     Print("run: " .. tostring(db.run.runName or "none"))
     Print("runId: " .. tostring(db.run.runId or "none"))
     Print("active: " .. tostring(db.run.active) .. ", party: " .. self:GetPartyStatus())
+    Print("activeTime: " .. FormatDuration(self:GetActiveRunTimeSeconds()) .. " (addon-observed)")
     Print("rulesetVersion: " .. tostring(db.run.ruleset.version) .. ", rulesetHash: " .. tostring(self.GetRulesetHash and self:GetRulesetHash() or "unknown"))
     Print("integrity: addon " .. tostring(self.version or "?") .. ", active violations " .. tostring(activeViolations) .. ", active conflicts " .. tostring(activeConflicts))
     if IsInGroup() then
@@ -1819,6 +1888,7 @@ end
 function SC:Initialize()
     BindCharacterDatabase()
     EnsureDatabase()
+    self:ResumeActiveRunTimer()
     self:RefreshCharacter()
     if self.ClearStalePendingProposal then
         self:ClearStalePendingProposal()
@@ -1854,8 +1924,13 @@ end
 
 SC.frame = CreateFrame("Frame")
 SC.frame:RegisterEvent("ADDON_LOADED")
+SC.frame:RegisterEvent("PLAYER_LOGOUT")
 SC.frame:SetScript("OnEvent", function(_, event, addonName)
     if event == "ADDON_LOADED" and addonName == ADDON_NAME then
         SC:Initialize()
+    elseif event == "PLAYER_LOGOUT" then
+        if SC.UpdateActiveRunTime then
+            SC:UpdateActiveRunTime()
+        end
     end
 end)

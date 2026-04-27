@@ -115,6 +115,19 @@ local function FormatElapsed(startTime)
     return string.format("%dm", m)
 end
 
+local function FormatDuration(seconds)
+    if SC.FormatDuration then
+        return SC:FormatDuration(seconds)
+    end
+    seconds = tonumber(seconds or 0) or 0
+    local h = math.floor(seconds / 3600)
+    local m = math.floor((seconds % 3600) / 60)
+    if h > 0 then
+        return string.format("%dh %02dm", h, m)
+    end
+    return string.format("%dm", m)
+end
+
 local function Trunc(str, maxLen)
     str = tostring(str or "")
     if #str <= maxLen then return str end
@@ -643,6 +656,9 @@ local function ApplyStartPreset(frame, preset)
     for _, spec in ipairs(MOVEMENT_RULES) do
         SetDisallowedRule(rules, spec.key, not ironman)
     end
+    if ironman then
+        rules.flightPaths = "ALLOWED"
+    end
 
     SetDisallowedRule(rules, "consumables", not ironman)
     SetDisallowedRule(rules, "instancedPvP", false)
@@ -840,9 +856,11 @@ local function BuildRunIntegritySummary(run, activeViolations)
     local version = SC.version or "?"
     local sync = db and db.sync or {}
     local lastSync = sync.lastReceivedAt or sync.lastSentAt
+    local activeTime = SC.GetActiveRunTimeSeconds and SC:GetActiveRunTimeSeconds() or (run and run.activeTimeSeconds) or 0
 
     local summary = "Integrity: addon " .. tostring(version)
         .. "  /  rules " .. tostring(rulesHash)
+        .. "  /  observed " .. FormatDuration(activeTime)
         .. "  /  conflicts " .. tostring(conflicts)
         .. "  /  active violations " .. tostring(activeViolations or 0)
 
@@ -963,7 +981,7 @@ local function RefreshOverviewPanel(frame)
         frame.overview.run:SetText("|cffffd100" .. tostring(run.runName or "Softcore Run") .. "|r")
         frame.overview.localStatus:SetText("Character: " .. ColorStatus(status.participantStatus or "NOT_IN_RUN"))
         frame.overview.partyStatus:SetText("Party: " .. ColorStatus(status.partyStatus or "INACTIVE"))
-        frame.overview.elapsed:SetText("Elapsed: " .. FormatElapsed(run.startTime) .. "  |cffad8f61Started " .. FormatTime(run.startTime) .. "|r")
+        frame.overview.elapsed:SetText("Elapsed: " .. FormatElapsed(run.startTime) .. "  |cffad8f61Observed " .. FormatDuration(SC.GetActiveRunTimeSeconds and SC:GetActiveRunTimeSeconds() or run.activeTimeSeconds) .. " / Started " .. FormatTime(run.startTime) .. "|r")
         SetLine(frame.overview.deaths, "Deaths", tostring(run.deathCount or 0) .. " (permanent)")
         if not tonumber(startLevel) or tonumber(startLevel) <= 0 then
             startLevel = "?"

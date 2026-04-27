@@ -29,9 +29,12 @@ Open with `/sc menu`, the minimap button, or the HUD.
 - **Run**: start a run, review locked active rules, stop a run, invite party members, propose run sync, or modify rules.
 - **Violations**: active clearable issues with one-click Clear where allowed.
 - **Log**: audit history, newest first.
+- **Achievements**: account-level leveling, ruleset, and max-level milestones.
 
 When no run is active, the menu focuses on starting a run. When a run is active, it focuses on current status.
 The Run tab also includes compact own-character death announcement checkboxes beside the core death rules.
+
+The Ironman preset follows the common WoW Challenges shape and allows flight paths. No-flight-path completion is tracked as a stricter achievement, including the Ironman + no flight paths + camera mode milestone.
 
 ## HUD
 
@@ -152,6 +155,8 @@ Run data is stored per character in `SoftcoreCharDB`. This protects alts and rep
 
 Softcore preserves the current run across `/reload`, logout, and party leave/rejoin. The addon does not start a new run or reset progress unless the local user starts, accepts, resets, retires, fails, or changes something through the UI/commands.
 
+The Overview and `/sc run chat` show addon-observed active time for the current run. This is informational context for the ledger, not tamper-proof verification; time while logged out or between reload sessions is not counted.
+
 Boundary behavior:
 
 - Incomplete chunked sync messages are discarded after 30 seconds.
@@ -164,7 +169,7 @@ Boundary behavior:
 ## What Softcore Tracks
 
 - Character name, realm, class, level, and zone
-- Active run ID, start time, start level, rules, and party status
+- Active run ID, start time, addon-observed active time, start level, rules, and party status
 - Local deaths and violations
 - Active and cleared violations
 - Participants and participant states
