@@ -530,7 +530,9 @@ function SC:ReceiveRunProposal(payload, proposerKey)
         status = "PENDING",
         proposalType = payload.proposalKind or "RUN",
         targetPlayerKey = payload.targetPlayerKey,
+        partyAtProposalTime = GetCurrentPartyKeys(),
     }
+    proposal.acceptedBy[proposerKey] = true
 
     if proposal.targetPlayerKey and proposal.targetPlayerKey ~= self:GetPlayerKey() then
         db.proposals[proposal.proposalId] = proposal

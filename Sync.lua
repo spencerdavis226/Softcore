@@ -43,6 +43,21 @@ local function SplitFullName(fullName)
     return fullName, GetRealmName()
 end
 
+local function ResolvePayloadPlayerKey(payload, sender)
+    local senderName, senderRealm = SplitFullName(sender)
+    local senderKey = PlayerKey(senderName, senderRealm)
+    local payloadKey = payload and payload.playerKey
+
+    if payloadKey and payloadKey ~= "" then
+        local payloadName = string.match(payloadKey, "^([^-]+)")
+        if not payloadName or payloadName == senderName then
+            return payloadKey, senderName, senderRealm
+        end
+    end
+
+    return senderKey, senderName, senderRealm
+end
+
 local function Escape(value)
     value = tostring(value or "")
     return string.gsub(value, "([^%w _%.%-])", function(character)
@@ -705,8 +720,7 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
 
     local payload = Decode(message)
 
-    local name, realm = SplitFullName(sender)
-    local key = PlayerKey(name, realm)
+    local key, name, realm = ResolvePayloadPlayerKey(payload, sender)
     if key == LocalPlayerKey() then
         return
     end
