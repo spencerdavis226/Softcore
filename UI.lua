@@ -22,35 +22,31 @@ end
 
 -- ── HUD ──────────────────────────────────────────────────────────────────────
 
-local HUD_W        = 130
-local HUD_PAD      = 8
-local ROW_H        = 22
-local DOT_SIZE     = 8
-local HUD_MAX_ROWS = 6
+local HUD_W    = 118
+local HUD_H    = 26
+local HUD_PAD  = 8
+local DOT_SIZE = 10
 
--- Maps status prefix → RGB color (green=ok, yellow=warning, red=failed, grey=inactive)
-local STATUS_COLOR = {
-    ACTIVE     = {0.29, 0.85, 0.50},
-    VALID      = {0.29, 0.85, 0.50},
-    FAILED     = {1.00, 0.27, 0.27},
-    BLOCKED    = {0.98, 0.75, 0.14},
-    CONFLICT   = {0.98, 0.75, 0.14},
-    VIOLATION  = {0.98, 0.75, 0.14},
-    WARNING    = {0.98, 0.75, 0.14},
-    UNSYNCED   = {0.61, 0.64, 0.69},
-    INACTIVE   = {0.61, 0.64, 0.69},
-    NOT_IN_RUN = {0.61, 0.64, 0.69},
+local LAMP_COLOR = {
+    GREEN  = {0.22, 0.95, 0.42},
+    YELLOW = {1.00, 0.78, 0.16},
+    ORANGE = {1.00, 0.42, 0.12},
+    RED    = {1.00, 0.18, 0.14},
+    GRAY   = {0.48, 0.50, 0.54},
 }
 
-local function SetStatusDot(texture, statusStr)
-    local base = statusStr and string.match(statusStr, "^(%u+)")
-    local c = (base and STATUS_COLOR[base]) or STATUS_COLOR.INACTIVE
-    texture:SetColorTexture(c[1], c[2], c[3], 1)
-    texture:SetSize(DOT_SIZE, DOT_SIZE)
-end
+local TEXT_COLOR = {
+    GREEN  = {0.62, 1.00, 0.68},
+    YELLOW = {1.00, 0.86, 0.32},
+    ORANGE = {1.00, 0.62, 0.28},
+    RED    = {1.00, 0.38, 0.32},
+    GRAY   = {0.66, 0.68, 0.72},
+}
 
-local function ShortName(name)
-    return name and (string.match(name, "^[^-]+") or name) or "?"
+local function SetLamp(frame, state)
+    local c = LAMP_COLOR[state] or LAMP_COLOR.GRAY
+    frame.lamp:SetColorTexture(c[1], c[2], c[3], 1)
+    frame.lampGlow:SetVertexColor(c[1], c[2], c[3], 0.55)
 end
 
 local function LocalActiveViolations()
@@ -64,6 +60,61 @@ local function LocalActiveViolations()
     return n
 end
 
+local function HasRemoteFailure(syncRows)
+    local db = SC.db or SoftcoreDB
+    local localKey = SC:GetPlayerKey()
+
+    for playerKey, participant in pairs(db and db.run and db.run.participants or {}) do
+        if playerKey ~= localKey and participant.status == "FAILED" then
+            if not SC.IsParticipantInCurrentParty or SC:IsParticipantInCurrentParty(playerKey) then
+                return true
+            end
+        end
+    end
+
+    for _, peer in ipairs(syncRows or {}) do
+        if peer.participantStatus == "FAILED" or peer.failed or peer.valid == false then
+            return true
+        end
+    end
+    return false
+end
+
+local function GetHUDState(status, violations, syncRows)
+    local localStatus = status.participantStatus or "NOT_IN_RUN"
+    local partyStatus = status.partyStatus or localStatus
+
+    if localStatus == "FAILED" or status.failed or status.valid == false then
+        return "RED", "Failed", "OVERVIEW"
+    end
+
+    if violations > 0 or localStatus == "WARNING" or localStatus == "VIOLATION" then
+        local text = violations == 1 and "1 Violation" or tostring(violations) .. " Violations"
+        if violations <= 0 then text = "Violation" end
+        return "YELLOW", text, "VIOLATIONS"
+    end
+
+    if HasRemoteFailure(syncRows) then
+        return "ORANGE", "Party Fail", "OVERVIEW"
+    end
+
+    if partyStatus == "BLOCKED" then
+        return "YELLOW", "Blocked", "OVERVIEW"
+    elseif partyStatus == "CONFLICT" then
+        return "YELLOW", "Conflict", "OVERVIEW"
+    elseif partyStatus == "UNSYNCED" then
+        return "YELLOW", "Unsynced", "OVERVIEW"
+    elseif partyStatus == "VIOLATION" or partyStatus == "WARNING" then
+        return "YELLOW", "Warning", "OVERVIEW"
+    elseif localStatus == "PENDING" then
+        return "YELLOW", "Pending", "RUN"
+    elseif localStatus == "NOT_IN_RUN" then
+        return "GRAY", "No Run", "RUN"
+    end
+
+    return "GREEN", "Valid", "OVERVIEW"
+end
+
 function SC:HUD_Create()
     if self.hudFrame then
         self:HUD_Refresh()
@@ -71,7 +122,7 @@ function SC:HUD_Create()
     end
 
     local frame = CreateFrame("Button", "SoftcoreHUDFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(HUD_W, HUD_PAD * 2 + ROW_H)
+    frame:SetSize(HUD_W, HUD_H)
     RestorePosition("hud", frame, 0, 150)
     frame:SetMovable(true)
     frame:EnableMouse(true)
@@ -83,8 +134,8 @@ function SC:HUD_Create()
     end)
     frame:RegisterForClicks("LeftButtonUp")
     frame:SetScript("OnClick", function()
-        if SC.OpenMasterWindow and LocalActiveViolations() > 0 then
-            SC:OpenMasterWindow("VIOLATIONS")
+        if SC.OpenMasterWindow then
+            SC:OpenMasterWindow(frame.focusTab or "OVERVIEW")
         elseif SC.ToggleMasterWindow then
             SC:ToggleMasterWindow()
         end
@@ -95,40 +146,44 @@ function SC:HUD_Create()
         tile = false, edgeSize = 12,
         insets = { left = 3, right = 3, top = 3, bottom = 3 },
     })
-    frame:SetBackdropColor(0.08, 0.045, 0.02, 0.96)
-    frame:SetBackdropBorderColor(0.72, 0.49, 0.18, 0.85)
+    frame:SetBackdropColor(0.055, 0.032, 0.014, 0.94)
+    frame:SetBackdropBorderColor(0.78, 0.56, 0.24, 0.92)
     frame:Hide()
 
-    frame.rows = {}
-    for i = 1, HUD_MAX_ROWS do
-        local dot = frame:CreateTexture(nil, "OVERLAY")
-        dot:SetPoint("CENTER", frame, "TOPLEFT",
-            HUD_PAD + DOT_SIZE / 2,
-            -HUD_PAD - (i - 1) * ROW_H - ROW_H / 2)
-        local mask = frame:CreateMaskTexture()
-        mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMaskSmall",
-            "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-        mask:SetAllPoints(dot)
-        dot:AddMaskTexture(mask)
+    local shine = frame:CreateTexture(nil, "BACKGROUND")
+    shine:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -4)
+    shine:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -4, 4)
+    shine:SetColorTexture(0.85, 0.58, 0.18, 0.08)
 
-        local label = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        label:SetPoint("TOPLEFT", frame, "TOPLEFT",
-            HUD_PAD + DOT_SIZE + 6,
-            -HUD_PAD - (i - 1) * ROW_H)
-        label:SetSize(HUD_W - HUD_PAD * 2 - DOT_SIZE - 6, ROW_H)
-        label:SetJustifyH("LEFT")
-        label:SetJustifyV("MIDDLE")
+    frame.lampGlow = frame:CreateTexture(nil, "ARTWORK")
+    frame.lampGlow:SetTexture("Interface\\GLUES\\Models\\UI_Draenei\\GenericGlow64")
+    frame.lampGlow:SetBlendMode("ADD")
+    frame.lampGlow:SetSize(22, 22)
+    frame.lampGlow:SetPoint("LEFT", frame, "LEFT", 2, 0)
 
-        dot:Hide()
-        label:Hide()
-        frame.rows[i] = { dot = dot, label = label }
-    end
+    frame.lamp = frame:CreateTexture(nil, "OVERLAY")
+    frame.lamp:SetSize(DOT_SIZE, DOT_SIZE)
+    frame.lamp:SetPoint("LEFT", frame, "LEFT", HUD_PAD, 0)
+    local mask = frame:CreateMaskTexture()
+    mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMaskSmall",
+        "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    mask:SetAllPoints(frame.lamp)
+    frame.lamp:AddMaskTexture(mask)
 
-    frame.violLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.violLabel:SetSize(HUD_W - HUD_PAD * 2, ROW_H)
-    frame.violLabel:SetJustifyH("LEFT")
-    frame.violLabel:SetJustifyV("MIDDLE")
-    frame.violLabel:Hide()
+    frame.statusText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.statusText:SetPoint("LEFT", frame.lamp, "RIGHT", 8, 0)
+    frame.statusText:SetSize(HUD_W - 34, 18)
+    frame.statusText:SetJustifyH("LEFT")
+    frame.statusText:SetJustifyV("MIDDLE")
+    frame.statusText:SetMaxLines(1)
+
+    frame:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Softcore HUD", 1, 1, 1)
+        GameTooltip:AddLine("Click for details. Drag to move.", 0.74, 0.66, 0.50)
+        GameTooltip:Show()
+    end)
+    frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     self.hudFrame = frame
     self:HUD_Refresh()
@@ -149,57 +204,16 @@ function SC:HUD_Refresh()
     end
 
     local status     = self:GetPlayerStatus()
-    local pStatus    = status.participantStatus or "NOT_IN_RUN"
     local syncRows   = self.Sync_GetGroupRows and self:Sync_GetGroupRows() or {}
-    local inParty    = IsInGroup() and #syncRows > 0
     local violations = LocalActiveViolations()
+    local state, text, focusTab = GetHUDState(status, violations, syncRows)
+    local textColor = TEXT_COLOR[state] or TEXT_COLOR.GRAY
 
-    local entries = {}
-    table.insert(entries, {
-        name    = inParty and "Party Status" or "Run Status",
-        status  = inParty and (status.partyStatus or pStatus) or pStatus,
-        isLocal = true,
-    })
-    if inParty then
-        for _, peer in ipairs(syncRows) do
-            if #entries >= HUD_MAX_ROWS then break end
-            local raw = self.Sync_GetDisplayStatus and self:Sync_GetDisplayStatus(peer)
-                     or peer.participantStatus or "UNSYNCED"
-            table.insert(entries, { name = ShortName(peer.name), status = raw })
-        end
-    end
-
-    for i, entry in ipairs(entries) do
-        local row = frame.rows[i]
-        SetStatusDot(row.dot, entry.status)
-        row.label:SetText(entry.name)
-        if entry.isLocal then
-            row.label:SetTextColor(1, 0.82, 0.20)
-        else
-            row.label:SetTextColor(0.94, 0.86, 0.68)
-        end
-        row.dot:Show()
-        row.label:Show()
-    end
-    for i = #entries + 1, HUD_MAX_ROWS do
-        frame.rows[i].dot:Hide()
-        frame.rows[i].label:Hide()
-    end
-
-    local totalRows = #entries
-    if violations > 0 then
-        frame.violLabel:ClearAllPoints()
-        frame.violLabel:SetPoint("TOPLEFT", frame, "TOPLEFT",
-            HUD_PAD, -HUD_PAD - totalRows * ROW_H)
-        local word = violations == 1 and "violation" or "violations"
-        frame.violLabel:SetText("|cfffbbf24" .. violations .. " active " .. word .. "|r")
-        frame.violLabel:Show()
-        totalRows = totalRows + 1
-    else
-        frame.violLabel:Hide()
-    end
-
-    frame:SetHeight(HUD_PAD * 2 + totalRows * ROW_H)
+    frame.focusTab = focusTab
+    SetLamp(frame, state)
+    frame.statusText:SetText(text)
+    frame.statusText:SetTextColor(textColor[1], textColor[2], textColor[3])
+    frame:SetSize(HUD_W, HUD_H)
     frame:Show()
 end
 
