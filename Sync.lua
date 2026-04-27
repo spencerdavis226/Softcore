@@ -471,10 +471,10 @@ end
 function SC:Sync_BroadcastStatus(reason)
     local payload = self:Sync_BuildPayload(reason)
     if not payload then
-        return
+        return false
     end
 
-    SendPayload(payload)
+    return SendPayload(payload)
 end
 
 function SC:Sync_SendHello()
@@ -848,20 +848,24 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
     end
 
     local localRunId = (self.db and self.db.run and self.db.run.runId) or nil
+    local localActive = self.db and self.db.run and self.db.run.active
     local remoteRunId = payload.runId
     local localRulesetHash = self.GetRulesetHash and self:GetRulesetHash() or ""
     local remoteRulesetHash = payload.rulesetHash
     local remoteRuleset = payload.ruleset and self.DeserializeRuleset and self:DeserializeRuleset(payload.ruleset) or nil
+    local remoteActive = payload.active == "1"
 
     local participantStatus = payload.participantStatus
-    if localRunId and remoteRunId and localRunId ~= remoteRunId then
+    local compareRunState = localActive and remoteActive and participantStatus ~= "NOT_IN_RUN" and participantStatus ~= "PENDING" and participantStatus ~= "UNSYNCED"
+
+    if compareRunState and localRunId and remoteRunId and localRunId ~= remoteRunId then
         participantStatus = "RUN_MISMATCH"
         RecordConflict(key, "RUN_MISMATCH", localRunId, remoteRunId)
     else
         ClearConflict(key, "RUN_MISMATCH")
     end
 
-    if remoteRulesetHash and remoteRulesetHash ~= "" and localRulesetHash ~= "" and remoteRulesetHash ~= localRulesetHash then
+    if compareRunState and remoteRulesetHash and remoteRulesetHash ~= "" and localRulesetHash ~= "" and remoteRulesetHash ~= localRulesetHash then
         if participantStatus ~= "RUN_MISMATCH" then
             participantStatus = "RULESET_MISMATCH"
         end

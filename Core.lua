@@ -771,6 +771,14 @@ function SC:IsRemoteStateCompatible(peer)
         return false, "UNSYNCED"
     end
 
+    if peer.participantStatus == "PENDING" or peer.participantStatus == "UNSYNCED" or peer.participantStatus == "NOT_IN_RUN" then
+        return false, peer.participantStatus
+    end
+
+    if not peer.active then
+        return false, "NOT_IN_RUN"
+    end
+
     if db.run.runId and peer.runId and db.run.runId ~= peer.runId then
         return false, "RUN_MISMATCH"
     end

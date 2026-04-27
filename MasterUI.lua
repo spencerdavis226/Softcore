@@ -2462,7 +2462,10 @@ function SC:OpenMasterWindow(focusTab)
     frame.overview.resyncBtn:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", -24, -227)
     table.insert(frame.overview.activeElements, frame.overview.resyncBtn)
     frame.overview.resyncBtn:SetScript("OnClick", function()
-        if SC.Sync_BroadcastStatus then
+        if SC.Sync_RequestFullState then
+            SC:Sync_RequestFullState()
+            Print("requested full state from party.")
+        elseif SC.Sync_BroadcastStatus then
             SC:Sync_BroadcastStatus("RESYNC")
             Print("resync requested.")
         end
