@@ -15,6 +15,7 @@ SC.groupStatuses = SC.groupStatuses or {}
 
 local syncFrame
 local pendingChunks = {}
+local syncSessionId = tostring(time()) .. "-" .. tostring(math.random(100000, 999999))
 
 local function CleanupPendingChunks(now)
     now = now or time()
@@ -131,6 +132,7 @@ local function AddMetadata(payload)
     payload.addonVersion = SC.version
     payload.playerKey = status.playerKey
     payload.sequence = NextSequence()
+    payload.syncSessionId = syncSessionId
     payload.sentAt = time()
     payload.partyStatus = status.partyStatus
 
@@ -269,7 +271,29 @@ local function ShouldIgnoreStale(payload, playerKey)
     end
 
     local db = GetDB()
-    local lastSequence = tonumber(db.sync.remoteSequences[playerKey] or 0)
+    local remoteSessionId = payload.syncSessionId or ""
+    local previous = db.sync.remoteSequences[playerKey]
+    local lastSequence = 0
+    local lastSessionId
+
+    if type(previous) == "table" then
+        lastSequence = tonumber(previous.sequence or 0) or 0
+        lastSessionId = previous.sessionId
+    else
+        lastSequence = tonumber(previous or 0) or 0
+    end
+
+    if remoteSessionId ~= "" then
+        if lastSessionId == remoteSessionId and sequence <= lastSequence then
+            return true
+        end
+
+        db.sync.remoteSequences[playerKey] = {
+            sequence = sequence,
+            sessionId = remoteSessionId,
+        }
+        return false
+    end
 
     if sequence <= lastSequence then
         return true

@@ -165,11 +165,19 @@ The Overview and `/sc run chat` show addon-observed active time for the current 
 Boundary behavior:
 
 - Incomplete chunked sync messages are discarded after 30 seconds.
+- Sync sequence checks are scoped by sender session, so a party member reinstalling, clearing saved variables, or reloading with a reset counter should not stay permanently ignored.
 - Stale proposals expire after 30 minutes.
 - Stale rule amendments expire after 30 minutes.
 - Simultaneous incoming proposals are declined if another proposal is already pending.
 - Remote violation-clear messages can only clear imported shared violations, not local authoritative violations.
 - Remote deaths, failures, mismatches, or resets do not fail or reset the local character.
+
+## Backend Hardening TODOs
+
+- [x] Make sync stale-message protection tolerate peer sequence resets.
+- [ ] Reconcile raid behavior between project notes and README: either add true `RAID` sync/roster support or keep raids explicitly local-only everywhere.
+- [ ] Audit remote status participant writes so same-run display remains useful without bypassing proposal, invite, late-join, or leader-approval rules.
+- [ ] Add in-game party test passes for disconnect/reload, non-addon members, members joining/leaving during pending proposals, and rule amendment expiry.
 
 ## What Softcore Tracks
 
