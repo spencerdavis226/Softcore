@@ -27,12 +27,14 @@ local TAB_ACHIEVEMENTS = "ACHIEVEMENTS"
 local DISALLOWED_OUTCOME = "WARNING"
 local PANEL_WIDTH = 710
 local PANEL_HEIGHT = 560
-local LOG_ROWS = 24
+local LOG_ROWS = 26
 local LOG_ROW_TOP = -66
 local LOG_ROW_HEIGHT = 18
 local VIOLATION_ROWS = LOG_ROWS
 local VIOLATION_ROW_TOP = LOG_ROW_TOP
 local VIOLATION_ROW_HEIGHT = LOG_ROW_HEIGHT
+local OVERVIEW_PARTY_ROWS = 8
+local ACHIEVEMENT_SCROLL_HEIGHT = PANEL_HEIGHT - 82
 local BODY_TEXT = { r = 0.94, g = 0.86, b = 0.68 }
 local MUTED_TEXT = { r = 0.68, g = 0.56, b = 0.38 }
 local GOLD_TEXT = { r = 1.00, g = 0.82, b = 0.20 }
@@ -884,7 +886,7 @@ local function GetPartyDisplayRows()
             end
         end
 
-        if peerKey and not seen[peerKey] and #displayRows < 5 then
+        if peerKey and not seen[peerKey] and #displayRows < OVERVIEW_PARTY_ROWS then
             table.insert(displayRows, {
                 name = peer.name or peer.playerKey or "Unknown",
                 level = peer.level,
@@ -897,7 +899,7 @@ local function GetPartyDisplayRows()
     end
 
     for _, participantKey in ipairs(participantOrder) do
-        if participantKey ~= localKey and not seen[participantKey] and #displayRows < 5 then
+        if participantKey ~= localKey and not seen[participantKey] and #displayRows < OVERVIEW_PARTY_ROWS then
             local participant = participants[participantKey]
             if participant then
                 table.insert(displayRows, {
@@ -978,7 +980,7 @@ local function RefreshOverviewPanel(frame)
 
     frame.overview.partyEmpty:SetShown(grouped and #partyRows == 0)
 
-    for index = #frame.overview.partyRows + 1, math.min(#partyRows, 5) do
+    for index = #frame.overview.partyRows + 1, math.min(#partyRows, OVERVIEW_PARTY_ROWS) do
         frame.overview.partyRows[index] = CreateOverviewPartyRow(frame.overview.panel, index)
     end
 
@@ -1543,7 +1545,7 @@ local function RefreshAchievementsPanel(frame)
         frame.achievements.rows[index] = CreateAchievementRow(frame.achievements.content, index)
     end
 
-    local contentHeight = math.max(408, (#rows * 82) + 12)
+    local contentHeight = math.max(ACHIEVEMENT_SCROLL_HEIGHT, (#rows * 82) + 12)
     frame.achievements.content:SetSize(628, contentHeight)
 
     for index, rowFrame in ipairs(frame.achievements.rows) do
@@ -1879,7 +1881,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.cameraHint = startPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     frame.start.cameraHint:SetPoint("TOPLEFT", cameraHeader, "TOPLEFT", 88, -1)
     frame.start.cameraHint:SetTextColor(MUTED_TEXT.r * 0.7, MUTED_TEXT.g * 0.7, MUTED_TEXT.b * 0.7)
-    frame.start.cameraHint:SetText("Switch anytime.")
+    frame.start.cameraHint:SetText("Can toggle freely.")
     table.insert(frame.start.controls, frame.start.cameraHint)
     frame.start.firstPersonCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
     frame.start.firstPersonCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -446)
@@ -2379,7 +2381,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.achievements.empty:SetText("No achievements are loaded.")
     frame.achievements.scroll = CreateFrame("ScrollFrame", "SoftcoreAchievementsScrollFrame", achievementsPanel, "UIPanelScrollFrameTemplate")
     frame.achievements.scroll:SetPoint("TOPLEFT", achievementsPanel, "TOPLEFT", 0, -64)
-    frame.achievements.scroll:SetSize(674, 408)
+    frame.achievements.scroll:SetSize(674, ACHIEVEMENT_SCROLL_HEIGHT)
     frame.achievements.scroll:EnableMouseWheel(true)
     frame.achievements.scroll:SetScript("OnMouseWheel", function(self, delta)
         local current = self:GetVerticalScroll() or 0
@@ -2394,7 +2396,7 @@ function SC:OpenMasterWindow(focusTab)
         end
     end)
     frame.achievements.content = CreateFrame("Frame", nil, frame.achievements.scroll)
-    frame.achievements.content:SetSize(628, 408)
+    frame.achievements.content:SetSize(628, ACHIEVEMENT_SCROLL_HEIGHT)
     frame.achievements.scroll:SetScrollChild(frame.achievements.content)
 
     self.masterFrame = frame
