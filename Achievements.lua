@@ -25,6 +25,28 @@ local RESTRICTION_RULES = {
     { id = "no_instanced_pvp", name = "No Battleground Detours", rule = "instancedPvP", label = "Instanced PvP" },
 }
 
+local CLEAN_LEVEL_NAMES = {
+    [30] = "Rule Keeper",
+    [40] = "Steady Hands",
+    [50] = "Unshaken",
+    [60] = "Untarnished",
+    [70] = "Pure Resolve",
+    [80] = "Flawless Path",
+    [90] = "Crystal Ledger",
+    [100] = "Spotless Century",
+}
+
+local ACHIEVEMENT_NAME_MAX_LEN = 34
+local ACHIEVEMENT_DESC_MAX_LEN = 108
+
+local function ClampAchievementText(value, maxLen)
+    local text = tostring(value or "")
+    if maxLen and maxLen > 3 and #text > maxLen then
+        return string.sub(text, 1, maxLen - 2) .. ".."
+    end
+    return text
+end
+
 local function GetAccountDB()
     SoftcoreAchievementsDB = SoftcoreAchievementsDB or {}
     SoftcoreAchievementsDB.earned = SoftcoreAchievementsDB.earned or {}
@@ -159,15 +181,17 @@ local function CanEarnMaxRunAchievement(eligibility)
 end
 
 local function AddDefinition(result, id, scope, category, name, description, progressKind, target, ruleName)
+    local sortOrder = #result + 1
     table.insert(result, {
         id = id,
         scope = scope,
         category = category,
-        name = name,
-        description = description,
+        name = ClampAchievementText(name, ACHIEVEMENT_NAME_MAX_LEN),
+        description = ClampAchievementText(description, ACHIEVEMENT_DESC_MAX_LEN),
         progressKind = progressKind,
         target = target,
         ruleName = ruleName,
+        sortOrder = sortOrder,
     })
 end
 
@@ -181,14 +205,16 @@ function SC:GetAchievementDefinitions()
         AddDefinition(result, "char_level_" .. tostring(level), "ACCOUNT", "Leveling", "Still Breathing: " .. tostring(level), "Reach level " .. tostring(level) .. " during an active Softcore run.", "LEVEL", level)
     end
 
-    AddDefinition(result, "char_clean_level_30", "ACCOUNT", "Leveling", "Rule Keeper", "Reach level 30 on an eligible run with no violations.", "LEVEL_CLEAN", 30)
-    AddDefinition(result, "char_clean_level_40", "ACCOUNT", "Leveling", "Steady Hands", "Reach level 40 on an eligible run with no violations.", "LEVEL_CLEAN", 40)
+    for level = 30, maxLevel, 10 do
+        local name = CLEAN_LEVEL_NAMES[level] or ("Clean Climb: " .. tostring(level))
+        AddDefinition(result, "char_clean_level_" .. tostring(level), "ACCOUNT", "Leveling", name, "Reach level " .. tostring(level) .. " on an eligible run with no violations.", "LEVEL_CLEAN", level)
+    end
 
     AddDefinition(result, "char_max_level", "ACCOUNT", "Max Level", "Softcore Champion", "Reach max level after starting the run at level 10 or below.", "MAX_LEVEL")
     AddDefinition(result, "char_clean_max_level", "ACCOUNT", "Max Level", "Clean Finish", "Reach max level on an eligible run without any local violations.", "CLEAN_MAX")
     AddDefinition(result, "char_ironman_max_level", "ACCOUNT", "Max Level", "Iron Will", "Reach max level on an eligible run that started with the Ironman preset.", "IRONMAN_MAX")
     AddDefinition(result, "char_camera_max_level", "ACCOUNT", "Max Level", "Locked Perspective", "Reach max level on an eligible run with First Person or Cinematic Camera enforced from run start.", "CAMERA_MAX")
-    AddDefinition(result, "char_camera_ironman_no_flight_paths_max_level", "ACCOUNT", "Max Level", "Through Iron Eyes", "Reach max level on an eligible Ironman run with no Flight Paths and an enforced camera mode selected from run start.", "CAMERA_IRONMAN_NO_FLIGHT_PATHS_MAX")
+    AddDefinition(result, "char_camera_ironman_no_flight_paths_max_level", "ACCOUNT", "Max Level", "Through Iron Eyes", "Reach max level on an eligible Ironman run with no Flight Paths and camera mode enforced from run start.", "CAMERA_IRONMAN_NO_FLIGHT_PATHS_MAX")
     AddDefinition(result, "char_original_terms", "ACCOUNT", "Max Level", "Original Terms", "Reach max level on an eligible run with no rule amendments applied.", "RULE_UNCHANGED_MAX")
     AddDefinition(result, "char_party_survivor", "ACCOUNT", "Max Level", "Party Survivor", "Reach max level on an eligible run started in group mode.", "GROUPED_MAX")
 
@@ -399,6 +425,7 @@ function SC:GetAchievementRows()
             earnedAt = earned and earned.earnedAt or nil,
             progressValue = progressValue,
             progressText = progressText,
+            sortOrder = definition.sortOrder,
         })
     end
 
@@ -422,6 +449,12 @@ function SC:GetAchievementRows()
 
         if leftStarted and leftProgress ~= rightProgress then
             return leftProgress > rightProgress
+        end
+
+        local leftOrder = tonumber(left.sortOrder or 0) or 0
+        local rightOrder = tonumber(right.sortOrder or 0) or 0
+        if leftOrder ~= rightOrder then
+            return leftOrder < rightOrder
         end
 
         return tostring(left.name or "") < tostring(right.name or "")
@@ -474,11 +507,10 @@ function SC:Achievements_OnLevelChanged(level)
         end
     end
 
-    if level >= 30 and 30 >= startLevel and not eligibility.hadViolation then
-        Earn("char_clean_level_30", "CHARACTER", "Rule Keeper")
-    end
-    if level >= 40 and 40 >= startLevel and not eligibility.hadViolation then
-        Earn("char_clean_level_40", "CHARACTER", "Steady Hands")
+    for milestone = 30, maxLevel, 10 do
+        if level >= milestone and milestone >= startLevel and not eligibility.hadViolation then
+            Earn("char_clean_level_" .. tostring(milestone), "CHARACTER", CLEAN_LEVEL_NAMES[milestone] or ("Clean Climb: " .. tostring(milestone)))
+        end
     end
 
     if level < maxLevel or not CanEarnMaxRunAchievement(eligibility) then

@@ -1634,8 +1634,8 @@ end
 
 local function CreateAchievementRow(parent, index)
     local row = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    row:SetSize(628, 74)
-    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -((index - 1) * 82))
+    row:SetSize(628, 88)
+    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -((index - 1) * 96))
     row:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -1673,15 +1673,19 @@ local function CreateAchievementRow(parent, index)
     row.date:SetJustifyH("RIGHT")
     row.description = CreateField(row, 70, -32, 530)
     row.description:SetFontObject(GameFontHighlightSmall)
+    row.description:SetWordWrap(true)
+    if row.description.SetMaxLines then
+        row.description:SetMaxLines(2)
+    end
     row.progress = CreateFrame("StatusBar", nil, row)
     row.progress:SetSize(300, 10)
-    row.progress:SetPoint("TOPLEFT", row, "TOPLEFT", 70, -56)
+    row.progress:SetPoint("TOPLEFT", row, "TOPLEFT", 70, -68)
     row.progress:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
     row.progress:SetMinMaxValues(0, 1)
     row.progressBg = row.progress:CreateTexture(nil, "BACKGROUND")
     row.progressBg:SetAllPoints(row.progress)
     row.progressBg:SetColorTexture(0.05, 0.04, 0.025, 0.95)
-    row.progressText = CreateField(row, 378, -52, 234)
+    row.progressText = CreateField(row, 378, -64, 234)
     row.progressText:SetFontObject(GameFontHighlightSmall)
 
     return row
@@ -1711,7 +1715,7 @@ local function RefreshAchievementsPanel(frame)
         frame.achievements.rows[index] = CreateAchievementRow(frame.achievements.content, index)
     end
 
-    local contentHeight = math.max(ACHIEVEMENT_SCROLL_HEIGHT, (#rows * 82) + 12)
+    local contentHeight = math.max(ACHIEVEMENT_SCROLL_HEIGHT, (#rows * 96) + 12)
     frame.achievements.content:SetSize(628, contentHeight)
 
     for index, rowFrame in ipairs(frame.achievements.rows) do
@@ -1730,7 +1734,7 @@ local function RefreshAchievementsPanel(frame)
                 rowFrame.icon:SetText("|cff6b7280?|r")
             end
             rowFrame.name:SetText((achievement.earned and "|cffffd100" or "|cffad8f61") .. tostring(achievement.name or "?") .. "|r")
-            rowFrame.description:SetText(Trunc(achievement.description or "", 100))
+            rowFrame.description:SetText(Trunc(achievement.description or "", 180))
             if achievement.earnedAt then
                 rowFrame.date:SetText("|cff4ade80" .. FormatTime(achievement.earnedAt) .. "|r")
                 rowFrame.progress:SetValue(1)
