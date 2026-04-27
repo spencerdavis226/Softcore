@@ -29,7 +29,17 @@
     "UIDropDownMenu_DisableDropDown",
     "UISpecialFrames",
     "GameTooltip_Hide",
-    "SOUNDKIT"
+    "SOUNDKIT",
+    "GuildRegistrarFrame",
+    "TaxiFrame",
+    "ClassTrainerFrame",
+    "ItemTextFrame",
+    "QuestFrame",
+    "GossipFrame",
+    "MerchantFrame",
+    "FauxScrollFrame_Update",
+    "FauxScrollFrame_GetOffset",
+    "FauxScrollFrame_OnVerticalScroll"
   ],
   "Lua.type.weakUnionCheck": true
 }
