@@ -69,6 +69,12 @@ Common commands:
 | `/sc dungeons` | Print dungeon tracking state |
 | `/sc participants` | Print current participants |
 | `/sc conflicts` | Print active conflicts |
+| `/sc proposal` | Show the current pending proposal |
+| `/sc propose` | Propose a grouped run from chat |
+| `/sc propose-add Player-Realm` | Invite a party member into the current run |
+| `/sc access` | Print access/storage rules |
+| `/sc run chat` | Print run integrity summary |
+| `/sc rule name value` | Change or propose a single rule value |
 
 ## Starting Runs
 
@@ -163,7 +169,7 @@ Boundary behavior:
 - Party conflicts such as run mismatch, rules mismatch, version mismatch, unsynced members, and level-gap blockers
 - Dungeon repeat state
 - Equipped gear quality and heirloom checks
-- Economy/storage/movement/access rule events
+- Economy/storage/movement/access rule events, including flight path use
 - Audit log entries and shared same-run audit events
 
 ## Testing Checklist

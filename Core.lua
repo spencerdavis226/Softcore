@@ -1142,6 +1142,9 @@ function SC:StartRun(runOptions)
     if self.Achievements_OnRunStart then
         self:Achievements_OnRunStart(runOptions)
     end
+    if self.ResetGearScanTracking then
+        self:ResetGearScanTracking()
+    end
     if self.ScanEquippedGear then
         self:ScanEquippedGear(true)
     end
@@ -1277,10 +1280,24 @@ end
 
 function SC:PrintRun()
     local db = EnsureDatabase()
+    local violationSnapshot = self.GetActiveViolationSnapshot and self:GetActiveViolationSnapshot(self:GetPlayerKey()) or nil
+    local activeViolations = violationSnapshot and violationSnapshot.count or 0
+    local activeConflicts = 0
+    for _, conflict in pairs(db.run.conflicts or {}) do
+        if conflict.active then
+            activeConflicts = activeConflicts + 1
+        end
+    end
+
     Print("run: " .. tostring(db.run.runName or "none"))
     Print("runId: " .. tostring(db.run.runId or "none"))
     Print("active: " .. tostring(db.run.active) .. ", party: " .. self:GetPartyStatus())
     Print("rulesetVersion: " .. tostring(db.run.ruleset.version) .. ", rulesetHash: " .. tostring(self.GetRulesetHash and self:GetRulesetHash() or "unknown"))
+    Print("integrity: addon " .. tostring(self.version or "?") .. ", active violations " .. tostring(activeViolations) .. ", active conflicts " .. tostring(activeConflicts))
+    if IsInGroup() then
+        local lastSync = db.sync and (db.sync.lastReceivedAt or db.sync.lastSentAt)
+        Print("sync: " .. (lastSync and (tostring(time() - lastSync) .. "s ago") or "none"))
+    end
     Print("governance: " .. tostring(db.run.governance.mode))
 end
 
@@ -1330,6 +1347,10 @@ function SC:PrintRules()
         "voidStorage",
         "craftingOrders",
         "vendor",
+        "consumables",
+        "instancedPvP",
+        "firstPersonOnly",
+        "actionCam",
     }
 
     Print("current rules:")
@@ -1376,11 +1397,22 @@ end
 
 function SC:PrintHelp()
     Print("Softcore commands:")
-    Print("  /sc menu          open the menu")
-    Print("  /sc minimap       toggle minimap button")
-    Print("  /sc hud           toggle status HUD")
+    Print("  /sc menu | status | rules | violations | log")
+    Print("  /sc status chat | rules chat | log chat")
+    Print("  /sc run chat      print run integrity summary")
+    Print("  /sc participants  show current participants")
+    Print("  /sc conflicts     print active party conflicts")
+    Print("  /sc gear          print equipped gear rule status")
+    Print("  /sc dungeons      print dungeon tracking state")
+    Print("  /sc proposal      show pending proposal")
+    Print("  /sc accept | decline")
+    Print("  /sc propose       propose a grouped run")
+    Print("  /sc propose-add Player-Realm")
     Print("  /sc resync        re-sync state with party")
-    Print("  /sc reset         stop the current run")
+    Print("  /sc hud | minimap toggle UI surfaces")
+    Print("  /sc reset | retire")
+    Print("  /sc access        print access rules")
+    Print("  /sc rule name value")
 end
 
 function SC:HandleSlash(input)

@@ -58,6 +58,7 @@ local function GetEquippedItems()
         local itemLink = GetInventoryItemLink("player", slotId)
         if itemLink then
             local name, _, quality = GetItemInfoCompat(itemLink)
+            quality = GetInventoryItemQuality("player", slotId) or quality
             table.insert(items, {
                 slotId = slotId,
                 link = itemLink,
@@ -111,6 +112,11 @@ local function ShouldThrottle(key, seconds)
 
     gearViolationTimes[key] = now
     return false
+end
+
+function SC:ResetGearScanTracking()
+    lastGearScanAt = 0
+    gearViolationTimes = {}
 end
 
 function SC:GetInvalidEquippedItems()

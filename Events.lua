@@ -23,6 +23,7 @@ local movementState = {
     flying = false,
     mountWarnedAt = 0,
     flyingWarnedAt = 0,
+    flightPathWarnedAt = 0,
 }
 
 local MOVEMENT_WARNING_THROTTLE = 30
@@ -107,8 +108,6 @@ local function HandleZoneChanged()
     if not db.run or not db.run.active or (SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed()) then
         return
     end
-
-    SC:AddLog("ZONE_CHANGED", "Entered " .. tostring(db.character.zone) .. ".")
 end
 
 local pvpWarnedAt = 0
@@ -237,6 +236,10 @@ local function CheckMovementRules()
     movementState.flying = flying and true or false
 end
 
+local function ApplyFlightPathRule(detail)
+    ApplyMovementRule("flightPaths", detail or "Used a flight path while on a Softcore run.", "flightPathWarnedAt")
+end
+
 function SC:CheckMovementRules()
     CheckMovementRules()
 end
@@ -267,6 +270,8 @@ function SC:Events_Register()
     eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
     eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
     eventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
+    SafeRegisterEvent(eventFrame, "TAXIMAP_OPENED")
+    SafeRegisterEvent(eventFrame, "TAXIMAP_CLOSED")
     eventFrame:RegisterUnitEvent("UNIT_AURA", "player")
 
     eventFrame:SetScript("OnEvent", function(_, event, ...)
@@ -305,11 +310,12 @@ function SC:Events_Register()
             -- In-game verification note: mount/flying state updates can arrive through either
             -- display or aura events depending on mount type, shapeshift form, and client build.
             CheckMovementRules()
+        elseif event == "TAXIMAP_OPENED" then
+            -- Presence of the map alone is not a violation; the taxi API hook below
+            -- records actual flight path use.
+        elseif event == "TAXIMAP_CLOSED" then
+            CheckMovementRules()
         elseif event == "GROUP_ROSTER_UPDATE" then
-            local db = SC.db or SoftcoreDB
-            if db and db.run and db.run.active then
-                SC:AddLog("GROUP_ROSTER", "Group roster changed.")
-            end
             if SC.ClearStalePendingProposal then
                 SC:ClearStalePendingProposal()
             end
@@ -385,7 +391,7 @@ function SC:Events_Register()
 
         SC:ApplyRuleOutcome("consumables", {
             playerKey = SC:GetPlayerKey(),
-            detail = "Used consumable: " .. tostring(itemName or link or itemRef or "?") .. " (" .. tostring(itemSubType or "?") .. ").",
+            detail = "Used consumable: " .. tostring(link or itemName or itemRef or "?") .. " (" .. tostring(itemSubType or "?") .. ").",
         })
     end
 
@@ -409,5 +415,16 @@ function SC:Events_Register()
     end
     if UseAction then
         hooksecurefunc("UseAction", OnUseAction)
+    end
+
+    -- Flight paths are most reliably detected at the taxi API call.
+    if C_TaxiMap and C_TaxiMap.TakeTaxiNode then
+        hooksecurefunc(C_TaxiMap, "TakeTaxiNode", function()
+            ApplyFlightPathRule("Took a flight path while on a Softcore run.")
+        end)
+    elseif TakeTaxiNode then
+        hooksecurefunc("TakeTaxiNode", function()
+            ApplyFlightPathRule("Took a flight path while on a Softcore run.")
+        end)
     end
 end

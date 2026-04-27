@@ -108,6 +108,8 @@ local function GetDB()
     SoftcoreDB.sync = SoftcoreDB.sync or {}
     SoftcoreDB.sync.remoteSequences = SoftcoreDB.sync.remoteSequences or {}
     SoftcoreDB.sync.localSequence = SoftcoreDB.sync.localSequence or 0
+    SoftcoreDB.sync.lastSentAt = SoftcoreDB.sync.lastSentAt or nil
+    SoftcoreDB.sync.lastReceivedAt = SoftcoreDB.sync.lastReceivedAt or nil
     SoftcoreDB.run = SoftcoreDB.run or {}
     SoftcoreDB.run.conflicts = SoftcoreDB.run.conflicts or {}
     return SoftcoreDB
@@ -142,6 +144,9 @@ local function SendPayload(payload)
         -- confirmation (e.g. proposals) should check IsInGroup() beforehand.
         return false
     end
+
+    local db = GetDB()
+    db.sync.lastSentAt = time()
 
     local message = Encode(AddMetadata(payload))
     if #message <= MAX_MESSAGE_BYTES then
@@ -690,6 +695,9 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
     if ShouldIgnoreStale(payload, key) then
         return
     end
+
+    local db = GetDB()
+    db.sync.lastReceivedAt = time()
 
     if payload.type == "FULL_STATE_REQUEST" then
         self:Sync_SendFullState()

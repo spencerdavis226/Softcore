@@ -98,6 +98,7 @@ local SEVERITY_ONLY_RULES = {
     trade = true,
     mounts = true,
     flying = true,
+    flightPaths = true,
     outsiderGrouping = true,
     unsyncedMembers = true,
     heirlooms = true,

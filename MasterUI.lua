@@ -25,14 +25,22 @@ local TAB_LOG = "LOG"
 local TAB_ACHIEVEMENTS = "ACHIEVEMENTS"
 
 local DISALLOWED_OUTCOME = "WARNING"
-local LOG_ROWS = 22
 local PANEL_WIDTH = 710
 local PANEL_HEIGHT = 500
+local LOG_ROWS = 24
+local LOG_ROW_TOP = -66
+local LOG_ROW_HEIGHT = 18
+local VIOLATION_ROWS = LOG_ROWS
+local VIOLATION_ROW_TOP = LOG_ROW_TOP
+local VIOLATION_ROW_HEIGHT = LOG_ROW_HEIGHT
 local BODY_TEXT = { r = 0.94, g = 0.86, b = 0.68 }
 local MUTED_TEXT = { r = 0.68, g = 0.56, b = 0.38 }
 local GOLD_TEXT = { r = 1.00, g = 0.82, b = 0.20 }
 local GREEN_TEXT = { r = 0.42, g = 1.00, b = 0.54 }
 local RED_TEXT = { r = 1.00, g = 0.30, b = 0.25 }
+local BLUE_TEXT = { r = 0.38, g = 0.66, b = 1.00 }
+local PURPLE_TEXT = { r = 0.78, g = 0.58, b = 1.00 }
+local ORANGE_TEXT = { r = 1.00, g = 0.58, b = 0.22 }
 local MENU_LOGO_TEXTURE = "Interface\\AddOns\\Softcore\\Assets\\SoftcoreLogoMenu"
 
 local GROUPING_OPTIONS = {
@@ -59,6 +67,7 @@ local ECONOMY_RULES = {
 local MOVEMENT_RULES = {
     { label = "Allow Mounts", key = "mounts" },
     { label = "Allow Flying Mounts", key = "flying" },
+    { label = "Allow Flight Paths", key = "flightPaths" },
 }
 
 local EDITABLE_RULE_ORDER = {
@@ -71,6 +80,7 @@ local EDITABLE_RULE_ORDER = {
     "guildBank",
     "mounts",
     "flying",
+    "flightPaths",
     "gearQuality",
     "heirlooms",
     "maxLevelGap",
@@ -120,6 +130,212 @@ end
 
 local function SetLine(fontString, label, value)
     fontString:SetText(label .. ": " .. tostring(value))
+end
+
+local LOG_EVENT_GROUP_COLORS = {
+    achievement = GOLD_TEXT,
+    character = GREEN_TEXT,
+    failure = RED_TEXT,
+    party = BLUE_TEXT,
+    proposal = ORANGE_TEXT,
+    rules = PURPLE_TEXT,
+    run = GREEN_TEXT,
+    system = MUTED_TEXT,
+    violation = GOLD_TEXT,
+    world = BODY_TEXT,
+}
+
+local LOG_HIDDEN_EVENTS = {
+    GROUP_ROSTER = true,
+    ZONE_CHANGED = true,
+}
+
+local LOG_EVENT_DISPLAY = {
+    ACHIEVEMENT_EARNED = { label = "Achievement", group = "achievement" },
+    DEATH = { label = "Death", group = "failure" },
+    GROUP_ROSTER = { label = "Group Changed", group = "party" },
+    INSTANCE_ENTERED = { label = "Instance", group = "world" },
+    LEVEL_GAP_EXCEEDED = { label = "Level Gap", group = "party" },
+    LEVEL_UP = { label = "Level Up", group = "character" },
+    PARTICIPANT_ADDED = { label = "Joined Run", group = "party" },
+    PARTICIPANT_DISCOVERED = { label = "Party Synced", group = "party" },
+    PARTICIPANT_FAILED = { label = "Member Failed", group = "failure" },
+    PARTICIPANT_OUT_OF_PARTY = { label = "Left Party", group = "party" },
+    PARTICIPANT_RETIRED = { label = "Retired", group = "failure" },
+    PROPOSAL_ACCEPT_SYNC = { label = "Accepted", group = "proposal" },
+    PROPOSAL_ACCEPTED = { label = "Accepted", group = "proposal" },
+    PROPOSAL_BUSY_DECLINED = { label = "Proposal Busy", group = "proposal" },
+    PROPOSAL_CANCELLED = { label = "Cancelled", group = "proposal" },
+    PROPOSAL_CONFIRMED = { label = "Confirmed", group = "proposal" },
+    PROPOSAL_CREATED = { label = "Proposal", group = "proposal" },
+    PROPOSAL_DECLINED = { label = "Declined", group = "proposal" },
+    PROPOSAL_DECLINE_SYNC = { label = "Declined", group = "proposal" },
+    PROPOSAL_EXPIRED = { label = "Expired", group = "proposal" },
+    PROPOSAL_HASH_MISMATCH = { label = "Rules Mismatch", group = "proposal" },
+    PROPOSAL_OBSERVED = { label = "Proposal Seen", group = "proposal" },
+    PROPOSAL_RESPONSE_UNKNOWN = { label = "Unknown Reply", group = "proposal" },
+    PROPOSAL_VERSION_MISMATCH = { label = "Version Mismatch", group = "proposal" },
+    RULE_AMENDMENT_ACCEPTED = { label = "Rule Accepted", group = "rules" },
+    RULE_AMENDMENT_APPLIED = { label = "Rules Applied", group = "rules" },
+    RULE_AMENDMENT_DECLINED = { label = "Rule Declined", group = "rules" },
+    RULE_AMENDMENT_PROPOSED = { label = "Rule Proposal", group = "rules" },
+    RULE_AMENDMENT_RECEIVED = { label = "Rule Proposal", group = "rules" },
+    RULE_CHANGED = { label = "Rule Changed", group = "rules" },
+    RULE_LOG = { label = "Rule Notice", group = "rules" },
+    RULE_UNKNOWN_OUTCOME = { label = "Rule Notice", group = "rules" },
+    RUN_RESET = { label = "Run Reset", group = "run" },
+    RUN_START = { label = "Run Started", group = "run" },
+    RUN_SYNCED = { label = "Run Synced", group = "run" },
+    VIOLATION_ADDED = { label = "Violation", group = "violation" },
+    VIOLATION_CLEARED = { label = "Cleared", group = "violation" },
+    ZONE_CHANGED = { label = "Zone", group = "world" },
+}
+
+local function HumanizeEventKind(kind)
+    local text = string.gsub(string.lower(tostring(kind or "")), "_", " ")
+    text = string.gsub(text, "(%a)([%w']*)", function(first, rest)
+        return string.upper(first) .. rest
+    end)
+    return text ~= "" and text or "Event"
+end
+
+local function FormatLogEvent(entry)
+    local kind = tostring(entry and entry.kind or "")
+    local display = LOG_EVENT_DISPLAY[kind]
+
+    if display then
+        return display.label, LOG_EVENT_GROUP_COLORS[display.group] or BODY_TEXT
+    end
+
+    return HumanizeEventKind(kind), LOG_EVENT_GROUP_COLORS.system
+end
+
+local function ShouldShowLogEntry(entry)
+    return not LOG_HIDDEN_EVENTS[tostring(entry and entry.kind or "")]
+end
+
+local function GetVisibleLogEntries(log)
+    local entries = {}
+
+    for index = #log, 1, -1 do
+        local entry = log[index]
+        if ShouldShowLogEntry(entry) then
+            table.insert(entries, entry)
+        end
+    end
+
+    return entries
+end
+
+local LOG_VIOLATION_LABELS = {
+    auctionHouse = "Auction House",
+    bank = "Bank",
+    consumables = "Consumable",
+    death = "Death",
+    flying = "Flying",
+    gearQuality = "Gear",
+    guildBank = "Guild Bank",
+    mailbox = "Mailbox",
+    mounts = "Mount",
+    trade = "Trade",
+    warbandBank = "Warband Bank",
+}
+
+local function FormatViolationLogLabel(violationType)
+    local raw = tostring(violationType or "")
+    return LOG_VIOLATION_LABELS[raw] or HumanizeEventKind(raw)
+end
+
+local function ExtractItemLink(text)
+    local raw = tostring(text or "")
+    return string.match(raw, "(|c.-|Hitem:.-|h%[.-%]|h|r)")
+        or string.match(raw, "(|Hitem:.-|h%[.-%]|h)")
+end
+
+local function FindViolationById(violationId)
+    if not violationId then return nil end
+
+    local db = SC.db or SoftcoreDB
+    for _, violation in ipairs((db and db.violations) or {}) do
+        if violation.id == violationId or violation.violationId == violationId then
+            return violation
+        end
+    end
+
+    return nil
+end
+
+local function SetCompactText(fontString, message, maxLen)
+    if string.find(tostring(message or ""), "|Hitem:", 1, true) then
+        fontString:SetText(message)
+        return
+    end
+
+    fontString:SetText(Trunc(message, maxLen))
+end
+
+local function FormatViolationDetail(violation)
+    local detail = violation and violation.detail
+    local itemLink = ExtractItemLink(detail)
+
+    if itemLink then
+        return "Item: " .. itemLink
+    end
+
+    return tostring(detail or "")
+end
+
+local function FormatViolationLogMessage(kind, violationType, violationDetail, entry)
+    local label = FormatViolationLogLabel(violationType)
+    local sourceViolation = entry and FindViolationById(entry.violationId)
+    local itemLink = ExtractItemLink(violationDetail)
+        or ExtractItemLink(entry and entry.message)
+        or ExtractItemLink(sourceViolation and sourceViolation.detail)
+
+    if itemLink then
+        return label .. " Violation: " .. itemLink
+    end
+
+    if violationType == "gearQuality" then
+        if kind == "VIOLATION_CLEARED" then
+            return "Cleared gear violation."
+        end
+
+        return "Gear violation."
+    end
+
+    if kind == "VIOLATION_CLEARED" then
+        return "Cleared " .. label .. "."
+    end
+
+    if violationDetail and violationDetail ~= "" then
+        return label .. ": " .. tostring(violationDetail)
+    end
+
+    return label .. " violation."
+end
+
+local function FormatLogMessage(entry)
+    local kind = tostring(entry and entry.kind or "")
+    local violationType = entry and entry.violationType
+    local violationDetail = entry and (entry.violationDetail or entry.message)
+
+    if kind == "VIOLATION_ADDED" and violationType then
+        return FormatViolationLogMessage(kind, violationType, violationDetail, entry)
+    end
+
+    if kind == "VIOLATION_CLEARED" and violationType then
+        return FormatViolationLogMessage(kind, violationType, violationDetail, entry)
+    end
+
+    if kind == "RUN_START" then
+        local level = string.match(tostring(entry and entry.message or ""), "level (%d+)")
+        if level then
+            return "Started at level " .. level .. "."
+        end
+    end
+
+    return tostring(entry and entry.message or "")
 end
 
 local function IsActiveRun()
@@ -489,6 +705,7 @@ local RULE_DISPLAY_NAMES = {
     guildBank      = "Guild Bank",
     mounts         = "Mounts",
     flying         = "Flying Mounts",
+    flightPaths    = "Flight Paths",
     gearQuality    = "Gear Limit",
     heirlooms      = "Heirlooms",
     maxLevelGap    = "Level Gap Enforcement",
@@ -576,6 +793,43 @@ local function CountAllViolations(playerKey)
         end
     end
     return count
+end
+
+local function CountActiveConflicts(run)
+    local count = 0
+    for _, conflict in pairs(run and run.conflicts or {}) do
+        if conflict.active then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function FormatSyncTime(timestamp)
+    if not timestamp then
+        return "none"
+    end
+    return FormatElapsed(timestamp) .. " ago"
+end
+
+local function BuildRunIntegritySummary(run, activeViolations)
+    local db = SC.db or SoftcoreDB
+    local rulesHash = SC.GetRulesetHash and SC:GetRulesetHash() or "unknown"
+    local conflicts = CountActiveConflicts(run)
+    local version = SC.version or "?"
+    local sync = db and db.sync or {}
+    local lastSync = sync.lastReceivedAt or sync.lastSentAt
+
+    local summary = "Integrity: addon " .. tostring(version)
+        .. "  /  rules " .. tostring(rulesHash)
+        .. "  /  conflicts " .. tostring(conflicts)
+        .. "  /  active violations " .. tostring(activeViolations or 0)
+
+    if IsInGroup() then
+        summary = summary .. "  /  sync " .. FormatSyncTime(lastSync)
+    end
+
+    return summary
 end
 
 local function GetPartyDisplayRows()
@@ -682,6 +936,7 @@ local function RefreshOverviewPanel(frame)
     frame.overview.violations:SetShown(active)
     frame.overview.levels:SetShown(active)
     frame.overview.runId:SetShown(active)
+    frame.overview.integrity:SetShown(active)
 
     if active then
         frame.overview.run:SetText("|cffffd100" .. tostring(run.runName or "Softcore Run") .. "|r")
@@ -699,6 +954,7 @@ local function RefreshOverviewPanel(frame)
         frame.overview.violations:SetText("Active violations: " .. violationColor .. activeViolations .. violationReset)
 
         frame.overview.runId:SetText("|cffad8f61Run ID: " .. tostring(run.runId or "none") .. "|r")
+        frame.overview.integrity:SetText("|cffad8f61" .. BuildRunIntegritySummary(run, activeViolations) .. "|r")
     end
 
     frame.overview.partyEmpty:SetShown(grouped and #partyRows == 0)
@@ -1115,16 +1371,20 @@ local function RefreshViolationsPanel(frame)
     local violations = GetSortedActiveViolations()
 
     frame.violations.empty:SetShown(#violations == 0)
+    if frame.violations.scroll then
+        FauxScrollFrame_Update(frame.violations.scroll, #violations, VIOLATION_ROWS, VIOLATION_ROW_HEIGHT)
+    end
 
-    for index, row in ipairs(frame.violations.rows) do
-        local violation = violations[index]
+    local offset = frame.violations.scroll and FauxScrollFrame_GetOffset(frame.violations.scroll) or 0
+    for rowIndex, row in ipairs(frame.violations.rows) do
+        local violation = violations[offset + rowIndex]
 
         if violation then
             row:Show()
-            row.type:SetText(Trunc(violation.type or "?", 18))
+            row.time:SetText(Trunc(FormatTime(violation.createdAt), 19))
             row.owner:SetText(Trunc(FormatPlayerLabel(violation.playerKey), 16))
-            row.detail:SetText(Trunc(violation.detail or "", 44))
-            row.time:SetText(FormatTime(violation.createdAt))
+            row.type:SetText(Trunc(FormatViolationLogLabel(violation.type), 18))
+            SetCompactText(row.detail, FormatViolationDetail(violation), 38)
 
             if SC:IsViolationClearable(violation) then
                 local violationId = violation.id
@@ -1148,26 +1408,37 @@ end
 local function RefreshLogPanel(frame)
     local db = SC.db or SoftcoreDB
     local log = (db and db.eventLog) or {}
+    local entries = GetVisibleLogEntries(log)
 
-    if #log == 0 then
+    if #entries == 0 then
         frame.log.empty:Show()
         for _, row in ipairs(frame.log.rows) do
             row:Hide()
+        end
+        if frame.log.scroll then
+            FauxScrollFrame_Update(frame.log.scroll, 0, LOG_ROWS, LOG_ROW_HEIGHT)
         end
         return
     end
 
     frame.log.empty:Hide()
+    if frame.log.scroll then
+        FauxScrollFrame_Update(frame.log.scroll, #entries, LOG_ROWS, LOG_ROW_HEIGHT)
+    end
 
+    local offset = frame.log.scroll and FauxScrollFrame_GetOffset(frame.log.scroll) or 0
     for rowIndex, row in ipairs(frame.log.rows) do
-        local entry = log[#log - rowIndex + 1]
+        local entry = entries[offset + rowIndex]
 
         if entry then
+            local eventLabel, eventColor = FormatLogEvent(entry)
+
             row:Show()
             row.time:SetText(FormatTime(entry.time))
             row.actor:SetText(Trunc(FormatPlayerLabel(entry.actorKey or entry.playerKey), 16))
-            row.kind:SetText(tostring(entry.kind or "?"))
-            row.message:SetText(Trunc(entry.message or "", 52))
+            row.kind:SetText(Trunc(eventLabel, 18))
+            row.kind:SetTextColor(eventColor.r, eventColor.g, eventColor.b)
+            SetCompactText(row.message, FormatLogMessage(entry), 52)
         else
             row:Hide()
         end
@@ -1530,21 +1801,21 @@ function SC:OpenMasterWindow(focusTab)
         y = y - 30
     end
 
-    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Gear and Items", 360, -158, 300))
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Gear limit", 360, -188, "GameFontNormalSmall", 82))
+    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Gear and Items", 360, -188, 300))
+    table.insert(frame.start.controls, CreateLabel(startPanel, "Gear limit", 360, -218, "GameFontNormalSmall", 82))
     frame.start.gearDropdown = CreateDropdown(startPanel, "SoftcoreMasterGearDropdown", GEAR_OPTIONS, frame.start.selectedRules.gearQuality, function(value)
         frame.start.selectedRules.gearQuality = value
         SC:MasterUI_Refresh()
     end, 145)
-    frame.start.gearDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 452, -180)
-    frame.start.heirloomCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Heirlooms", key = "heirlooms" }, 360, -222)
+    frame.start.gearDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 452, -210)
+    frame.start.heirloomCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Heirlooms", key = "heirlooms" }, 360, -252)
     table.insert(frame.start.controls, frame.start.heirloomCheck)
-    frame.start.consumablesCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Consumables", key = "consumables" }, 360, -252)
+    frame.start.consumablesCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Consumables", key = "consumables" }, 360, -282)
     table.insert(frame.start.controls, frame.start.consumablesCheck)
 
-    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Group and Dungeon", 360, -292, 300))
+    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Group and Dungeon", 360, -322, 300))
     frame.start.maxGapCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
-    frame.start.maxGapCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 360, -322)
+    frame.start.maxGapCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 360, -352)
     frame.start.maxGapCheck.label = frame.start.maxGapCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.start.maxGapCheck.label:SetPoint("LEFT", frame.start.maxGapCheck, "RIGHT", 2, 0)
     frame.start.maxGapCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
@@ -1554,11 +1825,11 @@ function SC:OpenMasterWindow(focusTab)
         SC:MasterUI_Refresh()
     end)
     table.insert(frame.start.controls, frame.start.maxGapCheck)
-    frame.start.maxGapLabel = CreateLabel(startPanel, "Max gap", 388, -358, "GameFontNormalSmall", 70)
+    frame.start.maxGapLabel = CreateLabel(startPanel, "Max gap", 388, -388, "GameFontNormalSmall", 70)
     table.insert(frame.start.controls, frame.start.maxGapLabel)
     frame.start.maxGapBox = CreateFrame("EditBox", nil, startPanel, "InputBoxTemplate")
     frame.start.maxGapBox:SetSize(42, 22)
-    frame.start.maxGapBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 460, -352)
+    frame.start.maxGapBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 460, -382)
     frame.start.maxGapBox:SetAutoFocus(false)
     frame.start.maxGapBox:SetNumeric(true)
     frame.start.maxGapBox:SetScript("OnTextChanged", function(self)
@@ -1570,9 +1841,9 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.maxGapBox:SetScript("OnEditFocusLost", function()
         SC:MasterUI_Refresh()
     end)
-    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Repeated Dungeons", key = "dungeonRepeat" }, 360, -390)
+    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Repeated Dungeons", key = "dungeonRepeat" }, 360, -420)
     table.insert(frame.start.controls, frame.start.dungeonRepeatCheck)
-    frame.start.instancedPvPCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 360, -420)
+    frame.start.instancedPvPCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 360, -450)
     table.insert(frame.start.controls, frame.start.instancedPvPCheck)
 
     table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Camera", 0, -398, 300))
@@ -1921,6 +2192,7 @@ function SC:OpenMasterWindow(focusTab)
         deaths = CreateField(overviewPanel, 380, -84, 220),
         violations = CreateField(overviewPanel, 380, -110, 220),
         runId = CreateField(overviewPanel, 0, -140, 650),
+        integrity = CreateField(overviewPanel, 0, -162, 690),
         partyRows = {},
     }
     frame.overview.noRunText:SetText("No active run. Start a Softcore run to begin tracking deaths, violations, and party status.")
@@ -1940,7 +2212,7 @@ function SC:OpenMasterWindow(focusTab)
         end
     end)
     CreateLabel(overviewPanel, "Name", 0, -222, "GameFontNormalSmall", 190)
-    CreateLabel(overviewPanel, "Level (Start)", 204, -222, "GameFontNormalSmall", 100)
+    CreateLabel(overviewPanel, "Level |cffad8f61(Start)|r", 204, -222, "GameFontNormalSmall", 100)
     CreateLabel(overviewPanel, "Status", 314, -222, "GameFontNormalSmall", 180)
     CreateLabel(overviewPanel, "Total Violations", 520, -222, "GameFontNormalSmall", 140)
 
@@ -1957,10 +2229,10 @@ function SC:OpenMasterWindow(focusTab)
     frame.panels[TAB_VIOLATIONS] = violationsPanel
     frame.violations = { rows = {} }
     CreateSectionHeader(violationsPanel, "Active Violations", 0, 0, 650)
-    CreateLabel(violationsPanel, "Time", 0, -38, "GameFontNormalSmall", 118)
-    CreateLabel(violationsPanel, "Character", 122, -38, "GameFontNormalSmall", 110)
-    CreateLabel(violationsPanel, "Issue", 238, -38, "GameFontNormalSmall", 108)
-    CreateLabel(violationsPanel, "Details", 352, -38, "GameFontNormalSmall", 260)
+    CreateLabel(violationsPanel, "Time", 0, -38, "GameFontNormalSmall", 130)
+    CreateLabel(violationsPanel, "Character", 134, -38, "GameFontNormalSmall", 100)
+    CreateLabel(violationsPanel, "Issue", 242, -38, "GameFontNormalSmall", 128)
+    CreateLabel(violationsPanel, "Details", 378, -38, "GameFontNormalSmall", 230)
     local violColSep = violationsPanel:CreateTexture(nil, "ARTWORK")
     violColSep:SetHeight(1)
     violColSep:SetPoint("TOPLEFT",  violationsPanel, "TOPLEFT",  0, -53)
@@ -1968,21 +2240,41 @@ function SC:OpenMasterWindow(focusTab)
     violColSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
     frame.violations.empty = CreateField(violationsPanel, 0, -66, 620)
     frame.violations.empty:SetText("No active violations.")
-    for index = 1, 12 do
+    frame.violations.scroll = CreateFrame("ScrollFrame", "SoftcoreViolationsScrollFrame", violationsPanel, "FauxScrollFrameTemplate")
+    frame.violations.scroll:SetPoint("TOPLEFT", violationsPanel, "TOPLEFT", 0, VIOLATION_ROW_TOP)
+    frame.violations.scroll:SetPoint("BOTTOMRIGHT", violationsPanel, "BOTTOMRIGHT", -24, 18)
+    frame.violations.scroll:SetScript("OnVerticalScroll", function(self, offset)
+        FauxScrollFrame_OnVerticalScroll(self, offset, VIOLATION_ROW_HEIGHT, function()
+            SC:MasterUI_Refresh()
+        end)
+    end)
+    for index = 1, VIOLATION_ROWS do
         local row = CreateFrame("Frame", nil, violationsPanel)
-        row:SetSize(690, 28)
-        row:SetPoint("TOPLEFT", violationsPanel, "TOPLEFT", 0, -66 - ((index - 1) * 30))
+        row:SetSize(690, VIOLATION_ROW_HEIGHT)
+        row:SetPoint("TOPLEFT", violationsPanel, "TOPLEFT", 0, VIOLATION_ROW_TOP - ((index - 1) * VIOLATION_ROW_HEIGHT))
         if index % 2 == 0 then
             local rowBg = row:CreateTexture(nil, "BACKGROUND")
             rowBg:SetAllPoints(row)
             rowBg:SetColorTexture(0.82, 0.58, 0.22, 0.08)
         end
-        row.time = CreateField(row, 0, 0, 118)
-        row.owner = CreateField(row, 122, 0, 110)
-        row.type = CreateField(row, 238, 0, 108)
-        row.detail = CreateField(row, 352, 0, 260)
-        row.clearBtn = CreateButton(row, "Clear", 62, 20)
-        row.clearBtn:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 2)
+        row.time = CreateField(row, 0, 0, 130)
+        row.owner = CreateField(row, 134, 0, 100)
+        row.type = CreateField(row, 242, 0, 128)
+        row.detail = CreateField(row, 378, 0, 230)
+        row.time:ClearAllPoints()
+        row.time:SetPoint("LEFT", row, "LEFT", 0, 0)
+        row.owner:ClearAllPoints()
+        row.owner:SetPoint("LEFT", row, "LEFT", 134, 0)
+        row.type:ClearAllPoints()
+        row.type:SetPoint("LEFT", row, "LEFT", 242, 0)
+        row.detail:ClearAllPoints()
+        row.detail:SetPoint("LEFT", row, "LEFT", 378, 0)
+        row.time:SetWordWrap(false)
+        row.owner:SetWordWrap(false)
+        row.type:SetWordWrap(false)
+        row.detail:SetWordWrap(false)
+        row.clearBtn = CreateButton(row, "Clear", 58, 17)
+        row.clearBtn:SetPoint("RIGHT", row, "RIGHT", -18, 0)
         frame.violations.rows[index] = row
     end
 
@@ -1991,7 +2283,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.log = { rows = {} }
     CreateSectionHeader(logPanel, "Audit Log", 0, 0, 650)
     CreateLabel(logPanel, "Time", 0, -38, "GameFontNormalSmall", 130)
-    CreateLabel(logPanel, "Actor", 134, -38, "GameFontNormalSmall", 100)
+    CreateLabel(logPanel, "Character", 134, -38, "GameFontNormalSmall", 100)
     CreateLabel(logPanel, "Event", 242, -38, "GameFontNormalSmall", 128)
     CreateLabel(logPanel, "Message", 378, -38, "GameFontNormalSmall", 300)
     local logColSep = logPanel:CreateTexture(nil, "ARTWORK")
@@ -2001,10 +2293,18 @@ function SC:OpenMasterWindow(focusTab)
     logColSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
     frame.log.empty = CreateField(logPanel, 0, -66, 620)
     frame.log.empty:SetText("No events recorded.")
+    frame.log.scroll = CreateFrame("ScrollFrame", "SoftcoreLogScrollFrame", logPanel, "FauxScrollFrameTemplate")
+    frame.log.scroll:SetPoint("TOPLEFT", logPanel, "TOPLEFT", 0, LOG_ROW_TOP)
+    frame.log.scroll:SetPoint("BOTTOMRIGHT", logPanel, "BOTTOMRIGHT", -24, 18)
+    frame.log.scroll:SetScript("OnVerticalScroll", function(self, offset)
+        FauxScrollFrame_OnVerticalScroll(self, offset, LOG_ROW_HEIGHT, function()
+            SC:MasterUI_Refresh()
+        end)
+    end)
     for index = 1, LOG_ROWS do
         local row = CreateFrame("Frame", nil, logPanel)
-        row:SetSize(690, 18)
-        row:SetPoint("TOPLEFT", logPanel, "TOPLEFT", 0, -66 - ((index - 1) * 18))
+        row:SetSize(690, LOG_ROW_HEIGHT)
+        row:SetPoint("TOPLEFT", logPanel, "TOPLEFT", 0, LOG_ROW_TOP - ((index - 1) * LOG_ROW_HEIGHT))
         if index % 2 == 0 then
             local rowBg = row:CreateTexture(nil, "BACKGROUND")
             rowBg:SetAllPoints(row)
@@ -2014,6 +2314,18 @@ function SC:OpenMasterWindow(focusTab)
         row.actor = CreateField(row, 134, 0, 100)
         row.kind = CreateField(row, 242, 0, 128)
         row.message = CreateField(row, 378, 0, 300)
+        row.time:ClearAllPoints()
+        row.time:SetPoint("LEFT", row, "LEFT", 0, 0)
+        row.actor:ClearAllPoints()
+        row.actor:SetPoint("LEFT", row, "LEFT", 134, 0)
+        row.kind:ClearAllPoints()
+        row.kind:SetPoint("LEFT", row, "LEFT", 242, 0)
+        row.message:ClearAllPoints()
+        row.message:SetPoint("LEFT", row, "LEFT", 378, 0)
+        row.time:SetWordWrap(false)
+        row.actor:SetWordWrap(false)
+        row.kind:SetWordWrap(false)
+        row.message:SetWordWrap(false)
         frame.log.rows[index] = row
     end
 

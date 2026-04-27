@@ -21,6 +21,7 @@ local RULE_KEYS = {
     "guildBank",
     "mounts",
     "flying",
+    "flightPaths",
     "gearQuality",
     "heirlooms",
     "outsiderGrouping",
