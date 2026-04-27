@@ -544,6 +544,7 @@ local STATUS_COLORS = {
     BLOCKED = "|cfffbbf24",
     CONFLICT = "|cfffbbf24",
     VIOLATION = "|cfffbbf24",
+    RAID_UNSUPPORTED = "|cfffbbf24",
     UNSYNCED = "|cff9ca3af",
     INACTIVE = "|cff9ca3af",
     NOT_IN_RUN = "|cff9ca3af",
@@ -566,6 +567,7 @@ local STATUS_RGB = {
     RUN_MISMATCH = GOLD_TEXT,
     RULESET_MISMATCH = GOLD_TEXT,
     ADDON_VERSION_MISMATCH = GOLD_TEXT,
+    RAID_UNSUPPORTED = GOLD_TEXT,
 }
 
 local STATUS_LABELS = {
@@ -584,6 +586,7 @@ local STATUS_LABELS = {
     RUN_MISMATCH = "Run Conflict",
     RULESET_MISMATCH = "Rules Conflict",
     ADDON_VERSION_MISMATCH = "Version Conflict",
+    RAID_UNSUPPORTED = "Raid Local Only",
 }
 
 local function FriendlyStatus(statusStr)

@@ -104,6 +104,8 @@ Status heartbeats are sent every 10 seconds. Reloading or rejoining may briefly 
 
 Party state is display and compatibility data. Remote state should not reset, fail, or overwrite the local character's run.
 
+If a party converts to a raid, Softcore stops party sync, clears remote roster display, and expires pending group proposals/amendments instead of applying them late. The local run remains active and locally tracked.
+
 ## Separate Runs
 
 If two players started separate runs, matching rules are not enough by themselves because each run has a different run ID.
@@ -175,7 +177,7 @@ Boundary behavior:
 ## Backend Hardening TODOs
 
 - [x] Make sync stale-message protection tolerate peer sequence resets.
-- [ ] Reconcile raid behavior between project notes and README: either add true `RAID` sync/roster support or keep raids explicitly local-only everywhere.
+- [x] Keep raids explicitly local-only and expire pending group governance when a party converts to raid.
 - [ ] Audit remote status participant writes so same-run display remains useful without bypassing proposal, invite, late-join, or leader-approval rules.
 - [ ] Add in-game party test passes for disconnect/reload, non-addon members, members joining/leaving during pending proposals, and rule amendment expiry.
 

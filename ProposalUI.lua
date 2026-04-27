@@ -116,6 +116,16 @@ local function GetCurrentPartyKeys()
     return keys
 end
 
+local function IsGroupProposal(proposal)
+    if not proposal then
+        return false
+    end
+
+    return proposal.proposalType == "RUN"
+        or proposal.proposalType == "SYNC_RUN"
+        or proposal.proposalType == "ADD_PARTICIPANT"
+end
+
 function SC:SerializeRuleset(ruleset)
     local parts = {}
 
@@ -224,6 +234,15 @@ function SC:GetPendingProposal()
     if db.pendingProposalId then
         local proposal = db.proposals[db.pendingProposalId]
         if proposal and (proposal.status == "PENDING" or proposal.status == "ACCEPTED") then
+            if IsInRaid() and IsGroupProposal(proposal) then
+                proposal.status = "EXPIRED"
+                db.pendingProposalId = nil
+                self:AddLog("PROPOSAL_EXPIRED", "Expired group proposal because raid groups are local-only.", {
+                    proposalId = proposal.proposalId,
+                    runId = proposal.runId,
+                })
+                return nil
+            end
             if db.run and db.run.active and db.run.runId and proposal.runId and proposal.runId ~= db.run.runId then
                 proposal.status = "EXPIRED"
                 db.pendingProposalId = nil

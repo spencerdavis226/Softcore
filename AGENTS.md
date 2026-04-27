@@ -55,8 +55,9 @@ Sync uses Blizzard addon messages with the `SOFTCORE` prefix.
 The channel is selected automatically:
 
 - instance group: `INSTANCE_CHAT`
-- raid: `RAID`
 - party: `PARTY`
+
+Raid groups are intentionally unsupported because the UI is designed for party-scale accountability, not raid-scale rosters. When a party converts to raid, Softcore should become local-only: stop party sync, avoid raid roster display, and expire pending group proposals/amendments rather than applying them late.
 
 Status heartbeats are sent periodically. Full rules/proposals may be chunked. Incomplete chunk buffers expire and should never mutate run state.
 

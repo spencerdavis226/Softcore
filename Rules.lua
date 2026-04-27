@@ -160,14 +160,31 @@ local function IsAmendmentExpired(amendment)
     return time() - (tonumber(amendment and amendment.proposedAt) or time()) > AMENDMENT_TIMEOUT_SECONDS
 end
 
+local function CountKeys(values)
+    local count = 0
+    for _ in pairs(values or {}) do
+        count = count + 1
+    end
+    return count
+end
+
 function SC:ClearStaleRuleAmendments()
     local db = GetDB()
     local changed = false
     for _, amendment in ipairs(db.ruleAmendments or {}) do
-        if (amendment.status == "PENDING" or amendment.status == "ACCEPTED") and IsAmendmentExpired(amendment) then
-            amendment.status = "EXPIRED"
-            amendment.expiredAt = time()
-            changed = true
+        if amendment.status == "PENDING" or amendment.status == "ACCEPTED" then
+            if IsInRaid() and CountKeys(amendment.partyAtProposalTime) > 1 then
+                amendment.status = "EXPIRED"
+                amendment.expiredAt = time()
+                self:AddLog("RULE_AMENDMENT_EXPIRED", "Expired group rule amendment because raid groups are local-only.", {
+                    amendmentId = amendment.id,
+                })
+                changed = true
+            elseif IsAmendmentExpired(amendment) then
+                amendment.status = "EXPIRED"
+                amendment.expiredAt = time()
+                changed = true
+            end
         end
     end
     if changed and self.MasterUI_Refresh then

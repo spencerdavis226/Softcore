@@ -914,7 +914,7 @@ function SC:GetDerivedPartyStatus()
 
     if IsInRaid() then
         db.run.levelGapBlocked = false
-        db.run.partyStatus = "VALID"
+        db.run.partyStatus = "RAID_UNSUPPORTED"
         return db.run.partyStatus
     end
 
