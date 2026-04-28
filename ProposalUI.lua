@@ -50,6 +50,8 @@ local function GetRulesetSyncOrder(self)
         "vendor",
         "consumables",
         "instancedPvP",
+        "firstPersonOnly",
+        "actionCam",
         "maxDeaths",
         "maxDeathsValue",
     }

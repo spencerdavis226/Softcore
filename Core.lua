@@ -2037,6 +2037,9 @@ local function BuildDebugExportText()
     AddCsvLine(lines, "Run", "Status", SC:GetStatusText())
     AddCsvLine(lines, "Run", "Party Status", SC:GetPartyStatus())
     AddCsvLine(lines, "Run", "Ruleset Hash", SC.GetRulesetHash and SC:GetRulesetHash() or "unknown")
+    AddCsvLine(lines, "Rule", "firstPersonOnly", run.ruleset and run.ruleset.firstPersonOnly or "")
+    AddCsvLine(lines, "Rule", "actionCam", run.ruleset and run.ruleset.actionCam or "")
+    AddCsvLine(lines, "Rule", "cameraMode", run.cameraMode or "")
     AddCsvLine(lines, "Sync", "Last Sent", db.sync and db.sync.lastSentAt and FormatTime(db.sync.lastSentAt) or "never")
     AddCsvLine(lines, "Sync", "Last Received", db.sync and db.sync.lastReceivedAt and FormatTime(db.sync.lastReceivedAt) or "never")
     AddKeyValueCsv(lines, "Sync", "Last Send Result", db.sync and db.sync.lastSendResult)
@@ -2224,9 +2227,9 @@ function SC:PrintHelp()
     Print("  /sc export        copy CSV run summary")
     Print("  /sc participants  show current participants")
     Print("  /sc conflicts     print active party conflicts")
-    Print("  /sc syncdebug     print sync diagnostics")
-    Print("  /sc debuglog      copy sync/audit debug export")
-    Print("  /sc debugclear    clear debug trace for a fresh test")
+    Print("  /sc syncdebug | sd  print sync diagnostics")
+    Print("  /sc debuglog | dl   copy sync/audit debug export")
+    Print("  /sc debugclear | dc clear debug trace for a fresh test")
     Print("  /sc gear          print equipped gear rule status")
     Print("  /sc dungeons      print dungeon tracking state")
     Print("  /sc proposal      show pending proposal")
@@ -2332,20 +2335,20 @@ function SC:HandleSlash(input)
         end
     elseif command == "conflicts" then
         self:PrintConflicts()
-    elseif command == "syncdebug" then
+    elseif command == "syncdebug" or command == "sd" then
         if self.PrintSyncDebug then
             self:PrintSyncDebug()
         else
             Print("sync debug is not loaded.")
         end
-    elseif command == "debuglog" or command == "debug" then
+    elseif command == "debuglog" or command == "debug" or command == "dl" then
         local sub = string.lower(strtrim(rest or ""))
         if sub == "chat" or sub == "print" then
             self:PrintDebugExport()
         else
             self:ShowDebugExport()
         end
-    elseif command == "debugclear" then
+    elseif command == "debugclear" or command == "dc" then
         if self.ClearDebugTrace then
             self:ClearDebugTrace(strtrim(rest or ""))
             Print("debug trace cleared.")

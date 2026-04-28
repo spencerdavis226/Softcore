@@ -36,6 +36,8 @@ local RULE_ORDER = {
     "vendor",
     "consumables",
     "instancedPvP",
+    "firstPersonOnly",
+    "actionCam",
     "maxDeaths",
     "maxDeathsValue",
 }
@@ -69,6 +71,8 @@ local HASH_RULE_ORDER = {
     "vendor",
     "consumables",
     "instancedPvP",
+    "firstPersonOnly",
+    "actionCam",
     "maxDeaths",
     "maxDeathsValue",
 }
@@ -113,6 +117,8 @@ local SEVERITY_ONLY_RULES = {
     instanceWithUnsyncedPlayers = true,
     consumables = true,
     instancedPvP = true,
+    firstPersonOnly = true,
+    actionCam = true,
 }
 
 local GEAR_QUALITY_VALUES = {

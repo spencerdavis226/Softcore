@@ -72,8 +72,9 @@ Common commands:
 | `/sc dungeons` | Print dungeon tracking state |
 | `/sc participants` | Print current participants |
 | `/sc conflicts` | Print active conflicts |
-| `/sc debuglog` | Open a copyable sync/audit debug export |
-| `/sc debugclear` | Clear the in-memory debug trace before a test pass |
+| `/sc debuglog` or `/sc dl` | Open a copyable sync/audit debug export |
+| `/sc debugclear` or `/sc dc` | Clear the in-memory debug trace before a test pass |
+| `/sc syncdebug` or `/sc sd` | Print sync diagnostics |
 | `/sc proposal` | Show the current pending proposal |
 | `/sc propose` | Propose a grouped run from chat |
 | `/sc propose-add Player-Realm` | Invite a party member into the current run |
@@ -115,6 +116,7 @@ Softcore sync is built around current WoW addon-message limits:
 - Blizzard applies a per-prefix throttle; Softcore paces outbound messages through its send queue and chunks larger proposal/full-state payloads.
 - Proposal and control retries must remain paced. Do not bypass the send queue for chunked messages.
 - Rule serialization must preserve booleans exactly. `false` is a real rule value, not an empty string.
+- Every enforced rule that affects local behavior must be part of the canonical ruleset sync/hash order. Camera rules (`firstPersonOnly`, `actionCam`) are included so a synced run cannot silently enforce camera on one client but not another.
 
 If a party converts to a raid, Softcore stops party sync, clears remote roster display, and expires pending group proposals/amendments instead of applying them late. The local run remains active and locally tracked.
 

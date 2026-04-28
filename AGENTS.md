@@ -179,7 +179,7 @@ Current multiplayer test setup:
 
 After any feature, bug fix, or sync/UI behavior change, give the user exact A/B test instructions. Include:
 
-- what to run on A and B before the test, usually `/reload`, `/sc debugclear <test name>`, and sometimes `/sc reset` if a fresh run is needed
+- what to run on A and B before the test, usually `/reload`, `/sc dc <test name>`, and sometimes `/sc reset` if a fresh run is needed
 - what action to perform on A
 - what action to perform on B
 - expected UI/HUD/menu state on both computers
@@ -200,7 +200,11 @@ Useful commands:
 - `/sc participants`
 - `/sc conflicts`
 - `/sc debuglog`
+- `/sc dl`
 - `/sc debugclear`
+- `/sc dc`
+- `/sc syncdebug`
+- `/sc sd`
 - `/sc gear`
 - `/sc dungeons`
 - `/sc resync`
