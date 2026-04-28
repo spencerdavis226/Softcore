@@ -171,6 +171,25 @@ Before changing a feature, inspect the current implementation and preserve exist
 
 After each feature or bug fix, test in WoW when possible.
 
+Current multiplayer test setup:
+
+- Computer A: this/main computer, VSCode/Codex computer, character `Cathe-Thrall`, usually party leader/proposer.
+- Computer B: second computer, character `Hordrien-Thrall`, usually party member/receiver/accepter.
+- Unless the user says otherwise, assume multiplayer tests involve a normal party with A proposing and B accepting. Do not assume raid behavior is being tested unless explicitly stated.
+
+After any feature, bug fix, or sync/UI behavior change, give the user exact A/B test instructions. Include:
+
+- what to run on A and B before the test, usually `/reload`, `/sc debugclear <test name>`, and sometimes `/sc reset` if a fresh run is needed
+- what action to perform on A
+- what action to perform on B
+- expected UI/HUD/menu state on both computers
+- expected lifecycle events or audit/debug entries on both computers
+- when to wait for sync settling, usually 10-30 seconds because addon messages are queued/throttled
+- what commands to run after the test, especially `/sc syncdebug` and `/sc debuglog`
+- what exports or lines the user should paste back into chat for diagnosis
+
+Prefer test scripts that cover lifecycle and whole-app state, not just the specific button changed. For proposal/sync changes, always verify run ID, ruleset hash, pending proposal state, participant rows, party status, HUD lamp, active violations, conflicts, and absence of unexpected audit spam.
+
 Useful commands:
 
 - `/reload`
