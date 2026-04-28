@@ -349,6 +349,7 @@ local function EnsureDatabase()
     SoftcoreDB.sync.localSequence = SoftcoreDB.sync.localSequence or 0
     SoftcoreDB.sync.seenAuditIds = SoftcoreDB.sync.seenAuditIds or {}
     SoftcoreDB.sync.seenViolationIds = SoftcoreDB.sync.seenViolationIds or {}
+    SoftcoreDB.debugTrace = SoftcoreDB.debugTrace or {}
     SoftcoreDB.runHistory = SoftcoreDB.runHistory or {}
 
     EnsureRunDefaults(SoftcoreDB.run)
@@ -368,6 +369,30 @@ local function EnsureDatabase()
 
     SC.db = SoftcoreDB
     return SoftcoreDB
+end
+
+function SC:TraceDebug(kind, fields)
+    local db = EnsureDatabase()
+    local trace = db.debugTrace
+    local entry = {
+        time = time(),
+        kind = tostring(kind or "DEBUG"),
+    }
+
+    if type(fields) == "table" then
+        for key, value in pairs(fields) do
+            if type(value) ~= "table" and type(value) ~= "function" then
+                entry[key] = value
+            end
+        end
+    end
+
+    table.insert(trace, entry)
+    while #trace > 300 do
+        table.remove(trace, 1)
+    end
+
+    return entry
 end
 
 local function BindCharacterDatabase()
@@ -539,6 +564,17 @@ function SC:AddLog(kind, message, extra)
     table.insert(db.eventLog, entry)
     db.sync.seenAuditIds[entry.id] = true
 
+    if self.TraceDebug then
+        self:TraceDebug("AUDIT_LOG", {
+            logEntryId = entry.id,
+            runId = entry.runId,
+            eventKind = entry.kind,
+            playerKey = entry.playerKey,
+            actorKey = entry.actorKey,
+            message = entry.message,
+        })
+    end
+
     if self.HUD_Refresh then
         self:HUD_Refresh()
     end
@@ -590,6 +626,16 @@ function SC:AddViolation(violationType, detail, severity, playerKey)
 
     table.insert(db.violations, violation)
     db.sync.seenViolationIds[violation.id] = true
+    if self.TraceDebug then
+        self:TraceDebug("VIOLATION_LOCAL_ADDED", {
+            violationId = violation.id,
+            runId = violation.runId,
+            playerKey = violation.playerKey,
+            violationType = violation.type,
+            severity = violation.severity,
+            detail = violation.detail,
+        })
+    end
     self:AddLog("VIOLATION_ADDED", BuildViolationAddedMessage(violation), {
         violationId = violation.id,
         violationType = violation.type,
@@ -1059,6 +1105,17 @@ function SC:ClearViolation(violationId, clearedBy, clearReason)
                 violation.clearedAt = time()
                 violation.clearedBy = clearedBy or GetPlayerKey(db.character)
                 violation.clearReason = clearReason or "Cleared"
+                if self.TraceDebug then
+                    self:TraceDebug("VIOLATION_CLEARED", {
+                        violationId = violation.id,
+                        runId = violation.runId,
+                        playerKey = violation.playerKey,
+                        violationType = violation.type,
+                        shared = violation.shared == true,
+                        clearedBy = violation.clearedBy,
+                        clearReason = violation.clearReason,
+                    })
+                end
                 self:AddLog("VIOLATION_CLEARED", BuildViolationClearMessage(violation), {
                     violationId = violation.id,
                     violationType = violation.type,
@@ -1115,6 +1172,18 @@ function SC:ImportSharedLog(entry)
     db.sync.seenAuditIds[entry.id] = true
     table.insert(db.eventLog, entry)
 
+    if self.TraceDebug then
+        self:TraceDebug("AUDIT_LOG_IMPORTED", {
+            logEntryId = entry.id,
+            runId = entry.runId,
+            eventKind = entry.kind,
+            playerKey = entry.playerKey,
+            actorKey = entry.actorKey,
+            violationId = entry.violationId,
+            message = entry.message,
+        })
+    end
+
     if self.MasterUI_Refresh then
         self:MasterUI_Refresh()
     end
@@ -1134,6 +1203,18 @@ function SC:ImportSharedViolation(violation)
 
     db.sync.seenViolationIds[violation.id] = true
     table.insert(db.violations, violation)
+
+    if self.TraceDebug then
+        self:TraceDebug("VIOLATION_SHARED_IMPORTED", {
+            violationId = violation.id,
+            runId = violation.runId,
+            playerKey = violation.playerKey,
+            violationType = violation.type,
+            severity = violation.severity,
+            status = violation.status,
+            detail = violation.detail,
+        })
+    end
 
     self:ImportSharedLog({
         id = violation.logEntryId or (violation.id .. ":added"),
@@ -1173,6 +1254,16 @@ function SC:ImportSharedViolationClear(violationId, clearedBy, clearedAt, clearR
                 violation.clearedBy = clearedBy
                 violation.clearedAt = clearedAt or time()
                 violation.clearReason = clearReason or "Cleared"
+                if self.TraceDebug then
+                    self:TraceDebug("VIOLATION_SHARED_CLEARED", {
+                        violationId = violation.id,
+                        runId = violation.runId,
+                        playerKey = violation.playerKey,
+                        violationType = violation.type,
+                        clearedBy = violation.clearedBy,
+                        clearReason = violation.clearReason,
+                    })
+                end
 
                 self:ImportSharedLog({
                     id = violation.id .. ":cleared:" .. tostring(violation.clearedAt),
@@ -1201,6 +1292,89 @@ function SC:ImportSharedViolationClear(violationId, clearedBy, clearedAt, clearR
     return nil
 end
 
+function SC:ImportSharedViolationSnapshot(snapshot)
+    if type(snapshot) ~= "table" or not snapshot.id or snapshot.id == "" then
+        return nil
+    end
+
+    local db = EnsureDatabase()
+    if not db.run or not db.run.active or not db.run.runId or snapshot.runId ~= db.run.runId then
+        return nil
+    end
+
+    local existing
+    for _, violation in ipairs(db.violations) do
+        if violation.id == snapshot.id then
+            existing = violation
+            break
+        end
+    end
+
+    if existing then
+        if existing.shared then
+            local wasCleared = existing.status == "CLEARED"
+            existing.status = "ACTIVE"
+            existing.clearedAt = nil
+            existing.clearedBy = nil
+            existing.clearReason = nil
+            existing.type = snapshot.type or existing.type
+            existing.detail = snapshot.detail or existing.detail
+            existing.severity = snapshot.severity or existing.severity or "WARNING"
+            existing.playerKey = snapshot.playerKey or existing.playerKey
+            existing.runId = snapshot.runId or existing.runId
+            existing.createdAt = snapshot.createdAt or existing.createdAt or time()
+
+            if wasCleared and self.TraceDebug then
+                self:TraceDebug("VIOLATION_SHARED_REACTIVATED", {
+                    violationId = existing.id,
+                    runId = existing.runId,
+                    playerKey = existing.playerKey,
+                    violationType = existing.type,
+                    detail = existing.detail,
+                })
+            end
+        end
+
+        return existing
+    end
+
+    local violation = {
+        id = snapshot.id,
+        violationId = snapshot.id,
+        runId = snapshot.runId,
+        playerKey = snapshot.playerKey,
+        type = snapshot.type or "unknown",
+        detail = snapshot.detail,
+        severity = snapshot.severity or "WARNING",
+        status = "ACTIVE",
+        createdAt = snapshot.createdAt or time(),
+        clearedAt = nil,
+        clearedBy = nil,
+        clearReason = nil,
+        shared = true,
+        snapshotOnly = true,
+    }
+
+    db.sync.seenViolationIds[violation.id] = true
+    table.insert(db.violations, violation)
+
+    if self.TraceDebug then
+        self:TraceDebug("VIOLATION_SHARED_SNAPSHOT", {
+            violationId = violation.id,
+            runId = violation.runId,
+            playerKey = violation.playerKey,
+            violationType = violation.type,
+            detail = violation.detail,
+        })
+    end
+
+    if self.MasterUI_Refresh then
+        self:MasterUI_Refresh()
+    end
+
+    return violation
+end
+
 -- Violation types that represent party compatibility blockers, not clearable run events.
 local BLOCKER_VIOLATION_TYPES = {
     unsyncedMembers = true,
@@ -1211,6 +1385,7 @@ local BLOCKER_VIOLATION_TYPES = {
 
 function SC:IsViolationClearable(violation)
     if not violation or violation.status == "CLEARED" then return false end
+    if violation.shared and violation.playerKey ~= self:GetPlayerKey() then return false end
     if violation.type == "death" then return false end
     if violation.severity == "FATAL" or violation.severity == "CHARACTER_FAIL" then return false end
     if BLOCKER_VIOLATION_TYPES[violation.type] then return false end
@@ -1808,6 +1983,103 @@ function SC:GetRunExportText()
     return BuildRunExportText()
 end
 
+local function AddKeyValueCsv(lines, section, field, source)
+    if type(source) ~= "table" then
+        return
+    end
+
+    local parts = {}
+    for key, value in pairs(source) do
+        if type(value) ~= "table" and type(value) ~= "function" then
+            table.insert(parts, tostring(key) .. "=" .. tostring(value))
+        end
+    end
+    table.sort(parts)
+    AddCsvLine(lines, section, field, table.concat(parts, " | "))
+end
+
+local function BuildDebugExportText()
+    local db = EnsureDatabase()
+    local run = db.run or {}
+    local character = db.character or GetPlayerSnapshot()
+    local lines = {}
+    local localKey = GetPlayerKey(character)
+
+    table.insert(lines, "Section,Field,Value,Time,Actor,Kind,Message")
+    AddCsvLine(lines, "Info", "Format", "Softcore debug export - paste both clients into chat")
+    AddCsvLine(lines, "Info", "Exported", FormatTime(time()))
+    AddCsvLine(lines, "Character", "Player", localKey)
+    AddCsvLine(lines, "Character", "Level", character.level or "?")
+    AddCsvLine(lines, "Character", "Zone", character.zone or "?")
+    AddCsvLine(lines, "Run", "Run ID", run.runId or "none")
+    AddCsvLine(lines, "Run", "Active", run.active == true)
+    AddCsvLine(lines, "Run", "Status", SC:GetStatusText())
+    AddCsvLine(lines, "Run", "Party Status", SC:GetPartyStatus())
+    AddCsvLine(lines, "Run", "Ruleset Hash", SC.GetRulesetHash and SC:GetRulesetHash() or "unknown")
+    AddCsvLine(lines, "Sync", "Last Sent", db.sync and db.sync.lastSentAt and FormatTime(db.sync.lastSentAt) or "never")
+    AddCsvLine(lines, "Sync", "Last Received", db.sync and db.sync.lastReceivedAt and FormatTime(db.sync.lastReceivedAt) or "never")
+    AddKeyValueCsv(lines, "Sync", "Last Send Result", db.sync and db.sync.lastSendResult)
+    AddKeyValueCsv(lines, "Sync", "Last Chunked Send", db.sync and db.sync.lastChunkedSend)
+    AddKeyValueCsv(lines, "Sync", "Last Reassembled Chunk", db.sync and db.sync.lastReassembledChunk)
+
+    local proposal = SC.GetPendingProposal and SC:GetPendingProposal() or nil
+    if proposal then
+        AddCsvLine(lines, "Proposal", proposal.proposalId or "?", proposal.status or "?", FormatTime(proposal.proposedAt), proposal.proposedBy, proposal.proposalType, proposal.runId)
+    else
+        AddCsvLine(lines, "Proposal", "Pending", "none")
+    end
+
+    for _, violation in ipairs(db.violations or {}) do
+        AddCsvLine(
+            lines,
+            "Violation",
+            violation.id or "?",
+            tostring(violation.status or "?") .. " shared=" .. tostring(violation.shared == true),
+            FormatTime(violation.createdAt),
+            violation.playerKey or "",
+            violation.type or "?",
+            tostring(violation.detail or "") .. " clearedBy=" .. tostring(violation.clearedBy or "")
+        )
+    end
+
+    for _, entry in ipairs(db.eventLog or {}) do
+        AddCsvLine(lines, "Audit", entry.id or "?", "", FormatTime(entry.time), entry.actorKey or entry.playerKey or "", entry.kind or "?", entry.message or "")
+    end
+
+    for playerKey, participant in pairs(run.participants or {}) do
+        AddCsvLine(lines, "Participant", playerKey, participant.status or "?", FormatTime(participant.joinedAt), participant.playerKey or "", "Level", participant.currentLevel or participant.levelAtJoin or "?")
+    end
+
+    if SC.groupStatuses then
+        for playerKey, peer in pairs(SC.groupStatuses) do
+            AddCsvLine(
+                lines,
+                "Peer",
+                playerKey,
+                tostring(peer.participantStatus or "?") .. " active=" .. tostring(peer.active == true),
+                peer.lastSeen and FormatTime(peer.lastSeen) or "never",
+                peer.playerKey or playerKey,
+                "violations=" .. tostring(peer.activeViolations or 0),
+                "run=" .. tostring(peer.runId or "") .. " rules=" .. tostring(peer.rulesetHash or "") .. " latest=" .. tostring(peer.latestViolation and peer.latestViolation.id or "")
+            )
+        end
+    end
+
+    for _, conflict in pairs(run.conflicts or {}) do
+        AddCsvLine(lines, "Conflict", conflict.playerKey or "?", conflict.type or "?", FormatTime(conflict.detectedAt), "", conflict.active and "ACTIVE" or "CLEARED", "local=" .. tostring(conflict.localValue) .. " remote=" .. tostring(conflict.remoteValue))
+    end
+
+    for index, entry in ipairs(db.debugTrace or {}) do
+        AddKeyValueCsv(lines, "Trace", tostring(index) .. " " .. tostring(entry.kind or "?"), entry)
+    end
+
+    return table.concat(lines, "\n")
+end
+
+function SC:GetDebugExportText()
+    return BuildDebugExportText()
+end
+
 local exportFrame
 
 local function EnsureRunExportFrame()
@@ -1874,12 +2146,14 @@ local function EnsureRunExportFrame()
     return exportFrame
 end
 
-local function ShowRunExportWindow(text)
+local function ShowRunExportWindow(text, title, hint)
     if not CreateFrame or not UIParent then
         return false
     end
 
     local frame = EnsureRunExportFrame()
+    frame.title:SetText(title or "Softcore CSV Export")
+    frame.hint:SetText(hint or "Comma-delimited for spreadsheets. Highlighted text is ready to copy.")
     frame.editBox:SetText(text or "")
     frame.editBox:SetCursorPosition(0)
     frame.editBox:HighlightText()
@@ -1905,6 +2179,22 @@ function SC:ShowRunExport()
     end
 end
 
+function SC:PrintDebugExport()
+    local text = BuildDebugExportText()
+    for line in string.gmatch(text, "([^\n]+)") do
+        Print(line)
+    end
+end
+
+function SC:ShowDebugExport()
+    local text = BuildDebugExportText()
+    if ShowRunExportWindow(text, "Softcore Debug Export", "Paste this from both clients when tracing sync or violation lifecycles.") then
+        Print("debug export opened for copy.")
+    else
+        self:PrintDebugExport()
+    end
+end
+
 function SC:PrintHelp()
     Print("Softcore commands:")
     Print("  /sc menu | status | rules | violations | log")
@@ -1914,6 +2204,7 @@ function SC:PrintHelp()
     Print("  /sc participants  show current participants")
     Print("  /sc conflicts     print active party conflicts")
     Print("  /sc syncdebug     print sync diagnostics")
+    Print("  /sc debuglog      copy sync/audit debug export")
     Print("  /sc gear          print equipped gear rule status")
     Print("  /sc dungeons      print dungeon tracking state")
     Print("  /sc proposal      show pending proposal")
@@ -2024,6 +2315,13 @@ function SC:HandleSlash(input)
             self:PrintSyncDebug()
         else
             Print("sync debug is not loaded.")
+        end
+    elseif command == "debuglog" or command == "debug" then
+        local sub = string.lower(strtrim(rest or ""))
+        if sub == "chat" or sub == "print" then
+            self:PrintDebugExport()
+        else
+            self:ShowDebugExport()
         end
     elseif command == "announce" or command == "deathannounce" then
         local mode = string.lower(strtrim(rest or ""))

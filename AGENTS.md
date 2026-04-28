@@ -180,6 +180,7 @@ Useful commands:
 - `/sc violations`
 - `/sc participants`
 - `/sc conflicts`
+- `/sc debuglog`
 - `/sc gear`
 - `/sc dungeons`
 - `/sc resync`

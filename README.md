@@ -72,6 +72,7 @@ Common commands:
 | `/sc dungeons` | Print dungeon tracking state |
 | `/sc participants` | Print current participants |
 | `/sc conflicts` | Print active conflicts |
+| `/sc debuglog` | Open a copyable sync/audit debug export |
 | `/sc proposal` | Show the current pending proposal |
 | `/sc propose` | Propose a grouped run from chat |
 | `/sc propose-add Player-Realm` | Invite a party member into the current run |
@@ -79,6 +80,7 @@ Common commands:
 | `/sc run chat` | Print run integrity summary |
 | `/sc export` | Open a copyable CSV run summary for spreadsheets |
 | `/sc export chat` | Print the CSV run summary to chat |
+| `/sc debuglog chat` | Print the debug export to chat |
 | `/sc announce off\|chat\|party\|guild` | Configure optional death announcements; combine targets with spaces |
 | `/sc rule name value` | Change or propose a single rule value |
 

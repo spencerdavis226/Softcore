@@ -209,6 +209,17 @@ local function RecordSendResult(messageType, channel, byteCount, resultCode, chu
         db.sync.sendFailureCount = (db.sync.sendFailureCount or 0) + 1
         db.sync.lastSendError = db.sync.lastSendResult
     end
+
+    if SC.TraceDebug and (messageType ~= "STATUS" or not IsSuccessfulSend(resultCode)) then
+        SC:TraceDebug("SYNC_SEND_RESULT", {
+            messageType = messageType,
+            channel = channel,
+            bytes = byteCount,
+            result = resultCode,
+            resultName = SEND_RESULT_NAMES[resultCode] or tostring(resultCode),
+            chunk = chunkText,
+        })
+    end
 end
 
 local function DispatchAddonMessageNow(message, channel, messageType, chunkText)
@@ -355,6 +366,16 @@ local function SendPayload(payload)
     local db = GetDB()
     local messageType = payload.type or "UNKNOWN"
     db.sync.lastSentAt = time()
+
+    if SC.TraceDebug and messageType ~= "STATUS" then
+        SC:TraceDebug("SYNC_QUEUE_PAYLOAD", {
+            messageType = messageType,
+            channel = channel,
+            runId = payload.runId,
+            violationId = payload.violationId,
+            proposalId = payload.proposalId,
+        })
+    end
 
     local message = Encode(AddMetadata(payload))
     if #message <= MAX_MESSAGE_BYTES then
@@ -972,6 +993,13 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
                 total = buffer.total,
                 time = time(),
             }
+            if self.TraceDebug then
+                self:TraceDebug("SYNC_CHUNK_REASSEMBLED", {
+                    sender = key,
+                    messageType = buffer.messageType,
+                    total = buffer.total,
+                })
+            end
             self:Sync_HandleMessage(table.concat(parts), sender, true)
         end
 
@@ -991,6 +1019,20 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
 
     local db = GetDB()
     db.sync.lastReceivedAt = time()
+
+    if self.TraceDebug and (payload.type ~= "STATUS" or (tonumber(payload.activeViolations) or 0) > 0 or payload.participantStatus ~= "ACTIVE") then
+        self:TraceDebug("SYNC_RECEIVED", {
+            messageType = payload.type,
+            sender = key,
+            runId = payload.runId,
+            participantStatus = payload.participantStatus,
+            active = payload.active,
+            activeViolations = payload.activeViolations,
+            latestViolationId = payload.latestViolationId,
+            proposalId = payload.proposalId,
+            violationId = payload.violationId,
+        })
+    end
 
     if payload.type == "FULL_STATE_REQUEST" then
         self:Sync_SendFullState()
@@ -1203,6 +1245,18 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
         lastSeen = time(),
         unsynced = false,
     }
+
+    if remoteActive and (tonumber(payload.activeViolations) or 0) > 0 and self.ImportSharedViolationSnapshot then
+        self:ImportSharedViolationSnapshot({
+            id = payload.latestViolationId,
+            runId = payload.runId,
+            playerKey = key,
+            type = payload.latestViolationType,
+            detail = payload.latestViolationDetail,
+            severity = "WARNING",
+            createdAt = tonumber(payload.latestViolationAt) or time(),
+        })
+    end
 
     if payload.active == "1" and payload.runId and self.ConfirmAcceptedProposalFromStatus then
         self:ConfirmAcceptedProposalFromStatus(key, payload.runId, payload.rulesetHash)
