@@ -209,6 +209,8 @@ Useful commands:
 - `/sc dungeons`
 - `/sc resync`
 
+`/sc dc` clears the in-memory debug trace and resets test-oriented sync counters such as stale send drops, send failures, and expired chunk buffers. Use it at the start of every A/B test so pasted exports describe only that test pass.
+
 Check for:
 
 - no BugSack errors

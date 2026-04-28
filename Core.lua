@@ -398,6 +398,14 @@ end
 function SC:ClearDebugTrace(reason)
     local db = EnsureDatabase()
     db.debugTrace = {}
+    if db.sync then
+        db.sync.staleSendDrops = 0
+        db.sync.lastStaleSendDrop = nil
+        db.sync.sendFailureCount = 0
+        db.sync.lastSendError = nil
+        db.sync.expiredChunkBuffers = 0
+        db.sync.lastExpiredChunk = nil
+    end
     return self:TraceDebug("DEBUG_TRACE_CLEARED", {
         reason = reason or "manual",
         playerKey = GetPlayerKey(db.character),

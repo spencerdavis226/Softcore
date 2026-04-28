@@ -73,7 +73,7 @@ Common commands:
 | `/sc participants` | Print current participants |
 | `/sc conflicts` | Print active conflicts |
 | `/sc debuglog` or `/sc dl` | Open a copyable sync/audit debug export |
-| `/sc debugclear` or `/sc dc` | Clear the in-memory debug trace before a test pass |
+| `/sc debugclear` or `/sc dc` | Clear the in-memory debug trace and test counters before a test pass |
 | `/sc syncdebug` or `/sc sd` | Print sync diagnostics |
 | `/sc proposal` | Show the current pending proposal |
 | `/sc propose` | Propose a grouped run from chat |
