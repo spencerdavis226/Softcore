@@ -271,7 +271,7 @@ local function IsQueuedMessageStale(item)
     end
 
     if item.messageType == "PROPOSAL_ACCEPT" then
-        return proposal and proposal.status ~= "ACCEPTED"
+        return proposal and (proposal.status == "CANCELLED" or proposal.status == "DECLINED" or proposal.status == "EXPIRED")
     end
 
     return false
