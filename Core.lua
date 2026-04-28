@@ -1458,6 +1458,17 @@ function SC:StartRun(runOptions)
         startingRuleset = self:NormalizeRulesetForSync(startingRuleset)
     end
 
+    local preservedProposals = {}
+    if runOptions.runId then
+        for proposalId, proposal in pairs(db.proposals or {}) do
+            if proposal and proposal.runId == runOptions.runId and (proposal.status == "PENDING" or proposal.status == "ACCEPTED" or proposal.status == "CONFIRMED") then
+                proposal.status = "CONFIRMED"
+                proposal.confirmedAt = proposal.confirmedAt or time()
+                preservedProposals[proposalId] = proposal
+            end
+        end
+    end
+
     ArchiveCurrentRun(db, "Starting new run")
 
     db.character = GetPlayerSnapshot()
@@ -1486,7 +1497,7 @@ function SC:StartRun(runOptions)
     db.run.levelGapBlocked = false
     db.eventLog = {}
     db.violations = {}
-    db.proposals = {}
+    db.proposals = preservedProposals
     db.pendingProposalId = nil
     db.acceptedRunId = nil
     db.acceptedRulesetHash = nil

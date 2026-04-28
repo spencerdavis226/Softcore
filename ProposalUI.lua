@@ -909,10 +909,16 @@ function SC:ReceiveProposalResponse(payload, playerKey)
     local proposal = db.proposals[payload.proposalId]
 
     if not proposal then
-        self:AddLog("PROPOSAL_RESPONSE_UNKNOWN", "Received response for unknown proposal.", {
-            proposalId = payload.proposalId,
-            playerKey = playerKey,
-        })
+        if self.TraceDebug then
+            self:TraceDebug("PROPOSAL_RESPONSE_UNKNOWN", {
+                proposalId = payload.proposalId,
+                runId = payload.runId,
+                messageType = payload.type,
+                playerKey = playerKey,
+                localRunId = db.run and db.run.runId,
+                localActive = db.run and db.run.active == true,
+            })
+        end
         return
     end
     if time() - (tonumber(proposal.proposedAt) or time()) > PROPOSAL_TIMEOUT_SECONDS then
