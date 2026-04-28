@@ -78,9 +78,10 @@ local function Print(message)
 end
 
 local function GetDB()
-    SoftcoreDB = SoftcoreDB or {}
-    SoftcoreDB.proposals = SoftcoreDB.proposals or {}
-    return SoftcoreDB
+    local db = SC.db or SoftcoreDB or {}
+    SoftcoreDB = db
+    db.proposals = db.proposals or {}
+    return db
 end
 
 local function Escape(value)
@@ -289,26 +290,35 @@ function SC:GetPendingProposal()
     local db = GetDB()
     if db.pendingProposalId then
         local proposal = db.proposals[db.pendingProposalId]
-        if proposal and (proposal.status == "PENDING" or proposal.status == "ACCEPTED") then
-            if IsInRaid() and IsGroupProposal(proposal) then
-                proposal.status = "EXPIRED"
-                db.pendingProposalId = nil
-                self:AddLog("PROPOSAL_EXPIRED", "Expired group proposal because raid groups are local-only.", {
-                    proposalId = proposal.proposalId,
-                    runId = proposal.runId,
-                })
-                return nil
-            end
-            local createdAt = tonumber(proposal.proposedAt) or time()
-            if time() - createdAt > PROPOSAL_TIMEOUT_SECONDS then
-                proposal.status = "EXPIRED"
-                db.pendingProposalId = nil
-                self:AddLog("PROPOSAL_EXPIRED", "Expired stale proposal: " .. tostring(proposal.runName), {
-                    proposalId = proposal.proposalId,
-                    runId = proposal.runId,
-                })
-                return nil
-            end
+        if not proposal then
+            db.pendingProposalId = nil
+            return nil
+        end
+
+        if proposal.status ~= "PENDING" and proposal.status ~= "ACCEPTED" then
+            db.pendingProposalId = nil
+            return nil
+        end
+
+        if IsInRaid() and IsGroupProposal(proposal) then
+            proposal.status = "EXPIRED"
+            db.pendingProposalId = nil
+            self:AddLog("PROPOSAL_EXPIRED", "Expired group proposal because raid groups are local-only.", {
+                proposalId = proposal.proposalId,
+                runId = proposal.runId,
+            })
+            return nil
+        end
+
+        local createdAt = tonumber(proposal.proposedAt) or time()
+        if time() - createdAt > PROPOSAL_TIMEOUT_SECONDS then
+            proposal.status = "EXPIRED"
+            db.pendingProposalId = nil
+            self:AddLog("PROPOSAL_EXPIRED", "Expired stale proposal: " .. tostring(proposal.runName), {
+                proposalId = proposal.proposalId,
+                runId = proposal.runId,
+            })
+            return nil
         end
         return proposal
     end
