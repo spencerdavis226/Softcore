@@ -11,12 +11,20 @@ local MAX_CHUNK_DATA_BYTES = 150
 local CHUNK_TIMEOUT_SECONDS = 30
 local CONTROL_RETRY_SECONDS = 1
 local CONTROL_RETRY_LIMIT = 3
+local PROPOSAL_RESEND_SECONDS = 8
+local SEND_QUEUE_TICK_SECONDS = 0.25
+local SEND_TOKEN_REFILL_SECONDS = 1.05
+local SEND_TOKEN_MAX = 8
 
 SC.syncEnabled = true
 SC.groupStatuses = SC.groupStatuses or {}
 
 local syncFrame
 local pendingChunks = {}
+local sendQueue = {}
+local sendQueueActive = false
+local sendTokens = SEND_TOKEN_MAX
+local sendLastRefillAt
 local syncSessionId = tostring(time()) .. "-" .. tostring(math.random(100000, 999999))
 local GetDB
 
@@ -157,6 +165,30 @@ local function IsSuccessfulSend(resultCode)
     return resultCode == 0
 end
 
+local function GetMonotonicTime()
+    if GetTime then
+        return GetTime()
+    end
+
+    return time()
+end
+
+local function RefillSendTokens()
+    local now = GetMonotonicTime()
+    sendLastRefillAt = sendLastRefillAt or now
+
+    local elapsed = now - sendLastRefillAt
+    if elapsed < SEND_TOKEN_REFILL_SECONDS then
+        return
+    end
+
+    local gained = math.floor(elapsed / SEND_TOKEN_REFILL_SECONDS)
+    if gained > 0 then
+        sendTokens = math.min(SEND_TOKEN_MAX, sendTokens + gained)
+        sendLastRefillAt = sendLastRefillAt + (gained * SEND_TOKEN_REFILL_SECONDS)
+    end
+end
+
 local function RecordSendResult(messageType, channel, byteCount, resultCode, chunkText)
     local db = GetDB()
     db.sync.lastSendResult = {
@@ -175,8 +207,7 @@ local function RecordSendResult(messageType, channel, byteCount, resultCode, chu
     end
 end
 
-local function DispatchAddonMessage(message, channel, messageType, chunkText, retryAttempt)
-    retryAttempt = retryAttempt or 0
+local function DispatchAddonMessageNow(message, channel, messageType, chunkText)
     local result
 
     if C_ChatInfo and C_ChatInfo.SendAddonMessage then
@@ -191,16 +222,86 @@ local function DispatchAddonMessage(message, channel, messageType, chunkText, re
     local resultCode = SendResultCode(result)
     RecordSendResult(messageType or "UNKNOWN", channel, #(message or ""), resultCode, chunkText)
 
-    if not IsSuccessfulSend(resultCode) and retryAttempt < CONTROL_RETRY_LIMIT and C_Timer and C_Timer.After then
-        if resultCode == 3 or resultCode == 8 or messageType ~= "STATUS" then
-            local retryMessage = message
-            C_Timer.After(CONTROL_RETRY_SECONDS * (retryAttempt + 1), function()
-                DispatchAddonMessage(retryMessage, channel, messageType, chunkText, retryAttempt + 1)
-            end)
+    return IsSuccessfulSend(resultCode), resultCode
+end
+
+local function ShouldRetrySend(resultCode, messageType)
+    return resultCode == 3 or resultCode == 8 or messageType ~= "STATUS"
+end
+
+local function ProcessSendQueue()
+    RefillSendTokens()
+
+    if #sendQueue > 0 and sendTokens > 0 then
+        local item = table.remove(sendQueue, 1)
+        sendTokens = sendTokens - 1
+
+        local success, resultCode = DispatchAddonMessageNow(item.message, item.channel, item.messageType, item.chunkText)
+        if not success then
+            if resultCode == 3 or resultCode == 8 then
+                sendTokens = 0
+                sendLastRefillAt = GetMonotonicTime()
+            end
+
+            item.retryAttempt = (item.retryAttempt or 0) + 1
+            if item.retryAttempt <= CONTROL_RETRY_LIMIT and ShouldRetrySend(resultCode, item.messageType) then
+                table.insert(sendQueue, item)
+            end
+        end
+
+        local db = SoftcoreDB
+        if db and db.sync then
+            db.sync.sendQueueDepth = #sendQueue
         end
     end
 
-    return IsSuccessfulSend(resultCode), resultCode
+    if #sendQueue == 0 then
+        sendQueueActive = false
+        return
+    end
+
+    if C_Timer and C_Timer.After then
+        C_Timer.After(SEND_QUEUE_TICK_SECONDS, ProcessSendQueue)
+    else
+        while #sendQueue > 0 do
+            local item = table.remove(sendQueue, 1)
+            DispatchAddonMessageNow(item.message, item.channel, item.messageType, item.chunkText)
+        end
+        sendQueueActive = false
+    end
+end
+
+local function DispatchAddonMessage(message, channel, messageType, chunkText)
+    if not C_Timer or not C_Timer.After then
+        return DispatchAddonMessageNow(message, channel, messageType, chunkText)
+    end
+
+    table.insert(sendQueue, {
+        message = message,
+        channel = channel,
+        messageType = messageType or "UNKNOWN",
+        chunkText = chunkText,
+        retryAttempt = 0,
+    })
+
+    local db = SoftcoreDB
+    if db and db.sync then
+        db.sync.sendQueueDepth = #sendQueue
+        db.sync.lastQueuedSend = {
+            type = messageType or "UNKNOWN",
+            channel = channel,
+            bytes = #(message or ""),
+            chunk = chunkText,
+            time = time(),
+        }
+    end
+
+    if not sendQueueActive then
+        sendQueueActive = true
+        ProcessSendQueue()
+    end
+
+    return true, 0
 end
 
 function GetDB()
@@ -765,7 +866,7 @@ function SC:Sync_SendRunProposal(proposal)
     local sent = SendPayload(payload)
     if C_Timer and C_Timer.After then
         for attempt = 1, 2 do
-            C_Timer.After(CONTROL_RETRY_SECONDS * attempt, function()
+            C_Timer.After(PROPOSAL_RESEND_SECONDS * attempt, function()
                 SendPayload(payload)
             end)
         end
@@ -1185,6 +1286,7 @@ function SC:PrintSyncDebug()
     if db.sync.lastSendResult then
         Print("  last send result: " .. tostring(db.sync.lastSendResult.type) .. " " .. tostring(db.sync.lastSendResult.resultName) .. " " .. tostring(db.sync.lastSendResult.bytes) .. "b")
     end
+    Print("  send queue: " .. tostring(db.sync.sendQueueDepth or #sendQueue))
 
     local pendingCount = 0
     for _, buffer in pairs(pendingChunks) do
