@@ -72,6 +72,33 @@ WoW addon-message API constraints are gospel for this project:
 - Preserve boolean values during serialization. Do not use `value or ""` when stringifying payload fields because `false` is meaningful for rules.
 - Use `PARTY` and `INSTANCE_CHAT` only. Do not use raid sync as a fallback; raids are local-only for Softcore.
 
+### Sync implementation map (current architecture)
+
+There is no separate HTTP or server “backend.” All multiplayer behavior is **two or more WoW clients** exchanging **addon channel messages** (`SOFTCORE` prefix on `PARTY` or `INSTANCE_CHAT`). Authoritative run state still lives in **per-character SavedVariables** (`SoftcoreCharDB` / `SoftcoreDB` in code). Sync code should be read as **transport + peer display + proposal transport**, not as a remote source of truth for local validity.
+
+**Where to look in code**
+
+- `Sync.lua`: prefix registration, inbound `CHAT_MSG_ADDON`, **chunk reassembly** (per-sender buffers that **expire** without applying partial state), **outbound send queue** (token-budget pacing, priority insertion, send failure retries), **stale send drops** for obsolete queued items, and serialization/chunking to the 255-byte body limit.
+- `Core.lua`: slash commands; **`/sc dc`** (`ClearDebugTrace`) clears the capped in-memory **debug trace** and resets **test-oriented `db.sync` counters** (stale send drops, last stale drop metadata, send failure count/last error, expired chunk buffer count/last expiry). **`/sc dl`** builds the CSV-style export that includes those fields.
+- `Events.lua`: game events that drive periodic **STATUS** heartbeats and other local hooks.
+- `ProposalUI.lua` / `MasterUI.lua`: Run-tab proposal UX; user actions enqueue outbound payloads through `Sync` rather than calling `SendAddonMessage` directly.
+
+**Outbound path**
+
+Structured payloads are queued (with a **priority** ordering so control/violation traffic can preempt bulky traffic), split into chunks when needed, then sent via `C_ChatInfo.SendAddonMessage` (or legacy equivalent). Pacing and resend **attempt limits** live as constants near the top of `Sync.lua` (for example proposal resend spacing vs control-message retry behavior). Treat Blizzard throttling as real: never bypass the queue for large or repeated sends.
+
+**Inbound path**
+
+Each received segment is either a standalone message or part of a **chunk sequence**. Reassembly uses a buffer key (sender + chunk id); **incomplete buffers expire** and must not mutate run state. Fully reassembled payloads dispatch to type-specific handlers (proposals, status, party log import, amendments, etc.).
+
+**Stale send drops (`SYNC_DROP_STALE_SEND`)**
+
+When the queue is about to send an item, `Sync.lua` may drop it if it is no longer meaningful. For example, a queued **`PROPOSAL`** is stale once that proposal is no longer `PENDING`. A queued **`PROPOSAL_ACCEPT`** is stale only if the proposal reached a **terminal** state such as **`CANCELLED`**, **`DECLINED`**, or **`EXPIRED`** (not merely because the acceptor has already moved to **`CONFIRMED`** locally). Drops increment **`db.sync.staleSendDrops`** and optional trace rows; **`/sc dc`** resets those counters for clean test exports.
+
+**Documentation vs code**
+
+Keep this section as a **map** (transport, modules, invariants). For exact thresholds, message-type lists, and handler behavior, **trust the code** and search `Sync.lua` first; update this subsection when the model changes, not every tweak.
+
 Incoming sync can update:
 
 - remote player status
