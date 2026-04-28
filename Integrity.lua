@@ -500,8 +500,8 @@ local ACTION_CAM_MOUNTED_SHOULDER_OFFSET = "0"
 local ACTION_CAM_HEAD_MOVEMENT_STRENGTH = "1"
 local ACTION_CAM_ENEMY_FOCUS_YAW = "0.5"
 local ACTION_CAM_ENEMY_FOCUS_PITCH = "0.4"
-local ACTION_CAM_INTERACT_FOCUS_YAW = "1.0"
-local ACTION_CAM_INTERACT_FOCUS_PITCH = "0.75"
+local ACTION_CAM_INTERACT_FOCUS_YAW = "0"
+local ACTION_CAM_INTERACT_FOCUS_PITCH = "0"
 
 local function SetCVarIfChanged(key, value)
     local str = tostring(value)
@@ -683,7 +683,7 @@ function SC:EnforceActionCamSettings()
     SetCVarIfChanged("test_cameraOverShoulder", mounted and ACTION_CAM_MOUNTED_SHOULDER_OFFSET or ACTION_CAM_SHOULDER_OFFSET)
     SetCVarIfChanged("test_cameraDynamicPitch", "1")
     SetCVarIfChanged("test_cameraTargetFocusEnemyEnable", "1")
-    SetCVarIfChanged("test_cameraTargetFocusInteractEnable", "1")
+    SetCVarIfChanged("test_cameraTargetFocusInteractEnable", "0")
     SetCVarIfChanged("test_cameraTargetFocusEnemyStrengthYaw", ACTION_CAM_ENEMY_FOCUS_YAW)
     SetCVarIfChanged("test_cameraTargetFocusEnemyStrengthPitch", ACTION_CAM_ENEMY_FOCUS_PITCH)
     SetCVarIfChanged("test_cameraTargetFocusInteractStrengthYaw", ACTION_CAM_INTERACT_FOCUS_YAW)
