@@ -108,7 +108,7 @@ Status heartbeats are sent every 10 seconds. Reloading or rejoining may briefly 
 
 Party state is display and compatibility data. Remote state should not reset, fail, or overwrite the local character's run.
 
-Contributor- and agent-oriented notes (module map, queue/stale-send behavior, what `/sc dc` resets) live in [`AGENTS.md`](AGENTS.md) under **Sync implementation map**.
+Contributor- and agent-oriented notes (module map, queue/stale-send behavior, what `/sc dc` resets) live in [`AGENTS.md`](AGENTS.md) under **Sync implementation map**. Anyone changing sync, UI, or commands should follow **Rolling documentation updates** there in the same commit.
 
 Softcore sync is built around current WoW addon-message limits:
 

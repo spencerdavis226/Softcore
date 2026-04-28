@@ -249,9 +249,28 @@ Check for:
 - proposals/amendments expiring instead of applying late
 - commands handling inactive states safely
 
+## Rolling documentation updates
+
+There is no separate doc bot or CI job. **Rolling updates are a required part of feature work:** keep `AGENTS.md` and `README.md` aligned with reality in the **same commit** as the code (or split only if the user explicitly wants a doc-only follow-up).
+
+When you change behavior or structure, patch the **smallest relevant sections**—do not duplicate long explanations that belong in code.
+
+| If you change… | Update (at minimum) |
+|----------------|---------------------|
+| `Sync.lua` or addon messaging (queue, chunking, throttling, message types, stale drops, counters, channel choice) | **Sync Model** and **Sync implementation map**; if user-facing, **README** party sync bullets |
+| Proposals, amendments, invites, expiry, Run-tab flows | **Proposal And Amendment Boundaries**; **Current Product Shape**; **README** starting runs / Run tab |
+| New or removed menu tab, HUD behavior, minimap | **Current Product Shape**; **README** UI sections |
+| New or removed slash commands or debug export fields | **README** command table; **Testing Expectations** useful commands |
+| SavedVariables layout, per-character scope, migration | **Persistence Model** |
+| Individual-first boundaries, what remote sync may/may not do | **Core Safety Principle** and **Incoming sync** lists |
+
+Skip doc edits only for **pure refactors** with no observable behavior and no architecture clarification. When in doubt, add one or two sentences to **Sync implementation map** or the relevant list rather than leaving the next chat guessing.
+
 ## Commit Discipline
 
 After each working feature or bug fix, summarize changed files and commit.
+
+If the work changed architecture, sync, persistence, UI surfaces, or player-visible commands, **include the documentation updates above in the same commit**.
 
 Use concise commit messages such as:
 

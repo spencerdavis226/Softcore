@@ -1,0 +1,14 @@
+---
+description: Update AGENTS.md/README when Softcore architecture or features change
+alwaysApply: true
+---
+
+# Rolling documentation (Softcore)
+
+On every change that affects **architecture**, **sync/messaging**, **persistence**, **Run-tab or proposal flows**, **UI surfaces**, or **slash commands**:
+
+1. Edit **`AGENTS.md`** in the same commit—see **Rolling documentation updates** for the trigger table (which section to touch).
+2. If players or contributors need to know it, update **`README.md`** (commands, UI, sync summary).
+3. Prefer short, accurate deltas. Do not paste implementation detail that belongs in `Sync.lua` / other modules.
+
+Pure refactors with no behavior change may omit doc updates. Everything else: **code + docs together**.
