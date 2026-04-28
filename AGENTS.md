@@ -61,6 +61,17 @@ Raid groups are intentionally unsupported because the UI is designed for party-s
 
 Status heartbeats are sent periodically. Full rules/proposals may be chunked. Incomplete chunk buffers expire and should never mutate run state.
 
+WoW addon-message API constraints are gospel for this project:
+
+- Register the `SOFTCORE` prefix on every login/reload before expecting `CHAT_MSG_ADDON` delivery. Prefix registration does not persist through `/reload`.
+- Prefixes are limited to 16 bytes. Message bodies are limited to 255 bytes and cannot contain null bytes.
+- `C_ChatInfo.SendAddonMessage` returning success only means the client accepted the message for enqueueing; it does not guarantee immediate delivery.
+- Addon messages are throttled per prefix. Treat the practical default as 10 message allowance and about 1 message recovered per second, but assume Blizzard can change those numbers server-side.
+- Large payloads must be chunked and sent through the Softcore send queue. Do not burst-send all chunks or repeated proposals directly.
+- Repeated proposal/control sends must be paced. A missing chunk must leave receiver state unchanged.
+- Preserve boolean values during serialization. Do not use `value or ""` when stringifying payload fields because `false` is meaningful for rules.
+- Use `PARTY` and `INSTANCE_CHAT` only. Do not use raid sync as a fallback; raids are local-only for Softcore.
+
 Incoming sync can update:
 
 - remote player status

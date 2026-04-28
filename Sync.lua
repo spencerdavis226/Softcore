@@ -97,7 +97,11 @@ local function ResolvePayloadPlayerKey(payload, sender)
 end
 
 local function Escape(value)
-    value = tostring(value or "")
+    if value == nil then
+        value = ""
+    else
+        value = tostring(value)
+    end
     return string.gsub(value, "([^%w _%.%-])", function(character)
         return string.format("%%%02X", string.byte(character))
     end)

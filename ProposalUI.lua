@@ -85,7 +85,11 @@ local function GetDB()
 end
 
 local function Escape(value)
-    value = tostring(value or "")
+    if value == nil then
+        value = ""
+    else
+        value = tostring(value)
+    end
     value = string.gsub(value, "%%", "%%%%")
     value = string.gsub(value, SEPARATOR, "%%u")
     value = string.gsub(value, PAIR_SEPARATOR, "%%p")

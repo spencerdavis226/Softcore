@@ -250,7 +250,7 @@ local function NormalizeRuleValue(ruleName, value)
             return true
         end
 
-        if value == false or value == "false" or value == "FALSE" then
+        if value == false or value == "false" or value == "FALSE" or value == "" then
             return false
         end
     end
