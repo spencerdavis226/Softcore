@@ -104,7 +104,7 @@ Declining cancels the proposal for everyone. Pending proposals expire after 30 m
 
 Softcore syncs over Blizzard addon messages using the `SOFTCORE` prefix. It supports normal parties only; raid groups are treated as local-only and show a raid-unsupported note instead of syncing or displaying a 40-player roster.
 
-Status heartbeats are sent every 10 seconds. Reloading or rejoining may briefly show Unsynced until addon messages arrive. Use `/sc resync`, the Overview Resync button, or **Party Sync** in the Run tab if the display looks stale.
+Status heartbeats are sent every 10 seconds. Reloading or rejoining may briefly show Unsynced until addon messages arrive. Use `/sc resync` or **Party Sync** in the Run tab if the display looks stale.
 
 Party state is display and compatibility data. Remote state should not reset, fail, or overwrite the local character's run.
 

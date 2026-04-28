@@ -16,7 +16,7 @@ The master menu is the primary interface. Group run proposals, run sync proposal
 
 Current menu tabs:
 
-- `Overview`: local run status, party status, participant snapshot, run ID, elapsed time, deaths, and active violation count
+- `Overview`: local run status, party status, participant snapshot, run ID, elapsed time, deaths, and active violation count (no Overview resync control; use `/sc resync` or Run tab Party Sync)
 - `Run`: start a run, review locked active rules, stop/reset a run, use Party Sync for resync/invite/run-alignment routing, and modify rules
 - `Violations`: active clearable issues
 - `Log`: audit history, newest first

@@ -27,6 +27,9 @@ local TAB_ACHIEVEMENTS = "ACHIEVEMENTS"
 local DISALLOWED_OUTCOME = "WARNING"
 local PANEL_WIDTH = 710
 local PANEL_HEIGHT = 560
+local RUN_FOOTER_BOTTOM = 24
+local RUN_FOOTER_LEFT_INSET = 32
+local RUN_FOOTER_RIGHT_INSET = 32
 local LOG_ROWS = 26
 local LOG_ROW_TOP = -66
 local LOG_ROW_HEIGHT = 18
@@ -1100,7 +1103,6 @@ local function RefreshOverviewPanel(frame)
     for _, element in ipairs(frame.overview.activeElements or {}) do
         SetRegionShown(element, active)
     end
-    SetRegionShown(frame.overview.resyncBtn, active and grouped)
 
     if active then
         frame.overview.run:SetText("|cffffd100" .. tostring(run.runName or "Softcore Run") .. "|r")
@@ -1301,35 +1303,62 @@ end
 
 local function AnchorRunFooterButtons(frame)
     local start = frame.start
-    local previous
+    local leftPrev
 
-    local function anchor(control, xGap, yOffset)
+    local function anchorLeft(control, xGap, yOffset)
         if not control or not control:IsShown() then
             return
         end
-
         control:ClearAllPoints()
-        if previous then
-            control:SetPoint("LEFT", previous, "RIGHT", xGap or 8, yOffset or 0)
+        if leftPrev then
+            control:SetPoint("LEFT", leftPrev, "RIGHT", xGap or 8, yOffset or 0)
         else
-            control:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 32, 24)
+            control:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", RUN_FOOTER_LEFT_INSET, RUN_FOOTER_BOTTOM)
         end
-        previous = control
+        leftPrev = control
     end
 
-    anchor(start.primaryBtn)
-    anchor(start.stopBtn)
-    anchor(start.cancelRunBox, 14, -1)
-    anchor(start.confirmStopBtn, 8, 1)
-    anchor(start.cancelStopBtn, 8, 1)
-    anchor(start.cancelRunHint, 10, 0)
-    anchor(start.modifyBtn)
-    anchor(start.partySyncBtn)
-    anchor(start.applyChangesBtn)
-    anchor(start.cancelChangesBtn)
-    anchor(start.proposalAcceptBtn)
-    anchor(start.proposalDeclineBtn)
-    anchor(start.proposalCancelBtn)
+    local rightPrev
+
+    local function anchorRight(control, xGap, yOffset)
+        if not control or not control:IsShown() then
+            return
+        end
+        control:ClearAllPoints()
+        if rightPrev then
+            control:SetPoint("RIGHT", rightPrev, "LEFT", -(xGap or 8), yOffset or 0)
+        else
+            control:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -RUN_FOOTER_RIGHT_INSET, RUN_FOOTER_BOTTOM)
+        end
+        rightPrev = control
+    end
+
+    -- Danger zone: Start / End Run and confirmation controls grow from the left toward center.
+    anchorLeft(start.primaryBtn)
+    anchorLeft(start.stopBtn)
+    anchorLeft(start.cancelRunBox, 14, -1)
+    anchorLeft(start.confirmStopBtn, 8, 1)
+    anchorLeft(start.cancelStopBtn, 8, 1)
+
+    if start.cancelRunHint and start.cancelRunHint:IsShown() then
+        start.cancelRunHint:ClearAllPoints()
+        if start.cancelRunBox and start.cancelRunBox:IsShown() then
+            start.cancelRunHint:SetPoint("BOTTOMLEFT", start.cancelRunBox, "TOPLEFT", 0, 4)
+        elseif start.stopBtn and start.stopBtn:IsShown() then
+            start.cancelRunHint:SetPoint("BOTTOMLEFT", start.stopBtn, "TOPLEFT", 0, 4)
+        else
+            start.cancelRunHint:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", RUN_FOOTER_LEFT_INSET, RUN_FOOTER_BOTTOM + 28)
+        end
+    end
+
+    -- Run governance: outermost control is at the panel's right edge; optional Party Sync sits inward.
+    anchorRight(start.modifyBtn)
+    anchorRight(start.partySyncBtn)
+    anchorRight(start.cancelChangesBtn)
+    anchorRight(start.applyChangesBtn)
+    anchorRight(start.proposalCancelBtn)
+    anchorRight(start.proposalDeclineBtn)
+    anchorRight(start.proposalAcceptBtn)
 end
 
 local function RefreshRunPanel(frame)
@@ -2237,7 +2266,7 @@ function SC:OpenMasterWindow(focusTab)
     end
 
     frame.start.primaryBtn = CreateButton(startPanel, "Start Run", 120, 24)
-    frame.start.primaryBtn:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 30, 18)
+    frame.start.primaryBtn:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", RUN_FOOTER_LEFT_INSET, RUN_FOOTER_BOTTOM)
     frame.start.primaryBtn:SetScript("OnClick", function()
         local ruleset = SC:CopyTable(frame.start.selectedRules)
         if SC.ApplyGroupingMode then
@@ -2464,18 +2493,6 @@ function SC:OpenMasterWindow(focusTab)
 
     frame.overview.partyHeader = CreateSectionHeader(overviewPanel, "Party Ledger", 0, -230, 690)
     table.insert(frame.overview.activeElements, frame.overview.partyHeader)
-    frame.overview.resyncBtn = CreateButton(overviewPanel, "Resync", 72, 20)
-    frame.overview.resyncBtn:SetPoint("TOPRIGHT", overviewPanel, "TOPRIGHT", -24, -227)
-    table.insert(frame.overview.activeElements, frame.overview.resyncBtn)
-    frame.overview.resyncBtn:SetScript("OnClick", function()
-        if SC.Sync_RequestFullState then
-            SC:Sync_RequestFullState()
-            Print("requested full state from party.")
-        elseif SC.Sync_BroadcastStatus then
-            SC:Sync_BroadcastStatus("RESYNC")
-            Print("resync requested.")
-        end
-    end)
     frame.overview.raidNote = CreateField(overviewPanel, 10, -254, 660)
     frame.overview.raidNote:SetText("|cfffbbf24Raid groups are not supported. Softcore will show and track only your character.|r")
     frame.overview.raidNote:Hide()
