@@ -73,6 +73,14 @@ local HASH_RULE_ORDER = {
     "maxDeathsValue",
 }
 
+local function CopyRuleOrder()
+    local order = {}
+    for index, ruleName in ipairs(HASH_RULE_ORDER) do
+        order[index] = ruleName
+    end
+    return order
+end
+
 local BOOLEAN_RULES = {
     failedMemberBlocksParty = true,
     allowLateJoin = true,
@@ -248,6 +256,50 @@ local function NormalizeRuleValue(ruleName, value)
     end
 
     return string.upper(tostring(value or ""))
+end
+
+function SC:GetRulesetSyncOrder()
+    return CopyRuleOrder()
+end
+
+function SC:NormalizeRulesetForSync(ruleset)
+    local normalized = self:GetDefaultRuleset()
+    for key, value in pairs(ruleset or {}) do
+        normalized[key] = value
+    end
+
+    for _, ruleName in ipairs(HASH_RULE_ORDER) do
+        local value = ruleset and ruleset[ruleName]
+        if value ~= nil then
+            normalized[ruleName] = NormalizeRuleValue(ruleName, value)
+        end
+    end
+
+    if self.ApplyGroupingMode then
+        self:ApplyGroupingMode(normalized)
+    end
+
+    return normalized
+end
+
+function SC:DescribeRulesetDifferences(localRuleset, remoteRuleset)
+    local differences = {}
+    local localNormalized = self:NormalizeRulesetForSync(localRuleset or {})
+    local remoteNormalized = self:NormalizeRulesetForSync(remoteRuleset or {})
+
+    for _, ruleName in ipairs(HASH_RULE_ORDER) do
+        local localValue = localNormalized[ruleName]
+        local remoteValue = remoteNormalized[ruleName]
+        if tostring(localValue) ~= tostring(remoteValue) then
+            table.insert(differences, {
+                ruleName = ruleName,
+                localValue = localValue,
+                remoteValue = remoteValue,
+            })
+        end
+    end
+
+    return differences
 end
 
 local function ContextDetail(ruleName, context)
@@ -679,9 +731,10 @@ function SC:GetRulesetHash()
     local db = GetDB()
     local text = ""
     local checksum = 0
+    local ruleset = self.NormalizeRulesetForSync and self:NormalizeRulesetForSync(db.run.ruleset or {}) or (db.run.ruleset or {})
 
     for _, ruleName in ipairs(HASH_RULE_ORDER) do
-        text = text .. ruleName .. "=" .. tostring(db.run.ruleset[ruleName]) .. ";"
+        text = text .. ruleName .. "=" .. tostring(ruleset[ruleName]) .. ";"
     end
 
     for index = 1, string.len(text) do

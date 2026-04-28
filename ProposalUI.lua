@@ -8,45 +8,51 @@ local PROPOSAL_TIMEOUT_SECONDS = 30 * 60
 local ACCEPT_RETRY_SECONDS = 5
 local ACCEPT_RETRY_LIMIT = 6
 
-local RULE_KEYS = {
-    "death",
-    "groupingMode",
-    "failedMemberBlocksParty",
-    "allowLateJoin",
-    "allowReplacementCharacters",
-    "requireLeaderApprovalForJoin",
-    "auctionHouse",
-    "mailbox",
-    "trade",
-    "bank",
-    "warbandBank",
-    "guildBank",
-    "voidStorage",
-    "craftingOrders",
-    "vendor",
-    "mounts",
-    "flying",
-    "flightPaths",
-    "gearQuality",
-    "heirlooms",
-    "outsiderGrouping",
-    "unsyncedMembers",
-    "maxLevelGap",
-    "maxLevelGapValue",
-    "dungeonRepeat",
-    "instanceWithUnsyncedPlayers",
-    "consumables",
-    "instancedPvP",
-    "maxDeaths",
-    "maxDeathsValue",
-}
-
 local function FriendlyGroupingMode(value)
     if value == "SOLO_SELF_FOUND" then
         return "Solo"
     end
 
     return "Group"
+end
+
+local function GetRulesetSyncOrder(self)
+    if self.GetRulesetSyncOrder then
+        return self:GetRulesetSyncOrder()
+    end
+
+    return {
+        "death",
+        "groupingMode",
+        "failedMemberBlocksParty",
+        "allowLateJoin",
+        "allowReplacementCharacters",
+        "requireLeaderApprovalForJoin",
+        "auctionHouse",
+        "mailbox",
+        "trade",
+        "mounts",
+        "flying",
+        "flightPaths",
+        "outsiderGrouping",
+        "unsyncedMembers",
+        "maxLevelGap",
+        "maxLevelGapValue",
+        "dungeonRepeat",
+        "gearQuality",
+        "heirlooms",
+        "instanceWithUnsyncedPlayers",
+        "bank",
+        "warbandBank",
+        "guildBank",
+        "voidStorage",
+        "craftingOrders",
+        "vendor",
+        "consumables",
+        "instancedPvP",
+        "maxDeaths",
+        "maxDeathsValue",
+    }
 end
 
 local function FriendlyAllowed(value)
@@ -155,10 +161,11 @@ end
 
 function SC:SerializeRuleset(ruleset)
     local parts = {}
+    local normalized = self.NormalizeRulesetForSync and self:NormalizeRulesetForSync(ruleset or {}) or (ruleset or {})
 
-    for _, key in ipairs(RULE_KEYS) do
-        if ruleset[key] ~= nil then
-            table.insert(parts, Escape(key) .. "=" .. Escape(ruleset[key]))
+    for _, key in ipairs(GetRulesetSyncOrder(self)) do
+        if normalized[key] ~= nil then
+            table.insert(parts, Escape(key) .. "=" .. Escape(normalized[key]))
         end
     end
 
@@ -214,7 +221,9 @@ function SC:DeserializeRuleset(serialized)
         end
     end
 
-    if self.ApplyGroupingMode then
+    if self.NormalizeRulesetForSync then
+        ruleset = self:NormalizeRulesetForSync(ruleset)
+    elseif self.ApplyGroupingMode then
         self:ApplyGroupingMode(ruleset)
     end
 
@@ -224,6 +233,10 @@ end
 function SC:ComputeRulesetHash(ruleset)
     local oldRuleset
     local db = self.db or SoftcoreDB
+
+    if self.NormalizeRulesetForSync then
+        ruleset = self:NormalizeRulesetForSync(ruleset or {})
+    end
 
     if db and db.run then
         oldRuleset = db.run.ruleset
@@ -249,6 +262,22 @@ local function ProposalSummary(proposal)
         .. "  Heirlooms: " .. FriendlyAllowed(proposal.ruleset.heirlooms)
 end
 
+local function PrintRuleDifferences(self, localRuleset, remoteRuleset)
+    if not self.DescribeRulesetDifferences then
+        return
+    end
+
+    local differences = self:DescribeRulesetDifferences(localRuleset, remoteRuleset)
+    if #differences == 0 then
+        return
+    end
+
+    Print("rule differences:")
+    for _, diff in ipairs(differences) do
+        Print("  " .. diff.ruleName .. ": local " .. tostring(diff.localValue) .. " / proposal " .. tostring(diff.remoteValue))
+    end
+end
+
 function SC:StoreProposal(proposal)
     local db = GetDB()
     db.proposals[proposal.proposalId] = proposal
@@ -268,11 +297,6 @@ function SC:GetPendingProposal()
                     proposalId = proposal.proposalId,
                     runId = proposal.runId,
                 })
-                return nil
-            end
-            if db.run and db.run.active and db.run.runId and proposal.runId and proposal.runId ~= db.run.runId then
-                proposal.status = "EXPIRED"
-                db.pendingProposalId = nil
                 return nil
             end
             local createdAt = tonumber(proposal.proposedAt) or time()
@@ -370,13 +394,14 @@ function SC:CheckPendingProposalOnRosterUpdate()
     end
 end
 
-function SC:ConfirmPendingProposalPeerActive(playerKey, runId)
+function SC:ConfirmPendingProposalPeerActive(playerKey, runId, rulesetHash)
     local db = GetDB()
     local proposal = self:GetPendingProposal()
     if not proposal or proposal.status ~= "PENDING" then return false end
     if proposal.proposedBy ~= self:GetPlayerKey() then return false end
     if proposal.proposalType ~= "RUN" and proposal.proposalType ~= "SYNC_RUN" and proposal.proposalType ~= "ADD_PARTICIPANT" then return false end
     if not playerKey or not runId or proposal.runId ~= runId then return false end
+    if rulesetHash and rulesetHash ~= "" and proposal.rulesetHash and proposal.rulesetHash ~= rulesetHash then return false end
 
     proposal.acceptedBy[playerKey] = true
 
@@ -447,7 +472,9 @@ function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, r
     end
     local proposalRunId = runId or self:CreateRunId()
     local proposalRuleset = self:CopyTable(ruleset or self:GetDefaultRuleset())
-    if self.ApplyGroupingMode then
+    if self.NormalizeRulesetForSync then
+        proposalRuleset = self:NormalizeRulesetForSync(proposalRuleset)
+    elseif self.ApplyGroupingMode then
         self:ApplyGroupingMode(proposalRuleset)
     end
     local proposal = {
@@ -523,6 +550,7 @@ function SC:ApplyRunSyncProposal(proposal, sourceKey)
     local localHash = self.GetRulesetHash and self:GetRulesetHash() or ""
     if localHash ~= "" and proposal.rulesetHash and localHash ~= proposal.rulesetHash then
         Print("cannot sync: local rules do not match the proposal.")
+        PrintRuleDifferences(self, db.run.ruleset, proposal.ruleset)
         return false
     end
 
@@ -614,6 +642,22 @@ function SC:ReceiveRunProposal(payload, proposerKey)
         return
     end
 
+    local sameExisting = db.proposals[proposal.proposalId]
+    if sameExisting then
+        sameExisting.runName = proposal.runName
+        sameExisting.ruleset = proposal.ruleset
+        sameExisting.rulesetHash = proposal.rulesetHash
+        sameExisting.preset = proposal.preset
+        sameExisting.partyAtProposalTime = sameExisting.partyAtProposalTime or proposal.partyAtProposalTime
+        sameExisting.acceptedBy = sameExisting.acceptedBy or {}
+        sameExisting.acceptedBy[proposerKey] = true
+        if (sameExisting.status == "PENDING" or sameExisting.status == "ACCEPTED") and db.pendingProposalId ~= sameExisting.proposalId then
+            db.pendingProposalId = sameExisting.proposalId
+        end
+        if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+        return
+    end
+
     self:StoreProposal(proposal)
     if self.PlayUISound then self:PlayUISound("PROPOSAL_RECEIVED") end
     if self.OpenMasterWindow then
@@ -633,14 +677,32 @@ function SC:AcceptPendingProposal()
         return
     end
 
+    if proposal.proposedBy == playerKey then
+        Print("you already proposed this. Waiting for party responses.")
+        return
+    end
+
+    if proposal.status == "ACCEPTED" and proposal.acceptedBy and proposal.acceptedBy[playerKey] then
+        if self.Sync_SendProposalResponse then
+            self:Sync_SendProposalResponse("PROPOSAL_ACCEPT", proposal)
+        end
+        if self.Sync_BroadcastStatus then
+            self:Sync_BroadcastStatus("PROPOSAL_ACCEPT_RETRY")
+        end
+        Print("already accepted. Waiting for confirmation.")
+        return
+    end
+
     if db.run and db.run.active and proposal.proposalType == "RUN" and db.run.runId ~= proposal.runId then
         Print("cannot accept: you already have an active run with a different runId. Use /sc reset only if you intend to leave it.")
+        Print("Use Propose Sync if both active runs should align.")
         return
     end
 
     local localHash = self.GetRulesetHash and self:GetRulesetHash() or ""
     if db.run and db.run.active and db.run.runId == proposal.runId and localHash ~= "" and localHash ~= proposal.rulesetHash then
         Print("cannot accept: ruleset mismatch detected.")
+        PrintRuleDifferences(self, db.run.ruleset, proposal.ruleset)
         return
     end
     if proposal.proposalType == "SYNC_RUN" then
@@ -650,6 +712,7 @@ function SC:AcceptPendingProposal()
         end
         if localHash ~= "" and proposal.rulesetHash and localHash ~= proposal.rulesetHash then
             Print("cannot accept sync: ruleset mismatch detected.")
+            PrintRuleDifferences(self, db.run.ruleset, proposal.ruleset)
             return
         end
     end
@@ -660,18 +723,17 @@ function SC:AcceptPendingProposal()
         end
         if db.run and db.run.active and localHash ~= "" and proposal.rulesetHash and localHash ~= proposal.rulesetHash then
             Print("cannot accept invite: ruleset mismatch detected.")
+            PrintRuleDifferences(self, db.run.ruleset, proposal.ruleset)
             return
         end
     end
 
     proposal.acceptedBy[playerKey] = true
-    proposal.status = "CONFIRMED"
+    proposal.status = "ACCEPTED"
     proposal.acceptRetryCount = 0
     db.acceptedRunId = proposal.runId
     db.acceptedRulesetHash = proposal.rulesetHash
-    if db.pendingProposalId == proposal.proposalId then
-        db.pendingProposalId = nil
-    end
+    db.pendingProposalId = proposal.proposalId
 
     if proposal.proposalType == "SYNC_RUN" then
         self:ApplyRunSyncProposal(proposal, proposal.proposedBy)
@@ -701,6 +763,12 @@ function SC:AcceptPendingProposal()
         participant.joinedAt = participant.joinedAt or time()
     end
 
+    db.proposals = db.proposals or {}
+    db.proposals[proposal.proposalId] = proposal
+    db.pendingProposalId = proposal.proposalId
+    db.acceptedRunId = proposal.runId
+    db.acceptedRulesetHash = proposal.rulesetHash
+
     self:AddLog("PROPOSAL_ACCEPTED", "Accepted proposal: " .. proposal.runName, {
         proposalId = proposal.proposalId,
         runId = proposal.runId,
@@ -714,7 +782,15 @@ function SC:AcceptPendingProposal()
         self:Sync_BroadcastStatus("PROPOSAL_ACCEPTED")
     end
 
-    Print("accepted proposal: " .. proposal.runName .. ".")
+    if C_Timer and C_Timer.After then
+        C_Timer.After(ACCEPT_RETRY_SECONDS, function()
+            if SC.RetryAcceptedProposal then
+                SC:RetryAcceptedProposal(proposal.proposalId)
+            end
+        end)
+    end
+
+    Print("accepted proposal: " .. proposal.runName .. ". Waiting for confirmation.")
     if self.MasterUI_Refresh then self:MasterUI_Refresh() end
     if self.HUD_Refresh then self:HUD_Refresh() end
 end
@@ -834,11 +910,26 @@ function SC:ReceiveProposalResponse(payload, playerKey)
     end
 
     if payload.type == "PROPOSAL_ACCEPT" then
+        if proposal.status == "CANCELLED" or proposal.status == "DECLINED" or proposal.status == "EXPIRED" then
+            return
+        end
+
         proposal.acceptedBy[playerKey] = true
-        self:AddLog("PROPOSAL_ACCEPT_SYNC", playerKey .. " accepted proposal " .. proposal.runName, {
-            proposalId = proposal.proposalId,
-            playerKey = playerKey,
-        })
+        if not proposal.acceptLoggedBy then proposal.acceptLoggedBy = {} end
+        if not proposal.acceptLoggedBy[playerKey] then
+            proposal.acceptLoggedBy[playerKey] = true
+            self:AddLog("PROPOSAL_ACCEPT_SYNC", playerKey .. " accepted proposal " .. proposal.runName, {
+                proposalId = proposal.proposalId,
+                playerKey = playerKey,
+            })
+        end
+
+        if proposal.proposedBy == self:GetPlayerKey() and proposal.status == "CONFIRMED" then
+            if self.Sync_SendRunProposalConfirmed then
+                self:Sync_SendRunProposalConfirmed(proposal)
+            end
+            return
+        end
 
         -- Only the proposer drives the "all accepted" check and starts the run.
         -- Guard against DECLINED/CANCELLED → CONFIRMED: only act from PENDING state.
@@ -879,6 +970,10 @@ function SC:ReceiveProposalResponse(payload, playerKey)
         end
 
     elseif payload.type == "PROPOSAL_DECLINE" then
+        if proposal.status == "CANCELLED" or proposal.status == "DECLINED" or proposal.status == "EXPIRED" then
+            return
+        end
+
         proposal.declinedBy[playerKey] = true
         self:AddLog("PROPOSAL_DECLINE_SYNC", playerKey .. " declined proposal " .. proposal.runName, {
             proposalId = proposal.proposalId,
@@ -977,12 +1072,13 @@ function SC:ReceiveRunConfirmed(payload, confirmerKey)
     end
 end
 
-function SC:ConfirmAcceptedProposalFromStatus(proposerKey, runId)
+function SC:ConfirmAcceptedProposalFromStatus(proposerKey, runId, rulesetHash)
     local db = GetDB()
     local proposal = self:GetPendingProposal()
     if not proposal or proposal.status ~= "ACCEPTED" then return false end
     if proposal.proposedBy ~= proposerKey then return false end
     if not runId or proposal.runId ~= runId then return false end
+    if rulesetHash and rulesetHash ~= "" and proposal.rulesetHash and proposal.rulesetHash ~= rulesetHash then return false end
     if time() - (tonumber(proposal.proposedAt) or time()) > PROPOSAL_TIMEOUT_SECONDS then
         proposal.status = "EXPIRED"
         if db.pendingProposalId == proposal.proposalId then

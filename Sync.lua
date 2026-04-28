@@ -7,8 +7,10 @@ local UNSYNCED_AFTER = 30
 local HEARTBEAT_SECONDS = 10
 local MAX_AUDIT_TEXT = 120
 local MAX_MESSAGE_BYTES = 230
-local MAX_CHUNK_DATA_BYTES = 180
+local MAX_CHUNK_DATA_BYTES = 150
 local CHUNK_TIMEOUT_SECONDS = 30
+local CONTROL_RETRY_SECONDS = 1
+local CONTROL_RETRY_LIMIT = 3
 
 SC.syncEnabled = true
 SC.groupStatuses = SC.groupStatuses or {}
@@ -16,12 +18,40 @@ SC.groupStatuses = SC.groupStatuses or {}
 local syncFrame
 local pendingChunks = {}
 local syncSessionId = tostring(time()) .. "-" .. tostring(math.random(100000, 999999))
+local GetDB
+
+local SEND_RESULT_NAMES = {
+    [0] = "Success",
+    [1] = "InvalidPrefix",
+    [2] = "InvalidMessage",
+    [3] = "AddonMessageThrottle",
+    [4] = "InvalidChatType",
+    [5] = "NotInGroup",
+    [6] = "TargetRequired",
+    [7] = "InvalidChannel",
+    [8] = "ChannelThrottle",
+    [9] = "GeneralError",
+    [10] = "NotInGuild",
+    [11] = "AddOnMessageLockdown",
+    [12] = "TargetOffline",
+}
 
 local function CleanupPendingChunks(now)
     now = now or time()
+    local db = SoftcoreDB
     for key, buffer in pairs(pendingChunks) do
         if now - (buffer.createdAt or now) > CHUNK_TIMEOUT_SECONDS then
             pendingChunks[key] = nil
+            if db and db.sync then
+                db.sync.expiredChunkBuffers = (db.sync.expiredChunkBuffers or 0) + 1
+                db.sync.lastExpiredChunk = {
+                    bufferKey = key,
+                    messageType = buffer.messageType,
+                    received = buffer.received or 0,
+                    total = buffer.total or 0,
+                    expiredAt = now,
+                }
+            end
         end
     end
 end
@@ -111,21 +141,76 @@ local function GetSyncChannel()
     return nil
 end
 
-local function DispatchAddonMessage(message, channel)
-    if C_ChatInfo and C_ChatInfo.SendAddonMessage then
-        C_ChatInfo.SendAddonMessage(PREFIX, message, channel)
-    else
-        _G.SendAddonMessage(PREFIX, message, channel)
+local function SendResultCode(result)
+    if result == nil or result == true then
+        return 0
+    end
+
+    if result == false then
+        return 9
+    end
+
+    return tonumber(result) or 9
+end
+
+local function IsSuccessfulSend(resultCode)
+    return resultCode == 0
+end
+
+local function RecordSendResult(messageType, channel, byteCount, resultCode, chunkText)
+    local db = GetDB()
+    db.sync.lastSendResult = {
+        type = messageType,
+        channel = channel,
+        bytes = byteCount,
+        result = resultCode,
+        resultName = SEND_RESULT_NAMES[resultCode] or tostring(resultCode),
+        chunk = chunkText,
+        time = time(),
+    }
+
+    if not IsSuccessfulSend(resultCode) then
+        db.sync.sendFailureCount = (db.sync.sendFailureCount or 0) + 1
+        db.sync.lastSendError = db.sync.lastSendResult
     end
 end
 
-local function GetDB()
+local function DispatchAddonMessage(message, channel, messageType, chunkText, retryAttempt)
+    retryAttempt = retryAttempt or 0
+    local result
+
+    if C_ChatInfo and C_ChatInfo.SendAddonMessage then
+        local r1, r2 = C_ChatInfo.SendAddonMessage(PREFIX, message, channel)
+        result = r2 ~= nil and r2 or r1
+    else
+        if _G.SendAddonMessage then
+            result = _G.SendAddonMessage(PREFIX, message, channel)
+        end
+    end
+
+    local resultCode = SendResultCode(result)
+    RecordSendResult(messageType or "UNKNOWN", channel, #(message or ""), resultCode, chunkText)
+
+    if not IsSuccessfulSend(resultCode) and retryAttempt < CONTROL_RETRY_LIMIT and C_Timer and C_Timer.After then
+        if resultCode == 3 or resultCode == 8 or messageType ~= "STATUS" then
+            local retryMessage = message
+            C_Timer.After(CONTROL_RETRY_SECONDS * (retryAttempt + 1), function()
+                DispatchAddonMessage(retryMessage, channel, messageType, chunkText, retryAttempt + 1)
+            end)
+        end
+    end
+
+    return IsSuccessfulSend(resultCode), resultCode
+end
+
+function GetDB()
     SoftcoreDB = SoftcoreDB or {}
     SoftcoreDB.sync = SoftcoreDB.sync or {}
     SoftcoreDB.sync.remoteSequences = SoftcoreDB.sync.remoteSequences or {}
     SoftcoreDB.sync.localSequence = SoftcoreDB.sync.localSequence or 0
     SoftcoreDB.sync.lastSentAt = SoftcoreDB.sync.lastSentAt or nil
     SoftcoreDB.sync.lastReceivedAt = SoftcoreDB.sync.lastReceivedAt or nil
+    SoftcoreDB.sync.rulesetRequests = SoftcoreDB.sync.rulesetRequests or {}
     SoftcoreDB.run = SoftcoreDB.run or {}
     SoftcoreDB.run.conflicts = SoftcoreDB.run.conflicts or {}
     return SoftcoreDB
@@ -163,25 +248,51 @@ local function SendPayload(payload)
     end
 
     local db = GetDB()
+    local messageType = payload.type or "UNKNOWN"
     db.sync.lastSentAt = time()
 
     local message = Encode(AddMetadata(payload))
     if #message <= MAX_MESSAGE_BYTES then
-        DispatchAddonMessage(message, channel)
+        DispatchAddonMessage(message, channel, messageType)
         return true
     end
 
     local chunkId = tostring(time()) .. "-" .. tostring(math.random(100000, 999999))
     local total = math.ceil(#message / MAX_CHUNK_DATA_BYTES)
+    db.sync.lastChunkedSend = {
+        type = messageType,
+        chunkId = chunkId,
+        total = total,
+        bytes = #message,
+        time = time(),
+    }
     for index = 1, total do
         local first = ((index - 1) * MAX_CHUNK_DATA_BYTES) + 1
+        local chunkData = string.sub(message, first, first + MAX_CHUNK_DATA_BYTES - 1)
+        local chunkText = tostring(index) .. "/" .. tostring(total)
         DispatchAddonMessage(
-            "CHUNK|" .. chunkId .. "|" .. tostring(index) .. "|" .. tostring(total) .. "|" .. string.sub(message, first, first + MAX_CHUNK_DATA_BYTES - 1),
-            channel
+            "CHUNK|2|" .. syncSessionId .. "|" .. chunkId .. "|" .. tostring(messageType) .. "|" .. tostring(index) .. "|" .. tostring(total) .. "|" .. chunkData,
+            channel,
+            messageType,
+            chunkText
         )
     end
 
     return true
+end
+
+local function SendPayloadWithRepeats(payload, repeats)
+    SendPayload(payload)
+
+    if not C_Timer or not C_Timer.After then
+        return
+    end
+
+    for attempt = 1, (repeats or 0) do
+        C_Timer.After(CONTROL_RETRY_SECONDS * attempt, function()
+            SendPayload(payload)
+        end)
+    end
 end
 
 local function RegisterPrefix()
@@ -324,6 +435,13 @@ local function IsProposalControlMessage(messageType)
         or messageType == "PROPOSAL_DECLINE"
         or messageType == "PROPOSAL_CONFIRMED"
         or messageType == "PROPOSAL_CANCELLED"
+        or messageType == "FULL_STATE_REQUEST"
+        or messageType == "FULL_STATE_RESPONSE"
+        or messageType == "AMENDMENT_PROPOSE"
+        or messageType == "AMENDMENT_ACCEPT"
+        or messageType == "AMENDMENT_DECLINE"
+        or messageType == "AMENDMENT_APPLIED"
+        or messageType == "AMENDMENT_CANCELLED"
 end
 
 local function GetDisplayStatus(status)
@@ -541,15 +659,15 @@ function SC:Sync_SendFullState()
 end
 
 function SC:Sync_SendProposal(proposalType, proposalId)
-    SendPayload({
+    SendPayloadWithRepeats({
         type = proposalType,
         amendmentId = proposalId,
         proposalId = proposalId,
-    })
+    }, 2)
 end
 
 function SC:Sync_SendAmendmentProposal(amendment)
-    SendPayload({
+    SendPayloadWithRepeats({
         type = "AMENDMENT_PROPOSE",
         amendmentId = amendment.id,
         runId = amendment.runId,
@@ -558,23 +676,23 @@ function SC:Sync_SendAmendmentProposal(amendment)
         reason = amendment.reason or "",
         proposedBy = amendment.proposedBy or "",
         proposedAt = tostring(amendment.proposedAt or time()),
-    })
+    }, 2)
 end
 
 function SC:Sync_SendAmendmentApplied(amendment)
-    SendPayload({
+    SendPayloadWithRepeats({
         type = "AMENDMENT_APPLIED",
         amendmentId = amendment.id,
         runId = amendment.runId,
-    })
+    }, 2)
 end
 
 function SC:Sync_SendAmendmentCancelled(amendment)
-    SendPayload({
+    SendPayloadWithRepeats({
         type = "AMENDMENT_CANCELLED",
         amendmentId = amendment.id,
         runId = amendment.runId,
-    })
+    }, 2)
 end
 
 function SC:Sync_BroadcastLog(entry)
@@ -630,7 +748,7 @@ function SC:Sync_BroadcastViolationClear(violation)
 end
 
 function SC:Sync_SendRunProposal(proposal)
-    local sent = SendPayload({
+    local payload = {
         type = "PROPOSAL",
         proposalId = proposal.proposalId,
         runId = proposal.runId,
@@ -643,45 +761,60 @@ function SC:Sync_SendRunProposal(proposal)
         ruleset = self:SerializeRuleset(proposal.ruleset),
         rulesetHash = proposal.rulesetHash,
         proposalRulesetHash = proposal.rulesetHash,
-    })
+    }
+    local sent = SendPayload(payload)
+    if C_Timer and C_Timer.After then
+        for attempt = 1, 2 do
+            C_Timer.After(CONTROL_RETRY_SECONDS * attempt, function()
+                SendPayload(payload)
+            end)
+        end
+    end
     if not sent then
         DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r Proposal created but not sent — you are not in a group.")
     end
 end
 
 function SC:Sync_SendProposalResponse(messageType, proposal)
-    SendPayload({
+    SendPayloadWithRepeats({
         type = messageType,
         proposalId = proposal.proposalId,
         runId = proposal.runId,
         proposalRunId = proposal.runId,
         runName = proposal.runName,
         proposalRulesetHash = proposal.rulesetHash,
-    })
+    }, 2)
 end
 
 function SC:Sync_SendRunProposalConfirmed(proposal)
-    SendPayload({
+    SendPayloadWithRepeats({
         type = "PROPOSAL_CONFIRMED",
         proposalId = proposal.proposalId,
         runId = proposal.runId,
         runName = proposal.runName,
         preset = proposal.preset or "CUSTOM",
-    })
+    }, 2)
 end
 
 function SC:Sync_SendProposalCancelled(proposal)
-    SendPayload({
+    SendPayloadWithRepeats({
         type = "PROPOSAL_CANCELLED",
         proposalId = proposal.proposalId,
-    })
+    }, 2)
 end
 
 function SC:Sync_HandleMessage(message, sender, isReassembled)
     if not isReassembled and string.sub(message or "", 1, 6) == "CHUNK|" then
         CleanupPendingChunks()
 
-        local chunkId, chunkIndexText, chunkTotalText, chunkData = string.match(message, "^CHUNK|([^|]+)|([^|]+)|([^|]+)|(.*)$")
+        local chunkSessionId, chunkId, chunkMessageType, chunkIndexText, chunkTotalText, chunkData
+        if string.sub(message or "", 1, 8) == "CHUNK|2|" then
+            chunkSessionId, chunkId, chunkMessageType, chunkIndexText, chunkTotalText, chunkData = string.match(message, "^CHUNK|2|([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)|(.*)$")
+        else
+            chunkId, chunkIndexText, chunkTotalText, chunkData = string.match(message, "^CHUNK|([^|]+)|([^|]+)|([^|]+)|(.*)$")
+            chunkSessionId = ""
+            chunkMessageType = "UNKNOWN"
+        end
         local chunkIndex = tonumber(chunkIndexText)
         local chunkTotal = tonumber(chunkTotalText)
         if not chunkId or not chunkIndex or not chunkTotal or chunkTotal < 1 then
@@ -699,11 +832,18 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
         if not buffer then
             buffer = {
                 total = chunkTotal,
+                sessionId = chunkSessionId,
+                messageType = chunkMessageType,
                 chunks = {},
                 received = 0,
                 createdAt = time(),
             }
             pendingChunks[bufferKey] = buffer
+        end
+
+        if buffer.total ~= chunkTotal then
+            pendingChunks[bufferKey] = nil
+            return
         end
 
         if not buffer.chunks[chunkIndex] then
@@ -720,6 +860,13 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
                 parts[index] = buffer.chunks[index]
             end
             pendingChunks[bufferKey] = nil
+            local db = GetDB()
+            db.sync.lastReassembledChunk = {
+                bufferKey = bufferKey,
+                messageType = buffer.messageType,
+                total = buffer.total,
+                time = time(),
+            }
             self:Sync_HandleMessage(table.concat(parts), sender, true)
         end
 
@@ -895,6 +1042,16 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
             remoteRuleset = remoteRuleset,
             remoteRulesetSerialized = payload.ruleset,
         })
+        if not remoteRuleset then
+            db.sync.rulesetRequests = db.sync.rulesetRequests or {}
+            local lastRequest = tonumber(db.sync.rulesetRequests[key] or 0) or 0
+            if time() - lastRequest > 20 then
+                db.sync.rulesetRequests[key] = time()
+                if self.Sync_RequestFullState then
+                    self:Sync_RequestFullState()
+                end
+            end
+        end
     else
         ClearConflict(key, "RULESET_MISMATCH")
     end
@@ -935,6 +1092,7 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
         addonVersion = payload.addonVersion or payload.version,
         rulesetVersion = tonumber(payload.rulesetVersion) or 0,
         rulesetHash = payload.rulesetHash,
+        remoteRuleset = remoteRuleset,
         sequence = tonumber(payload.sequence) or 0,
         timestamp = tonumber(payload.timestamp) or 0,
         lastSeen = time(),
@@ -942,10 +1100,10 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
     }
 
     if payload.active == "1" and payload.runId and self.ConfirmAcceptedProposalFromStatus then
-        self:ConfirmAcceptedProposalFromStatus(key, payload.runId)
+        self:ConfirmAcceptedProposalFromStatus(key, payload.runId, payload.rulesetHash)
     end
     if payload.active == "1" and payload.runId and self.ConfirmPendingProposalPeerActive then
-        self:ConfirmPendingProposalPeerActive(key, payload.runId)
+        self:ConfirmPendingProposalPeerActive(key, payload.runId, payload.rulesetHash)
     end
 
     if self.RefreshParticipantsFromRoster then
@@ -983,6 +1141,86 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
     end
     if self.MasterUI_Refresh then
         self:MasterUI_Refresh()
+    end
+end
+
+function SC:PrintSyncDebug()
+    local db = GetDB()
+    local localKey = LocalPlayerKey()
+    local hash = self.GetRulesetHash and self:GetRulesetHash() or "unknown"
+
+    local function Print(message)
+        DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r " .. tostring(message))
+    end
+
+    Print("sync debug:")
+    Print("  local: " .. tostring(localKey))
+    Print("  run: " .. tostring(db.run and db.run.runId or "none") .. " / rules " .. tostring(hash) .. " / active " .. tostring(db.run and db.run.active == true))
+
+    local roster = GetRosterKeys()
+    if #roster == 0 then
+        Print("  roster: not grouped")
+    else
+        Print("  roster:")
+        for _, key in ipairs(roster) do
+            Print("    " .. tostring(key))
+        end
+    end
+
+    local proposal = self.GetPendingProposal and self:GetPendingProposal() or nil
+    if proposal then
+        local accepted = {}
+        for playerKey, value in pairs(proposal.acceptedBy or {}) do
+            if value then table.insert(accepted, playerKey) end
+        end
+        Print("  pending proposal: " .. tostring(proposal.proposalId) .. " / " .. tostring(proposal.status) .. " / " .. tostring(proposal.proposalType) .. " / by " .. tostring(proposal.proposedBy))
+        Print("    run: " .. tostring(proposal.runId) .. " / rules " .. tostring(proposal.rulesetHash))
+        Print("    accepted: " .. (#accepted > 0 and table.concat(accepted, ", ") or "none"))
+    else
+        Print("  pending proposal: none")
+    end
+
+    Print("  last sent: " .. (db.sync.lastSentAt and (tostring(time() - db.sync.lastSentAt) .. "s ago") or "never"))
+    Print("  last received: " .. (db.sync.lastReceivedAt and (tostring(time() - db.sync.lastReceivedAt) .. "s ago") or "never"))
+    if db.sync.lastSendResult then
+        Print("  last send result: " .. tostring(db.sync.lastSendResult.type) .. " " .. tostring(db.sync.lastSendResult.resultName) .. " " .. tostring(db.sync.lastSendResult.bytes) .. "b")
+    end
+
+    local pendingCount = 0
+    for _, buffer in pairs(pendingChunks) do
+        pendingCount = pendingCount + 1
+        Print("  chunk pending: " .. tostring(buffer.messageType or "?") .. " " .. tostring(buffer.received or 0) .. "/" .. tostring(buffer.total or 0))
+    end
+    if pendingCount == 0 then
+        Print("  chunk pending: none")
+    end
+    Print("  chunk expired: " .. tostring(db.sync.expiredChunkBuffers or 0))
+
+    if self.groupStatuses then
+        local anyPeer = false
+        for peerKey, peer in pairs(self.groupStatuses) do
+            anyPeer = true
+            Print("  peer: " .. tostring(peerKey) .. " run " .. tostring(peer.runId or "none") .. " / rules " .. tostring(peer.rulesetHash or "?") .. " / " .. tostring(peer.participantStatus or "?") .. " / seen " .. tostring(peer.lastSeen and (time() - peer.lastSeen) or "never") .. "s")
+        end
+        if not anyPeer then
+            Print("  peers: none")
+        end
+    end
+
+    local foundConflict = false
+    for _, conflict in pairs(db.run and db.run.conflicts or {}) do
+        if conflict.active then
+            foundConflict = true
+            Print("  conflict: " .. tostring(conflict.playerKey) .. " " .. tostring(conflict.type) .. " local " .. tostring(conflict.localValue) .. " / remote " .. tostring(conflict.remoteValue))
+            if conflict.type == "RULESET_MISMATCH" and conflict.remoteRuleset and self.DescribeRulesetDifferences then
+                for _, diff in ipairs(self:DescribeRulesetDifferences(db.run.ruleset, conflict.remoteRuleset)) do
+                    Print("    " .. diff.ruleName .. ": local " .. tostring(diff.localValue) .. " / remote " .. tostring(diff.remoteValue))
+                end
+            end
+        end
+    end
+    if not foundConflict then
+        Print("  conflicts: none")
     end
 end
 

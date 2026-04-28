@@ -1269,6 +1269,9 @@ function SC:StartRun(runOptions)
     end
 
     local startingRuleset = runOptions.ruleset and CopyTable(runOptions.ruleset) or CopyTable(db.run.ruleset or CreateDefaultRuleset())
+    if self.NormalizeRulesetForSync then
+        startingRuleset = self:NormalizeRulesetForSync(startingRuleset)
+    end
 
     ArchiveCurrentRun(db, "Starting new run")
 
@@ -1610,56 +1613,21 @@ end
 function SC:PrintConflicts()
     local db = EnsureDatabase()
     local found = false
-    local ruleOrder = {
-        "death",
-        "groupingMode",
-        "failedMemberBlocksParty",
-        "allowLateJoin",
-        "allowReplacementCharacters",
-        "requireLeaderApprovalForJoin",
-        "auctionHouse",
-        "mailbox",
-        "trade",
-        "mounts",
-        "flying",
-        "flightPaths",
-        "outsiderGrouping",
-        "unsyncedMembers",
-        "maxLevelGap",
-        "maxLevelGapValue",
-        "dungeonRepeat",
-        "gearQuality",
-        "heirlooms",
-        "instanceWithUnsyncedPlayers",
-        "bank",
-        "warbandBank",
-        "guildBank",
-        "voidStorage",
-        "craftingOrders",
-        "vendor",
-        "consumables",
-        "instancedPvP",
-        "maxDeaths",
-        "maxDeathsValue",
-    }
 
     for _, conflict in pairs(db.run.conflicts) do
         if conflict.active then
             found = true
             Print(conflict.playerKey .. " - " .. conflict.type .. " - local " .. tostring(conflict.localValue) .. " / remote " .. tostring(conflict.remoteValue))
             if conflict.type == "RULESET_MISMATCH" and conflict.remoteRuleset and db.run.ruleset then
-                local shown = 0
-                for _, ruleName in ipairs(ruleOrder) do
-                    local localValue = db.run.ruleset[ruleName]
-                    local remoteValue = conflict.remoteRuleset[ruleName]
-                    if tostring(localValue) ~= tostring(remoteValue) then
-                        shown = shown + 1
-                        Print("  " .. ruleName .. ": local " .. tostring(localValue) .. " / remote " .. tostring(remoteValue))
-                        if shown >= 6 then
-                            break
-                        end
+                if self.DescribeRulesetDifferences then
+                    for _, diff in ipairs(self:DescribeRulesetDifferences(db.run.ruleset, conflict.remoteRuleset)) do
+                        Print("  " .. diff.ruleName .. ": local " .. tostring(diff.localValue) .. " / remote " .. tostring(diff.remoteValue))
                     end
+                else
+                    Print("  full rule diff unavailable.")
                 end
+            elseif conflict.type == "RULESET_MISMATCH" then
+                Print("  full remote rules unavailable. Use /sc resync, then /sc conflicts.")
             end
         end
     end
@@ -1945,6 +1913,7 @@ function SC:PrintHelp()
     Print("  /sc export        copy CSV run summary")
     Print("  /sc participants  show current participants")
     Print("  /sc conflicts     print active party conflicts")
+    Print("  /sc syncdebug     print sync diagnostics")
     Print("  /sc gear          print equipped gear rule status")
     Print("  /sc dungeons      print dungeon tracking state")
     Print("  /sc proposal      show pending proposal")
@@ -2050,6 +2019,12 @@ function SC:HandleSlash(input)
         end
     elseif command == "conflicts" then
         self:PrintConflicts()
+    elseif command == "syncdebug" then
+        if self.PrintSyncDebug then
+            self:PrintSyncDebug()
+        else
+            Print("sync debug is not loaded.")
+        end
     elseif command == "announce" or command == "deathannounce" then
         local mode = string.lower(strtrim(rest or ""))
         if mode == "" then

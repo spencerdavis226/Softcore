@@ -1292,6 +1292,12 @@ local function HideAllRunControls(frame)
     if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:Hide() end
     if frame.start.proposalDeclineBtn then frame.start.proposalDeclineBtn:Hide() end
     if frame.start.proposalCancelBtn then frame.start.proposalCancelBtn:Hide() end
+    if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:SetScript("OnClick", nil) end
+    if frame.start.proposalDeclineBtn then frame.start.proposalDeclineBtn:SetScript("OnClick", nil) end
+    if frame.start.proposalCancelBtn then frame.start.proposalCancelBtn:SetScript("OnClick", nil) end
+    if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:SetEnabled(true) end
+    if frame.start.proposalDeclineBtn then frame.start.proposalDeclineBtn:SetEnabled(true) end
+    if frame.start.proposalCancelBtn then frame.start.proposalCancelBtn:SetEnabled(true) end
 end
 
 local function AnchorRunFooterButtons(frame)
@@ -1353,6 +1359,21 @@ local function RefreshRunPanel(frame)
         local isProposer = pendingProposal.proposedBy == SC:GetPlayerKey()
         local acceptedLocally = pendingProposal.status == "ACCEPTED" and not isProposer
         local proposer = FormatPlayerLabel(pendingProposal.proposedBy)
+        local acceptBlocked = false
+        local blockText = nil
+        if (not isProposer) and (not acceptedLocally) and active and db and db.run and db.run.ruleset then
+            local localHash = SC.GetRulesetHash and SC:GetRulesetHash() or ""
+            if pendingProposal.rulesetHash and pendingProposal.rulesetHash ~= "" and localHash ~= "" and localHash ~= pendingProposal.rulesetHash then
+                acceptBlocked = true
+                blockText = "Rules do not match."
+                if SC.DescribeRulesetDifferences then
+                    local diffs = SC:DescribeRulesetDifferences(db.run.ruleset, pendingProposal.ruleset)
+                    if diffs and diffs[1] then
+                        blockText = blockText .. " " .. tostring(diffs[1].ruleName) .. ": local " .. tostring(diffs[1].localValue) .. " / proposal " .. tostring(diffs[1].remoteValue)
+                    end
+                end
+            end
+        end
         CopyRulesInto(frame.start.selectedRules, pendingProposal.ruleset)
         frame.start.groupingDropdown:SetShown(true)
         frame.start.gearDropdown:SetShown(true)
@@ -1382,7 +1403,9 @@ local function RefreshRunPanel(frame)
                 frame.start.activeText:SetText("|cfffbbf24Accepted run proposal from " .. proposer .. ".|r Waiting for party confirmation.")
             end
         else
-            if pendingProposal.proposalType == "SYNC_RUN" then
+            if acceptBlocked then
+                frame.start.activeText:SetText("|cfff87171Sync blocked: " .. blockText .. "|r Use /sc conflicts or /sc syncdebug for full details.")
+            elseif pendingProposal.proposalType == "SYNC_RUN" then
                 frame.start.activeText:SetText("|cffffd100Run sync proposal from " .. proposer .. ".|r Review the matching rules below, then Accept or Decline.")
             elseif pendingProposal.proposalType == "ADD_PARTICIPANT" then
                 frame.start.activeText:SetText("|cffffd100Party run invite from " .. proposer .. ".|r Review the rules below, then Accept or Decline.")
@@ -1406,8 +1429,11 @@ local function RefreshRunPanel(frame)
         frame.start.applyChangesBtn:Hide()
         frame.start.cancelChangesBtn:Hide()
         frame.start.proposalAcceptBtn:SetShown((not isProposer) and not acceptedLocally)
+        frame.start.proposalAcceptBtn:SetEnabled(not acceptBlocked)
         frame.start.proposalDeclineBtn:SetShown((not isProposer) and not acceptedLocally)
+        frame.start.proposalDeclineBtn:SetEnabled(true)
         frame.start.proposalCancelBtn:SetShown(isProposer or acceptedLocally)
+        frame.start.proposalCancelBtn:SetEnabled(true)
         frame.start.proposalCancelBtn:SetText(isProposer and "Cancel Proposal" or "Cancel Wait")
         frame.start.proposalAcceptBtn:SetScript("OnClick", function()
             if SC.AcceptPendingProposal then SC:AcceptPendingProposal() end
@@ -1495,6 +1521,12 @@ local function RefreshRunPanel(frame)
         frame.start.proposalCancelBtn:Hide()
         frame.start.proposalCancelBtn:SetText("Cancel Proposal")
     end
+    if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:SetScript("OnClick", nil) end
+    if frame.start.proposalDeclineBtn then frame.start.proposalDeclineBtn:SetScript("OnClick", nil) end
+    if frame.start.proposalCancelBtn then frame.start.proposalCancelBtn:SetScript("OnClick", nil) end
+    if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:SetEnabled(true) end
+    if frame.start.proposalDeclineBtn then frame.start.proposalDeclineBtn:SetEnabled(true) end
+    if frame.start.proposalCancelBtn then frame.start.proposalCancelBtn:SetEnabled(true) end
     SetRunSetupEnabled(frame, (not active) or modifying)
     if active and not modifying then
         frame.start.casualBtn:SetEnabled(false)
