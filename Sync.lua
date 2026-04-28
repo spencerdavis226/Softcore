@@ -12,6 +12,8 @@ local CHUNK_TIMEOUT_SECONDS = 30
 local CONTROL_RETRY_SECONDS = 1
 local CONTROL_RETRY_LIMIT = 3
 local PROPOSAL_RESEND_SECONDS = 8
+local PROPOSAL_RESEND_ATTEMPTS = 1
+local CONTROL_REPEAT_ATTEMPTS = 1
 local SEND_QUEUE_TICK_SECONDS = 0.25
 local SEND_TOKEN_REFILL_SECONDS = 1.05
 local SEND_TOKEN_MAX = 8
@@ -298,8 +300,16 @@ local function ProcessSendQueue()
             local db = SoftcoreDB
             if db and db.sync then
                 db.sync.sendQueueDepth = #sendQueue
+                db.sync.staleSendDrops = (db.sync.staleSendDrops or 0) + 1
+                db.sync.lastStaleSendDrop = {
+                    type = item.messageType,
+                    proposalId = item.proposalId,
+                    runId = item.runId,
+                    chunk = item.chunkText,
+                    time = time(),
+                }
             end
-            if SC.TraceDebug then
+            if SC.TraceDebug and (not item.chunkText or string.match(item.chunkText, "^1/")) then
                 SC:TraceDebug("SYNC_DROP_STALE_SEND", {
                     messageType = item.messageType,
                     proposalId = item.proposalId,
@@ -960,7 +970,7 @@ function SC:Sync_SendRunProposal(proposal)
     }
     local sent = SendPayload(payload)
     if C_Timer and C_Timer.After then
-        for attempt = 1, 2 do
+        for attempt = 1, PROPOSAL_RESEND_ATTEMPTS do
             C_Timer.After(PROPOSAL_RESEND_SECONDS * attempt, function()
                 if proposal.status == "PENDING" then
                     SendPayload(payload)
@@ -974,14 +984,32 @@ function SC:Sync_SendRunProposal(proposal)
 end
 
 function SC:Sync_SendProposalResponse(messageType, proposal)
-    SendPayloadWithRepeats({
+    local payload = {
         type = messageType,
         proposalId = proposal.proposalId,
         runId = proposal.runId,
         proposalRunId = proposal.runId,
         runName = proposal.runName,
         proposalRulesetHash = proposal.rulesetHash,
-    }, 2)
+    }
+
+    SendPayload(payload)
+
+    if not C_Timer or not C_Timer.After then
+        return
+    end
+
+    for attempt = 1, CONTROL_REPEAT_ATTEMPTS do
+        C_Timer.After(CONTROL_RETRY_SECONDS * attempt, function()
+            if messageType == "PROPOSAL_ACCEPT" and proposal.status ~= "ACCEPTED" then
+                return
+            end
+            if messageType == "PROPOSAL_DECLINE" and proposal.status ~= "DECLINED" then
+                return
+            end
+            SendPayload(payload)
+        end)
+    end
 end
 
 function SC:Sync_SendRunProposalConfirmed(proposal)
@@ -1001,7 +1029,7 @@ function SC:Sync_SendRunProposalConfirmed(proposal)
         runId = proposal.runId,
         runName = proposal.runName,
         preset = proposal.preset or "CUSTOM",
-    }, 2)
+    }, CONTROL_REPEAT_ATTEMPTS)
     return true
 end
 
@@ -1428,6 +1456,7 @@ function SC:PrintSyncDebug()
         Print("  last send result: " .. tostring(db.sync.lastSendResult.type) .. " " .. tostring(db.sync.lastSendResult.resultName) .. " " .. tostring(db.sync.lastSendResult.bytes) .. "b")
     end
     Print("  send queue: " .. tostring(db.sync.sendQueueDepth or #sendQueue))
+    Print("  stale send drops: " .. tostring(db.sync.staleSendDrops or 0))
 
     local pendingCount = 0
     for _, buffer in pairs(pendingChunks) do

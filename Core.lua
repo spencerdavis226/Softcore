@@ -2045,6 +2045,8 @@ local function BuildDebugExportText()
     AddKeyValueCsv(lines, "Sync", "Last Send Result", db.sync and db.sync.lastSendResult)
     AddKeyValueCsv(lines, "Sync", "Last Chunked Send", db.sync and db.sync.lastChunkedSend)
     AddKeyValueCsv(lines, "Sync", "Last Reassembled Chunk", db.sync and db.sync.lastReassembledChunk)
+    AddCsvLine(lines, "Sync", "Stale Send Drops", db.sync and db.sync.staleSendDrops or 0)
+    AddKeyValueCsv(lines, "Sync", "Last Stale Send Drop", db.sync and db.sync.lastStaleSendDrop)
 
     local proposal = SC.GetPendingProposal and SC:GetPendingProposal() or nil
     if proposal then
