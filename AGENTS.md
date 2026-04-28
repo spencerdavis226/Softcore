@@ -181,6 +181,7 @@ Useful commands:
 - `/sc participants`
 - `/sc conflicts`
 - `/sc debuglog`
+- `/sc debugclear`
 - `/sc gear`
 - `/sc dungeons`
 - `/sc resync`

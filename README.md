@@ -73,6 +73,7 @@ Common commands:
 | `/sc participants` | Print current participants |
 | `/sc conflicts` | Print active conflicts |
 | `/sc debuglog` | Open a copyable sync/audit debug export |
+| `/sc debugclear` | Clear the in-memory debug trace before a test pass |
 | `/sc proposal` | Show the current pending proposal |
 | `/sc propose` | Propose a grouped run from chat |
 | `/sc propose-add Player-Realm` | Invite a party member into the current run |

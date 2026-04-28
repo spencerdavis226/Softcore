@@ -395,6 +395,16 @@ function SC:TraceDebug(kind, fields)
     return entry
 end
 
+function SC:ClearDebugTrace(reason)
+    local db = EnsureDatabase()
+    db.debugTrace = {}
+    return self:TraceDebug("DEBUG_TRACE_CLEARED", {
+        reason = reason or "manual",
+        playerKey = GetPlayerKey(db.character),
+        runId = db.run and db.run.runId,
+    })
+end
+
 local function BindCharacterDatabase()
     local currentCharacter = GetPlayerSnapshot()
     local currentKey = GetPlayerKey(currentCharacter)
@@ -2205,6 +2215,7 @@ function SC:PrintHelp()
     Print("  /sc conflicts     print active party conflicts")
     Print("  /sc syncdebug     print sync diagnostics")
     Print("  /sc debuglog      copy sync/audit debug export")
+    Print("  /sc debugclear    clear debug trace for a fresh test")
     Print("  /sc gear          print equipped gear rule status")
     Print("  /sc dungeons      print dungeon tracking state")
     Print("  /sc proposal      show pending proposal")
@@ -2322,6 +2333,13 @@ function SC:HandleSlash(input)
             self:PrintDebugExport()
         else
             self:ShowDebugExport()
+        end
+    elseif command == "debugclear" then
+        if self.ClearDebugTrace then
+            self:ClearDebugTrace(strtrim(rest or ""))
+            Print("debug trace cleared.")
+        else
+            Print("debug trace is not available.")
         end
     elseif command == "announce" or command == "deathannounce" then
         local mode = string.lower(strtrim(rest or ""))
