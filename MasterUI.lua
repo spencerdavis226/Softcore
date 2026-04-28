@@ -1285,8 +1285,7 @@ local function HideAllRunControls(frame)
     if frame.start.cancelStopBtn then frame.start.cancelStopBtn:Hide() end
     if frame.start.cancelRunBox then frame.start.cancelRunBox:Hide() end
     frame.start.modifyBtn:Hide()
-    if frame.start.syncBtn then frame.start.syncBtn:Hide() end
-    if frame.start.inviteBtn then frame.start.inviteBtn:Hide() end
+    if frame.start.partySyncBtn then frame.start.partySyncBtn:Hide() end
     frame.start.applyChangesBtn:Hide()
     frame.start.cancelChangesBtn:Hide()
     if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:Hide() end
@@ -1325,8 +1324,7 @@ local function AnchorRunFooterButtons(frame)
     anchor(start.cancelStopBtn, 8, 1)
     anchor(start.cancelRunHint, 10, 0)
     anchor(start.modifyBtn)
-    anchor(start.syncBtn)
-    anchor(start.inviteBtn)
+    anchor(start.partySyncBtn)
     anchor(start.applyChangesBtn)
     anchor(start.cancelChangesBtn)
     anchor(start.proposalAcceptBtn)
@@ -1424,8 +1422,7 @@ local function RefreshRunPanel(frame)
         if frame.start.cancelRunHint then frame.start.cancelRunHint:Hide() end
         frame.start.stopConfirmPending = false
         frame.start.modifyBtn:Hide()
-        if frame.start.syncBtn then frame.start.syncBtn:Hide() end
-        if frame.start.inviteBtn then frame.start.inviteBtn:Hide() end
+        if frame.start.partySyncBtn then frame.start.partySyncBtn:Hide() end
         frame.start.applyChangesBtn:Hide()
         frame.start.cancelChangesBtn:Hide()
         frame.start.proposalAcceptBtn:SetShown((not isProposer) and not acceptedLocally)
@@ -1507,11 +1504,16 @@ local function RefreshRunPanel(frame)
         frame.start.cancelRunHint:SetShown(confirmingStop)
     end
     frame.start.modifyBtn:SetShown(active and not modifying and not confirmingStop)
-    if frame.start.syncBtn then
-        frame.start.syncBtn:SetShown(active and not modifying and not confirmingStop and IsInGroup() and not IsInRaid())
-    end
-    if frame.start.inviteBtn then
-        frame.start.inviteBtn:SetShown(active and not modifying and not confirmingStop and IsInGroup() and not IsInRaid())
+    local partySyncRoute = nil
+    if frame.start.partySyncBtn then
+        local showPartySync = active and not modifying and not confirmingStop and IsInGroup() and not IsInRaid()
+        if showPartySync and SC.GetPartySyncAction then
+            partySyncRoute = SC:GetPartySyncAction()
+            frame.start.partySyncBtn:SetEnabled(partySyncRoute and partySyncRoute.enabled == true)
+        else
+            frame.start.partySyncBtn:SetEnabled(false)
+        end
+        frame.start.partySyncBtn:SetShown(showPartySync)
     end
     frame.start.applyChangesBtn:SetShown(modifying)
     frame.start.cancelChangesBtn:SetShown(modifying)
@@ -1550,7 +1552,15 @@ local function RefreshRunPanel(frame)
             if confirmingStop then
                 frame.start.activeText:SetText("|cfffbbf24End run requested.|r This will reset local run progress.")
             elseif rulesConflict then
-                frame.start.activeText:SetText("|cfffbbf24Rules conflict detected with " .. FormatPlayerLabel(rulesConflict.playerKey) .. ".|r Use Propose Sync only when everyone has intentionally aligned rules.")
+                frame.start.activeText:SetText("|cfffbbf24Rules conflict detected with " .. FormatPlayerLabel(rulesConflict.playerKey) .. ".|r Use Modify Rules to align rules, then Party Sync.")
+            elseif partySyncRoute and partySyncRoute.message and IsInGroup() and not IsInRaid() then
+                if partySyncRoute.action == "NONE" then
+                    frame.start.activeText:SetText("|cff4ade80" .. partySyncRoute.message .. "|r Active run rules are locked.")
+                elseif partySyncRoute.action == "BLOCKED" then
+                    frame.start.activeText:SetText("|cfffbbf24" .. partySyncRoute.message .. "|r")
+                else
+                    frame.start.activeText:SetText("|cffffd100" .. partySyncRoute.message .. "|r")
+                end
             else
                 frame.start.activeText:SetText("Active run rules are locked. Camera mode can be switched anytime without a rule amendment.")
             end
@@ -2296,23 +2306,13 @@ function SC:OpenMasterWindow(focusTab)
         frame.start.selectedCameraMode = nil
         SC:MasterUI_Refresh()
     end)
-    frame.start.syncBtn = CreateButton(startPanel, "Propose Sync", 110, 24)
-    frame.start.syncBtn:SetPoint("LEFT", frame.start.modifyBtn, "RIGHT", 8, 0)
-    frame.start.syncBtn:SetScript("OnClick", function()
-        if SC.CreateRunSyncProposal then
-            SC:CreateRunSyncProposal()
+    frame.start.partySyncBtn = CreateButton(startPanel, "Party Sync", 100, 24)
+    frame.start.partySyncBtn:SetPoint("LEFT", frame.start.modifyBtn, "RIGHT", 8, 0)
+    frame.start.partySyncBtn:SetScript("OnClick", function()
+        if SC.RunPartySyncAction then
+            SC:RunPartySyncAction()
         else
-            Print("run sync proposals are not loaded.")
-        end
-        SC:MasterUI_Refresh()
-    end)
-    frame.start.inviteBtn = CreateButton(startPanel, "Invite Party", 100, 24)
-    frame.start.inviteBtn:SetPoint("LEFT", frame.start.syncBtn, "RIGHT", 8, 0)
-    frame.start.inviteBtn:SetScript("OnClick", function()
-        if SC.CreateRunInviteProposal then
-            SC:CreateRunInviteProposal()
-        else
-            Print("party run invites are not loaded.")
+            Print("party sync is not loaded.")
         end
         SC:MasterUI_Refresh()
     end)

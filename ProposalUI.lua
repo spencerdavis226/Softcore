@@ -553,6 +553,150 @@ function SC:CreateRunInviteProposal()
     return self:CreateRunProposal(db.run.runName or "Softcore Run", db.run.ruleset, "ADD_PARTICIPANT", nil, db.run.runId)
 end
 
+function SC:GetPartySyncAction()
+    local db = GetDB()
+    if IsInRaid() then
+        return {
+            action = "BLOCKED",
+            enabled = false,
+            message = "Raid groups are local-only. Convert back to party before syncing runs.",
+        }
+    end
+    if not IsInGroup() then
+        return {
+            action = "HIDDEN",
+            enabled = false,
+            message = "Party Sync is available in a party.",
+        }
+    end
+    if not db.run or not db.run.active then
+        return {
+            action = "BLOCKED",
+            enabled = true,
+            message = "Start a run before syncing with your party.",
+        }
+    end
+
+    local pending = self:GetPendingProposal()
+    if pending and (pending.status == "PENDING" or pending.status == "ACCEPTED") then
+        return {
+            action = "BLOCKED",
+            enabled = true,
+            message = "Finish or cancel the current proposal before starting another party sync.",
+        }
+    end
+
+    local localRunId = db.run.runId
+    local localHash = self.GetRulesetHash and self:GetRulesetHash() or ""
+    local rows = self.Sync_GetGroupRows and self:Sync_GetGroupRows() or {}
+    local wantsInvite, wantsSync, wantsResync
+    local blocked
+
+    for _, peer in ipairs(rows) do
+        local status = tostring(peer.participantStatus or "")
+        local label = self.FormatPlayerLabel and self:FormatPlayerLabel(peer.playerKey or peer.name) or tostring(peer.playerKey or peer.name or "party member")
+
+        if peer.unsynced or status == "UNSYNCED" or status == "PENDING" or not peer.lastSeen or peer.lastSeen <= 0 then
+            wantsResync = wantsResync or label
+        elseif status == "ADDON_VERSION_MISMATCH" or (peer.addonVersion and peer.addonVersion ~= self.version) then
+            blocked = blocked or ("Version mismatch with " .. label .. ". Update/reload both addons, then try Party Sync again.")
+        elseif status == "RULESET_MISMATCH" then
+            blocked = blocked or ("Rules mismatch with " .. label .. ". Use Modify Rules to align rules before syncing runs.")
+        elseif not peer.active or status == "NOT_IN_RUN" then
+            wantsInvite = wantsInvite or label
+        elseif localRunId and peer.runId and peer.runId ~= localRunId then
+            if localHash ~= "" and peer.rulesetHash and peer.rulesetHash ~= "" and peer.rulesetHash ~= localHash then
+                blocked = blocked or ("Rules mismatch with " .. label .. ". Use Modify Rules to align rules before syncing runs.")
+            else
+                wantsSync = wantsSync or label
+            end
+        elseif status == "RUN_MISMATCH" then
+            wantsSync = wantsSync or label
+        end
+    end
+
+    for _, conflict in pairs(db.run.conflicts or {}) do
+        if conflict.active and not conflict.dismissed then
+            local label = self.FormatPlayerLabel and self:FormatPlayerLabel(conflict.playerKey) or tostring(conflict.playerKey or "party member")
+            if conflict.type == "ADDON_VERSION_MISMATCH" then
+                blocked = blocked or ("Version mismatch with " .. label .. ". Update/reload both addons, then try Party Sync again.")
+            elseif conflict.type == "RULESET_MISMATCH" then
+                blocked = blocked or ("Rules mismatch with " .. label .. ". Use Modify Rules to align rules before syncing runs.")
+            elseif conflict.type == "RUN_MISMATCH" then
+                wantsSync = wantsSync or label
+            end
+        end
+    end
+
+    if blocked then
+        return {
+            action = "BLOCKED",
+            enabled = true,
+            message = blocked,
+        }
+    end
+    if wantsResync then
+        return {
+            action = "RESYNC",
+            enabled = true,
+            message = "Party state looks stale for " .. wantsResync .. ". Party Sync will request fresh state.",
+        }
+    end
+    if wantsInvite then
+        return {
+            action = "INVITE",
+            enabled = true,
+            message = wantsInvite .. " is not in this run. Party Sync will send a run invite.",
+        }
+    end
+    if wantsSync then
+        return {
+            action = "SYNC_RUN",
+            enabled = true,
+            message = wantsSync .. " is on a different run ID. Party Sync will propose aligning runs.",
+        }
+    end
+
+    return {
+        action = "NONE",
+        enabled = false,
+        message = "Party synced. No action needed.",
+    }
+end
+
+function SC:RunPartySyncAction()
+    local route = self:GetPartySyncAction()
+    if not route or route.action == "HIDDEN" then
+        return nil
+    end
+
+    if route.action == "NONE" then
+        Print(route.message or "party is already synced.")
+        return nil
+    elseif route.action == "BLOCKED" then
+        Print(route.message or "party sync is blocked.")
+        return nil
+    elseif route.action == "RESYNC" then
+        if self.Sync_RequestFullState then
+            self:Sync_RequestFullState()
+            Print("requested fresh party state.")
+        elseif self.Sync_BroadcastStatus then
+            self:Sync_BroadcastStatus("RESYNC")
+            Print("broadcast fresh party status.")
+        else
+            Print("sync is not ready yet.")
+        end
+        return route
+    elseif route.action == "INVITE" then
+        return self:CreateRunInviteProposal()
+    elseif route.action == "SYNC_RUN" then
+        return self:CreateRunSyncProposal()
+    end
+
+    Print(route.message or "party sync could not choose an action.")
+    return nil
+end
+
 function SC:ApplyRunSyncProposal(proposal, sourceKey)
     local db = GetDB()
     if not proposal or proposal.proposalType ~= "SYNC_RUN" then
@@ -711,7 +855,7 @@ function SC:AcceptPendingProposal()
 
     if db.run and db.run.active and proposal.proposalType == "RUN" and db.run.runId ~= proposal.runId then
         Print("cannot accept: you already have an active run with a different runId. Use /sc reset only if you intend to leave it.")
-        Print("Use Propose Sync if both active runs should align.")
+        Print("Use Party Sync if both active runs should align.")
         return
     end
 
@@ -734,7 +878,7 @@ function SC:AcceptPendingProposal()
     end
     if proposal.proposalType == "ADD_PARTICIPANT" then
         if db.run and db.run.active and db.run.runId ~= proposal.runId then
-            Print("cannot accept invite: you already have an active run with a different runId. Use Propose Sync if both runs should align.")
+            Print("cannot accept invite: you already have an active run with a different runId. Use Party Sync if both runs should align.")
             return
         end
         if db.run and db.run.active and localHash ~= "" and proposal.rulesetHash and localHash ~= proposal.rulesetHash then

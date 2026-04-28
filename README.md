@@ -104,7 +104,7 @@ Declining cancels the proposal for everyone. Pending proposals expire after 30 m
 
 Softcore syncs over Blizzard addon messages using the `SOFTCORE` prefix. It supports normal parties only; raid groups are treated as local-only and show a raid-unsupported note instead of syncing or displaying a 40-player roster.
 
-Status heartbeats are sent every 10 seconds. Reloading or rejoining may briefly show Unsynced until addon messages arrive. Use `/sc resync` or the Overview Resync button if the display looks stale.
+Status heartbeats are sent every 10 seconds. Reloading or rejoining may briefly show Unsynced until addon messages arrive. Use `/sc resync`, the Overview Resync button, or **Party Sync** in the Run tab if the display looks stale.
 
 Party state is display and compatibility data. Remote state should not reset, fail, or overwrite the local character's run.
 
@@ -144,19 +144,19 @@ Summons, portals, quest teleports, Chromie Time, Timewalking, level scaling, and
 
 If two players started separate runs, matching rules are not enough by themselves because each run has a different run ID.
 
-Use **Propose Sync** in the Run tab when:
+Use **Party Sync** in the Run tab when:
 
 - both characters have active runs
 - rules match
 - the players explicitly want to align to one shared run ID
 
-Accepting a sync proposal changes the accepting player's run ID to the proposer run ID. It does not wipe local deaths, violations, logs, or character progress.
+Party Sync routes this case to a sync proposal. Accepting a sync proposal changes the accepting player's run ID to the proposer run ID. It does not wipe local deaths, violations, logs, or character progress.
 
 If rules differ, sync acceptance is blocked and the party remains in conflict until rules are aligned through accepted rule changes or another explicit choice.
 
 ## Inviting Party Members
 
-An active grouped player can use **Invite Party** in the Run tab to invite party members into the current run.
+An active grouped player can use **Party Sync** in the Run tab to invite party members into the current run when they are not already in it.
 
 Accepted invitees join the existing run ID after proposal confirmation. Existing participants keep their progress and logs.
 

@@ -17,7 +17,7 @@ The master menu is the primary interface. Group run proposals, run sync proposal
 Current menu tabs:
 
 - `Overview`: local run status, party status, participant snapshot, run ID, elapsed time, deaths, and active violation count
-- `Run`: start a run, review locked active rules, stop/reset a run, invite party, propose sync, and modify rules
+- `Run`: start a run, review locked active rules, stop/reset a run, use Party Sync for resync/invite/run-alignment routing, and modify rules
 - `Violations`: active clearable issues
 - `Log`: audit history, newest first
 
@@ -125,8 +125,9 @@ Run proposals, run sync proposals, party invites, and rule amendments are explic
 Current behavior:
 
 - Group run start creates a Run-tab proposal.
-- Separate active runs can align only through `Propose Sync`.
-- Active players can invite party members through `Invite Party`.
+- Separate active runs can align only through explicit Party Sync routing to a run sync proposal.
+- Active players can invite party members through Party Sync routing to a party invite proposal.
+- Party Sync may also route stale/unsynced display state to a full-state resync without mutating local run state.
 - Mid-run rules change through `Modify Rules` and grouped amendment acceptance.
 - Pending proposals expire after 30 minutes.
 - Pending/accepted amendments expire after 30 minutes.
