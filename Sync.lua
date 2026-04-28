@@ -244,29 +244,89 @@ local function ShouldRetrySend(resultCode, messageType)
     return resultCode == 3 or resultCode == 8 or messageType ~= "STATUS"
 end
 
+local function GetMessagePriority(messageType)
+    if messageType == "PARTY_VIOLATION_CLEAR" then return 1 end
+    if messageType == "PARTY_VIOLATION" then return 2 end
+    if messageType == "PROPOSAL_CONFIRMED" or messageType == "PROPOSAL_CANCELLED" then return 2 end
+    if messageType == "PROPOSAL_ACCEPT" or messageType == "PROPOSAL_DECLINE" then return 3 end
+    if messageType == "PARTY_LOG" then return 4 end
+    if messageType == "PROPOSAL" then return 5 end
+    if messageType == "STATUS" then return 6 end
+    return 4
+end
+
+local function IsQueuedMessageStale(item)
+    if not item then
+        return true
+    end
+
+    local db = SoftcoreDB
+    local proposalId = item.proposalId
+    local proposal = proposalId and db and db.proposals and db.proposals[proposalId] or nil
+
+    if item.messageType == "PROPOSAL" then
+        return proposal and proposal.status ~= "PENDING"
+    end
+
+    if item.messageType == "PROPOSAL_ACCEPT" then
+        return proposal and proposal.status ~= "ACCEPTED"
+    end
+
+    return false
+end
+
+local function QueueSendItem(item)
+    item.priority = item.priority or GetMessagePriority(item.messageType)
+
+    local insertAt = #sendQueue + 1
+    for index, queued in ipairs(sendQueue) do
+        if (queued.priority or GetMessagePriority(queued.messageType)) > item.priority then
+            insertAt = index
+            break
+        end
+    end
+
+    table.insert(sendQueue, insertAt, item)
+end
+
 local function ProcessSendQueue()
     RefillSendTokens()
 
     if #sendQueue > 0 and sendTokens > 0 then
         local item = table.remove(sendQueue, 1)
-        sendTokens = sendTokens - 1
+        if IsQueuedMessageStale(item) then
+            local db = SoftcoreDB
+            if db and db.sync then
+                db.sync.sendQueueDepth = #sendQueue
+            end
+            if SC.TraceDebug then
+                SC:TraceDebug("SYNC_DROP_STALE_SEND", {
+                    messageType = item.messageType,
+                    proposalId = item.proposalId,
+                    runId = item.runId,
+                    chunk = item.chunkText,
+                })
+            end
+        else
+            sendTokens = sendTokens - 1
 
-        local success, resultCode = DispatchAddonMessageNow(item.message, item.channel, item.messageType, item.chunkText)
-        if not success then
-            if resultCode == 3 or resultCode == 8 then
-                sendTokens = 0
-                sendLastRefillAt = GetMonotonicTime()
+            local success, resultCode = DispatchAddonMessageNow(item.message, item.channel, item.messageType, item.chunkText)
+            if not success then
+                if resultCode == 3 or resultCode == 8 then
+                    sendTokens = 0
+                    sendLastRefillAt = GetMonotonicTime()
+                end
+
+                item.retryAttempt = (item.retryAttempt or 0) + 1
+                if item.retryAttempt <= CONTROL_RETRY_LIMIT and ShouldRetrySend(resultCode, item.messageType) then
+                    QueueSendItem(item)
+                end
             end
 
-            item.retryAttempt = (item.retryAttempt or 0) + 1
-            if item.retryAttempt <= CONTROL_RETRY_LIMIT and ShouldRetrySend(resultCode, item.messageType) then
-                table.insert(sendQueue, item)
+            local db = SoftcoreDB
+            if db and db.sync then
+                db.sync.sendQueueDepth = #sendQueue
             end
-        end
-
-        local db = SoftcoreDB
-        if db and db.sync then
-            db.sync.sendQueueDepth = #sendQueue
         end
     end
 
@@ -286,16 +346,20 @@ local function ProcessSendQueue()
     end
 end
 
-local function DispatchAddonMessage(message, channel, messageType, chunkText)
+local function DispatchAddonMessage(message, channel, messageType, chunkText, meta)
     if not C_Timer or not C_Timer.After then
         return DispatchAddonMessageNow(message, channel, messageType, chunkText)
     end
 
-    table.insert(sendQueue, {
+    meta = meta or {}
+    QueueSendItem({
         message = message,
         channel = channel,
         messageType = messageType or "UNKNOWN",
         chunkText = chunkText,
+        proposalId = meta.proposalId,
+        runId = meta.runId,
+        violationId = meta.violationId,
         retryAttempt = 0,
     })
 
@@ -378,8 +442,13 @@ local function SendPayload(payload)
     end
 
     local message = Encode(AddMetadata(payload))
+    local meta = {
+        proposalId = payload.proposalId,
+        runId = payload.runId,
+        violationId = payload.violationId,
+    }
     if #message <= MAX_MESSAGE_BYTES then
-        DispatchAddonMessage(message, channel, messageType)
+        DispatchAddonMessage(message, channel, messageType, nil, meta)
         return true
     end
 
@@ -400,7 +469,8 @@ local function SendPayload(payload)
             "CHUNK|2|" .. syncSessionId .. "|" .. chunkId .. "|" .. tostring(messageType) .. "|" .. tostring(index) .. "|" .. tostring(total) .. "|" .. chunkData,
             channel,
             messageType,
-            chunkText
+            chunkText,
+            meta
         )
     end
 
@@ -892,7 +962,9 @@ function SC:Sync_SendRunProposal(proposal)
     if C_Timer and C_Timer.After then
         for attempt = 1, 2 do
             C_Timer.After(PROPOSAL_RESEND_SECONDS * attempt, function()
-                SendPayload(payload)
+                if proposal.status == "PENDING" then
+                    SendPayload(payload)
+                end
             end)
         end
     end
@@ -913,6 +985,16 @@ function SC:Sync_SendProposalResponse(messageType, proposal)
 end
 
 function SC:Sync_SendRunProposalConfirmed(proposal)
+    if not proposal then
+        return false
+    end
+
+    local now = time()
+    if proposal.confirmBroadcastedAt and now - proposal.confirmBroadcastedAt < 20 then
+        return false
+    end
+
+    proposal.confirmBroadcastedAt = now
     SendPayloadWithRepeats({
         type = "PROPOSAL_CONFIRMED",
         proposalId = proposal.proposalId,
@@ -920,6 +1002,7 @@ function SC:Sync_SendRunProposalConfirmed(proposal)
         runName = proposal.runName,
         preset = proposal.preset or "CUSTOM",
     }, 2)
+    return true
 end
 
 function SC:Sync_SendProposalCancelled(proposal)
