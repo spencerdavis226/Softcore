@@ -756,14 +756,12 @@ function SC:ApplyRuleAmendment(amendmentId)
                     amendment.status = "APPLIED"
                     amendment.appliedAt = time()
 
-                    local parts = {}
                     for _, c in ipairs(OrderAmendmentChangesForLog(changed)) do
-                        table.insert(parts, FormatRuleAmendmentChangeLine(c.ruleName, c.oldValue, c.value))
+                        self:AddLog("RULE_AMENDMENT_SUMMARY", FormatRuleAmendmentChangeLine(c.ruleName, c.oldValue, c.value), {
+                            amendmentId = amendment.id,
+                            ruleName = c.ruleName,
+                        })
                     end
-                    self:AddLog("RULE_AMENDMENT_SUMMARY", table.concat(parts, " · "), {
-                        amendmentId = amendment.id,
-                        ruleCount = #changed,
-                    })
                     if self.Sync_BroadcastStatus then
                         self:Sync_BroadcastStatus("RULE_AMENDMENT_APPLIED", { fast = true })
                     end
