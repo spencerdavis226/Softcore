@@ -573,6 +573,8 @@ local actionCamOriginals = nil
 local ACTION_CAM_SHOULDER_OFFSET = "0.7"
 local ACTION_CAM_MOUNTED_SHOULDER_OFFSET = "0"
 local ACTION_CAM_HEAD_MOVEMENT_STRENGTH = "1"
+local ACTION_CAM_HEAD_MOVEMENT_STRENGTH_FIRST_PERSON = "0.4"
+local ACTION_CAM_FIRST_PERSON_ZOOM_THRESHOLD = 0.5
 local ACTION_CAM_ENEMY_FOCUS_YAW = "0.5"
 local ACTION_CAM_ENEMY_FOCUS_PITCH = "0.4"
 local ACTION_CAM_INTERACT_FOCUS_YAW = "0"
@@ -597,6 +599,14 @@ end
 
 local function HasHostileCameraTarget()
     return UnitExists("target") and UnitCanAttack("player", "target")
+end
+
+local function IsFirstPersonZoomedIn()
+    if not GetCameraZoom then
+        return false
+    end
+    local zoom = tonumber(GetCameraZoom())
+    return zoom ~= nil and zoom <= ACTION_CAM_FIRST_PERSON_ZOOM_THRESHOLD
 end
 
 local function IsCameraRuleEnforcedValue(value)
@@ -742,7 +752,10 @@ function SC:EnforceActionCamSettings()
     SetCVarIfChanged("test_cameraTargetFocusEnemyStrengthPitch", ACTION_CAM_ENEMY_FOCUS_PITCH)
     SetCVarIfChanged("test_cameraTargetFocusInteractStrengthYaw", ACTION_CAM_INTERACT_FOCUS_YAW)
     SetCVarIfChanged("test_cameraTargetFocusInteractStrengthPitch", ACTION_CAM_INTERACT_FOCUS_PITCH)
-    SetCVarIfChanged("test_cameraHeadMovementStrength", ACTION_CAM_HEAD_MOVEMENT_STRENGTH)
+    local headMovementStrength = IsFirstPersonZoomedIn()
+        and ACTION_CAM_HEAD_MOVEMENT_STRENGTH_FIRST_PERSON
+        or ACTION_CAM_HEAD_MOVEMENT_STRENGTH
+    SetCVarIfChanged("test_cameraHeadMovementStrength", headMovementStrength)
 
     if not IsNpcInteractionActive() and not HasHostileCameraTarget() then
         local current = GetCameraZoom and GetCameraZoom() or target
