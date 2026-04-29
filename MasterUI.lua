@@ -493,6 +493,117 @@ local function CreateOverviewCard(parent, title, x, y, width, height)
     return card
 end
 
+local function CreateRunSection(parent, title, x, y, width, height)
+    local section = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    section:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    section:SetSize(width, height)
+    section.expandedHeight = height
+    section.collapsedHeight = 30
+    section.children = {}
+    if section.SetBackdrop then
+        section:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        section:SetBackdropColor(0.07, 0.04, 0.018, 0.86)
+        section:SetBackdropBorderColor(0.68, 0.48, 0.18, 0.88)
+    end
+
+    section.title = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    section.title:SetPoint("TOPLEFT", section, "TOPLEFT", 12, -8)
+    section.title:SetWidth(width - 48)
+    section.title:SetJustifyH("LEFT")
+    section.title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
+    section.title:SetText(title)
+
+    section.toggle = CreateFrame("Button", nil, section)
+    section.toggle:SetSize(20, 20)
+    section.toggle:SetPoint("TOPRIGHT", section, "TOPRIGHT", -7, -5)
+    section.toggle.text = section.toggle:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    section.toggle.text:SetPoint("CENTER", section.toggle, "CENTER", 0, 0)
+
+    section.divider = section:CreateTexture(nil, "ARTWORK")
+    section.divider:SetHeight(1)
+    section.divider:SetPoint("TOPLEFT", section, "TOPLEFT", 10, -29)
+    section.divider:SetPoint("TOPRIGHT", section, "TOPRIGHT", -10, -29)
+    section.divider:SetColorTexture(0.72, 0.49, 0.18, 0.38)
+
+    section.content = CreateFrame("Frame", nil, section)
+    section.content:SetPoint("TOPLEFT", section, "TOPLEFT", 10, -36)
+    section.content:SetPoint("BOTTOMRIGHT", section, "BOTTOMRIGHT", -10, 8)
+
+    section.toggle:SetScript("OnClick", function()
+        section.collapsed = not section.collapsed
+        if SC.MasterUI_Refresh then
+            SC:MasterUI_Refresh()
+        end
+    end)
+
+    function section:Refresh()
+        local expanded = not self.collapsed
+        self:SetHeight(expanded and self.expandedHeight or self.collapsedHeight)
+        self.toggle.text:SetText(expanded and "-" or "+")
+        self.content:SetShown(expanded)
+        self.divider:SetShown(expanded)
+        for _, child in ipairs(self.children) do
+            child:SetShown(expanded and child.softcoreDesiredShown ~= false)
+        end
+    end
+
+    section:Refresh()
+    return section
+end
+
+local function RegisterRunControl(start, control, section)
+    table.insert(start.controls, control)
+    if section then
+        table.insert(section.children, control)
+        control.softcoreRunSection = section
+    end
+    return control
+end
+
+local function SetRunControlShown(control, shown)
+    if not control then return end
+    control.softcoreDesiredShown = shown
+    local section = control.softcoreRunSection
+    if section and section.collapsed and shown then
+        control:SetShown(false)
+    else
+        control:SetShown(shown)
+    end
+end
+
+local function RefreshRunSections(start)
+    if not start or not start.sections then return end
+    for _, section in ipairs(start.sections) do
+        section:Refresh()
+    end
+    if start.charterSection then
+        local topY = -18
+        start.charterSection:ClearAllPoints()
+        start.charterSection:SetPoint("TOPLEFT", start.panel, "TOPLEFT", 0, topY)
+
+        local bodyY = topY - start.charterSection:GetHeight() - 12
+        if start.accessSection then
+            start.accessSection:ClearAllPoints()
+            start.accessSection:SetPoint("TOPLEFT", start.panel, "TOPLEFT", 0, bodyY)
+        end
+        if start.travelSection then
+            start.travelSection:ClearAllPoints()
+            start.travelSection:SetPoint("TOPLEFT", start.panel, "TOPLEFT", 0, bodyY - (start.accessSection and start.accessSection:GetHeight() or 0) - 12)
+        end
+        if start.progressionSection then
+            start.progressionSection:ClearAllPoints()
+            start.progressionSection:SetPoint("TOPLEFT", start.panel, "TOPLEFT", 360, bodyY)
+        end
+    end
+end
+
 local function SetCardValue(card, value, detail, color)
     if not card then return end
     card.value:SetText(tostring(value or ""))
@@ -1291,11 +1402,11 @@ local function RefreshRunPanel(frame)
         frame.start.groupingDropdown:SetShown(true)
         frame.start.gearDropdown:SetShown(true)
         frame.start.maxGapBox:SetShown(true)
-        if frame.start.presetLabel then frame.start.presetLabel:SetShown(false) end
-        frame.start.casualBtn:SetShown(false)
-        frame.start.ironmanBtn:SetShown(false)
-        if frame.start.chefBtn then frame.start.chefBtn:SetShown(false) end
-        for _, control in ipairs(frame.start.controls) do control:SetShown(true) end
+        for _, control in ipairs(frame.start.controls) do SetRunControlShown(control, true) end
+        if frame.start.presetLabel then SetRunControlShown(frame.start.presetLabel, false) end
+        SetRunControlShown(frame.start.casualBtn, false)
+        SetRunControlShown(frame.start.ironmanBtn, false)
+        if frame.start.chefBtn then SetRunControlShown(frame.start.chefBtn, false) end
         SetRunSetupEnabled(frame, false)
         frame.start.inactiveText:SetShown(false)
         frame.start.activeText:SetShown(false)
@@ -1352,6 +1463,7 @@ local function RefreshRunPanel(frame)
             SC:MasterUI_Refresh()
         end)
         if frame.start.RefreshControls then frame.start:RefreshControls() end
+        RefreshRunSections(frame.start)
         AnchorRunFooterButtons(frame)
         return
     end
@@ -1386,11 +1498,11 @@ local function RefreshRunPanel(frame)
         frame.start.groupingDropdown:SetShown(true)
         frame.start.gearDropdown:SetShown(true)
         frame.start.maxGapBox:SetShown(true)
-        if frame.start.presetLabel then frame.start.presetLabel:SetShown(false) end
-        frame.start.casualBtn:SetShown(false)
-        frame.start.ironmanBtn:SetShown(false)
-        if frame.start.chefBtn then frame.start.chefBtn:SetShown(false) end
-        for _, control in ipairs(frame.start.controls) do control:SetShown(true) end
+        for _, control in ipairs(frame.start.controls) do SetRunControlShown(control, true) end
+        if frame.start.presetLabel then SetRunControlShown(frame.start.presetLabel, false) end
+        SetRunControlShown(frame.start.casualBtn, false)
+        SetRunControlShown(frame.start.ironmanBtn, false)
+        if frame.start.chefBtn then SetRunControlShown(frame.start.chefBtn, false) end
         SetRunSetupEnabled(frame, false)
         frame.start.inactiveText:SetShown(false)
         frame.start.activeText:SetShown(false)
@@ -1464,6 +1576,7 @@ local function RefreshRunPanel(frame)
             SC:MasterUI_Refresh()
         end)
         if frame.start.RefreshControls then frame.start:RefreshControls() end
+        RefreshRunSections(frame.start)
         AnchorRunFooterButtons(frame)
         return
     end
@@ -1486,7 +1599,7 @@ local function RefreshRunPanel(frame)
     frame.start.ironmanBtn:SetShown(true)
     if frame.start.chefBtn then frame.start.chefBtn:SetShown(true) end
     for _, control in ipairs(frame.start.controls) do
-        control:SetShown(true)
+        SetRunControlShown(control, true)
     end
     frame.start.primaryBtn:SetShown(not active)
     local confirmingStop = active and frame.start.stopConfirmPending
@@ -1588,6 +1701,7 @@ local function RefreshRunPanel(frame)
     if frame.start.RefreshControls then
         frame.start:RefreshControls()
     end
+    RefreshRunSections(frame.start)
     AnchorRunFooterButtons(frame)
 end
 
@@ -1965,7 +2079,7 @@ function SC:OpenMasterWindow(focusTab)
     local startPanel = CreatePanel(frame)
     startPanel:SetHeight(552)
     frame.panels[TAB_RUN] = startPanel
-    frame.start = { controls = {}, selectedRules = SC:GetDefaultRuleset(), selectedPreset = "CASUAL" }
+    frame.start = { panel = startPanel, controls = {}, selectedRules = SC:GetDefaultRuleset(), selectedPreset = "CASUAL" }
     frame.start.selectedRules.dungeonRepeat = "ALLOWED"
     frame.start.selectedRules.instanceWithUnsyncedPlayers = "ALLOWED"
     frame.start.selectedRules.unsyncedMembers = "ALLOWED"
@@ -1976,132 +2090,96 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.activeText:SetText("Active run rules are locked. Future rule changes will use a visible amendment flow.")
     frame.start.activeText:Hide()
 
-    frame.start.presetLabel = CreateLabel(startPanel, "Presets", 0, -30, "GameFontNormalSmall", 60)
+    frame.start.sections = {}
+    frame.start.charterSection = CreateRunSection(startPanel, "Run Charter", 0, -18, 690, 104)
+    frame.start.accessSection = CreateRunSection(startPanel, "Access and Economy", 0, -134, 330, 228)
+    frame.start.travelSection = CreateRunSection(startPanel, "Travel and Camera", 0, -374, 330, 142)
+    frame.start.progressionSection = CreateRunSection(startPanel, "Party, Dungeons, and Gear", 360, -134, 330, 382)
+    table.insert(frame.start.sections, frame.start.charterSection)
+    table.insert(frame.start.sections, frame.start.accessSection)
+    table.insert(frame.start.sections, frame.start.travelSection)
+    table.insert(frame.start.sections, frame.start.progressionSection)
+
+    frame.start.presetLabel = CreateLabel(frame.start.charterSection.content, "Presets", 0, -6, "GameFontNormalSmall", 60)
     frame.start.presetLabel:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
-    frame.start.casualBtn = CreateButton(startPanel, "Casual", 86, 22)
-    frame.start.casualBtn:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 58, -24)
+    RegisterRunControl(frame.start, frame.start.presetLabel, frame.start.charterSection)
+    frame.start.casualBtn = CreateButton(frame.start.charterSection.content, "Casual", 86, 22)
+    frame.start.casualBtn:SetPoint("TOPLEFT", frame.start.charterSection.content, "TOPLEFT", 58, -2)
     frame.start.casualBtn:SetScript("OnClick", function()
         ApplyStartPreset(frame, "CASUAL")
     end)
 
-    frame.start.chefBtn = CreateButton(startPanel, "Chef's Special", 116, 22)
+    frame.start.chefBtn = CreateButton(frame.start.charterSection.content, "Chef's Special", 116, 22)
     frame.start.chefBtn:SetPoint("LEFT", frame.start.casualBtn, "RIGHT", 8, 0)
     frame.start.chefBtn:SetScript("OnClick", function()
         ApplyStartPreset(frame, "CHEF_SPECIAL")
     end)
 
-    frame.start.ironmanBtn = CreateButton(startPanel, "Ironman", 86, 22)
+    frame.start.ironmanBtn = CreateButton(frame.start.charterSection.content, "Ironman", 86, 22)
     frame.start.ironmanBtn:SetPoint("LEFT", frame.start.chefBtn, "RIGHT", 8, 0)
     frame.start.ironmanBtn:SetScript("OnClick", function()
         ApplyStartPreset(frame, "IRONMAN")
     end)
 
-    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Core Rules", 0, -62, 300))
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Death is permanent. A death fails this character only.", 0, -92, "GameFontHighlightSmall", 320))
-    frame.start.groupingLabel = CreateLabel(startPanel, "Mode", 0, -128, "GameFontNormalSmall", 70)
-    table.insert(frame.start.controls, frame.start.groupingLabel)
-    frame.start.groupingDropdown = CreateDropdown(startPanel, "SoftcoreMasterGroupingDropdown", GROUPING_OPTIONS, frame.start.selectedRules.groupingMode, function(value)
+    RegisterRunControl(frame.start, frame.start.casualBtn, frame.start.charterSection)
+    RegisterRunControl(frame.start, frame.start.chefBtn, frame.start.charterSection)
+    RegisterRunControl(frame.start, frame.start.ironmanBtn, frame.start.charterSection)
+    RegisterRunControl(frame.start, CreateLabel(frame.start.charterSection.content, "Death is permanent. A death fails this character only.", 0, -38, "GameFontHighlightSmall", 320), frame.start.charterSection)
+    frame.start.groupingLabel = CreateLabel(frame.start.charterSection.content, "Mode", 360, -7, "GameFontNormalSmall", 70)
+    RegisterRunControl(frame.start, frame.start.groupingLabel, frame.start.charterSection)
+    frame.start.groupingDropdown = CreateDropdown(frame.start.charterSection.content, "SoftcoreMasterGroupingDropdown", GROUPING_OPTIONS, frame.start.selectedRules.groupingMode, function(value)
         frame.start.selectedRules.groupingMode = value
         if SC.ApplyGroupingMode then
             SC:ApplyGroupingMode(frame.start.selectedRules)
         end
         SC:MasterUI_Refresh()
     end, 140)
-    frame.start.groupingDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 82, -120)
+    frame.start.groupingDropdown:SetPoint("TOPLEFT", frame.start.charterSection.content, "TOPLEFT", 432, -1)
+    RegisterRunControl(frame.start, frame.start.groupingDropdown, frame.start.charterSection)
 
-    frame.start.deathAnnounceLabel = CreateLabel(startPanel, "Announce Death", 0, -158, "GameFontNormalSmall", 100)
-    table.insert(frame.start.controls, frame.start.deathAnnounceLabel)
-    frame.start.deathAnnounceChatCheck = CreateDeathAnnounceCheckbox(startPanel, "CHAT", "Chat", 112, -150)
-    table.insert(frame.start.controls, frame.start.deathAnnounceChatCheck)
-    frame.start.deathAnnouncePartyCheck = CreateDeathAnnounceCheckbox(startPanel, "PARTY", "Party", 178, -150)
-    table.insert(frame.start.controls, frame.start.deathAnnouncePartyCheck)
-    frame.start.deathAnnounceGuildCheck = CreateDeathAnnounceCheckbox(startPanel, "GUILD", "Guild", 252, -150)
-    table.insert(frame.start.controls, frame.start.deathAnnounceGuildCheck)
+    frame.start.deathAnnounceLabel = CreateLabel(frame.start.charterSection.content, "Announce Death", 360, -34, "GameFontNormalSmall", 100)
+    RegisterRunControl(frame.start, frame.start.deathAnnounceLabel, frame.start.charterSection)
+    frame.start.deathAnnounceChatCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "CHAT", "Chat", 466, -26)
+    RegisterRunControl(frame.start, frame.start.deathAnnounceChatCheck, frame.start.charterSection)
+    frame.start.deathAnnouncePartyCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "PARTY", "Party", 532, -26)
+    RegisterRunControl(frame.start, frame.start.deathAnnouncePartyCheck, frame.start.charterSection)
+    frame.start.deathAnnounceGuildCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "GUILD", "Guild", 606, -26)
+    RegisterRunControl(frame.start, frame.start.deathAnnounceGuildCheck, frame.start.charterSection)
 
-    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Economy and Storage", 0, -196, 300))
-    local y = -226
+    local y = 0
     for _, spec in ipairs(ECONOMY_RULES) do
-        local checkbox = CreateAllowCheckbox(startPanel, frame.start.selectedRules, spec, 0, y)
-        table.insert(frame.start.controls, checkbox)
+        local checkbox = CreateAllowCheckbox(frame.start.accessSection.content, frame.start.selectedRules, spec, 0, y)
+        RegisterRunControl(frame.start, checkbox, frame.start.accessSection)
         y = y - 30
     end
 
-    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Movement", 360, -62, 300))
-    y = -92
+    y = 0
     for _, spec in ipairs(MOVEMENT_RULES) do
-        local checkbox = CreateAllowCheckbox(startPanel, frame.start.selectedRules, spec, 360, y)
-        table.insert(frame.start.controls, checkbox)
+        local checkbox = CreateAllowCheckbox(frame.start.travelSection.content, frame.start.selectedRules, spec, 0, y)
+        RegisterRunControl(frame.start, checkbox, frame.start.travelSection)
         if spec.key == "flying" then
-            local hint = startPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            local hint = frame.start.travelSection.content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
             hint:SetPoint("LEFT", checkbox.label, "LEFT", 124, 0)
             hint:SetTextColor(MUTED_TEXT.r * 0.7, MUTED_TEXT.g * 0.7, MUTED_TEXT.b * 0.7)
             hint:SetText("incl. druid flight form")
-            table.insert(frame.start.controls, hint)
+            RegisterRunControl(frame.start, hint, frame.start.travelSection)
         end
         y = y - 30
     end
 
-    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Gear and Items", 360, -188, 300))
-    frame.start.gearLabel = CreateLabel(startPanel, "Gear limit", 360, -218, "GameFontNormalSmall", 82)
-    table.insert(frame.start.controls, frame.start.gearLabel)
-    frame.start.gearDropdown = CreateDropdown(startPanel, "SoftcoreMasterGearDropdown", GEAR_OPTIONS, frame.start.selectedRules.gearQuality, function(value)
-        frame.start.selectedRules.gearQuality = value
-        SC:MasterUI_Refresh()
-    end, 145)
-    frame.start.gearDropdown:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 452, -210)
-    frame.start.heirloomCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Heirlooms", key = "heirlooms" }, 360, -252)
-    table.insert(frame.start.controls, frame.start.heirloomCheck)
-    frame.start.consumablesCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Consumables", key = "consumables" }, 360, -282)
-    table.insert(frame.start.controls, frame.start.consumablesCheck)
-
-    table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Group and Dungeon", 360, -322, 300))
-    frame.start.maxGapCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
-    frame.start.maxGapCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 360, -352)
-    frame.start.maxGapCheck.label = frame.start.maxGapCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.start.maxGapCheck.label:SetPoint("LEFT", frame.start.maxGapCheck, "RIGHT", 2, 0)
-    frame.start.maxGapCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
-    frame.start.maxGapCheck.label:SetText("Enforce Level Gap")
-    frame.start.maxGapCheck:SetScript("OnClick", function(self)
-        frame.start.selectedRules.maxLevelGap = self:GetChecked() and DISALLOWED_OUTCOME or "ALLOWED"
-        SC:MasterUI_Refresh()
-    end)
-    table.insert(frame.start.controls, frame.start.maxGapCheck)
-    frame.start.maxGapLabel = CreateLabel(startPanel, "Max gap", 388, -388, "GameFontNormalSmall", 70)
-    table.insert(frame.start.controls, frame.start.maxGapLabel)
-    frame.start.maxGapBox = CreateFrame("EditBox", nil, startPanel, "InputBoxTemplate")
-    frame.start.maxGapBox:SetSize(42, 22)
-    frame.start.maxGapBox:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 460, -382)
-    frame.start.maxGapBox:SetAutoFocus(false)
-    frame.start.maxGapBox:SetNumeric(true)
-    frame.start.maxGapBox:SetScript("OnTextChanged", function(self)
-        local value = tonumber(self:GetText())
-        if value then
-            frame.start.selectedRules.maxLevelGapValue = value
-        end
-    end)
-    frame.start.maxGapBox:SetScript("OnEditFocusLost", function()
-        SC:MasterUI_Refresh()
-    end)
-    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Repeated Dungeons", key = "dungeonRepeat" }, 360, -420)
-    table.insert(frame.start.controls, frame.start.dungeonRepeatCheck)
-    frame.start.instancedPvPCheck = CreateAllowCheckbox(startPanel, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 360, -450)
-    table.insert(frame.start.controls, frame.start.instancedPvPCheck)
-
-    local cameraHeader = CreateSectionHeader(startPanel, "Camera", 0, -416, 300)
-    table.insert(frame.start.controls, cameraHeader)
-    frame.start.cameraHint = startPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.start.cameraHint:SetPoint("TOPLEFT", cameraHeader, "TOPLEFT", 88, -1)
+    frame.start.cameraHint = frame.start.travelSection.content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.start.cameraHint:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 128, -92)
     frame.start.cameraHint:SetTextColor(MUTED_TEXT.r * 0.7, MUTED_TEXT.g * 0.7, MUTED_TEXT.b * 0.7)
-    frame.start.cameraHint:SetText("Can toggle freely.")
-    table.insert(frame.start.controls, frame.start.cameraHint)
-    frame.start.firstPersonCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
-    frame.start.firstPersonCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -446)
+    frame.start.cameraHint:SetText("Camera can toggle freely.")
+    RegisterRunControl(frame.start, frame.start.cameraHint, frame.start.travelSection)
+    frame.start.firstPersonCheck = CreateFrame("CheckButton", nil, frame.start.travelSection.content, "UICheckButtonTemplate")
+    frame.start.firstPersonCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 0, -90)
     frame.start.firstPersonCheck.label = frame.start.firstPersonCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.start.firstPersonCheck.label:SetPoint("LEFT", frame.start.firstPersonCheck, "RIGHT", 2, 0)
-    frame.start.firstPersonCheck.label:SetWidth(280)
+    frame.start.firstPersonCheck.label:SetWidth(118)
     frame.start.firstPersonCheck.label:SetJustifyH("LEFT")
     frame.start.firstPersonCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
-    frame.start.firstPersonCheck.label:SetText("Use First Person Camera")
+    frame.start.firstPersonCheck.label:SetText("First Person")
     frame.start.firstPersonCheck.ruleKey = "firstPersonOnly"
     frame.start.firstPersonCheck:SetScript("OnClick", function(btn)
         if IsActiveRun() and not frame.start.isModifyingRules then
@@ -2122,16 +2200,16 @@ function SC:OpenMasterWindow(focusTab)
         SetCameraRules(frame.start.selectedRules, frame.start.selectedCameraMode)
         SC:MasterUI_Refresh()
     end)
-    table.insert(frame.start.controls, frame.start.firstPersonCheck)
+    RegisterRunControl(frame.start, frame.start.firstPersonCheck, frame.start.travelSection)
 
-    frame.start.actionCamCheck = CreateFrame("CheckButton", nil, startPanel, "UICheckButtonTemplate")
-    frame.start.actionCamCheck:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, -476)
+    frame.start.actionCamCheck = CreateFrame("CheckButton", nil, frame.start.travelSection.content, "UICheckButtonTemplate")
+    frame.start.actionCamCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 158, -90)
     frame.start.actionCamCheck.label = frame.start.actionCamCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.start.actionCamCheck.label:SetPoint("LEFT", frame.start.actionCamCheck, "RIGHT", 2, 0)
-    frame.start.actionCamCheck.label:SetWidth(280)
+    frame.start.actionCamCheck.label:SetWidth(118)
     frame.start.actionCamCheck.label:SetJustifyH("LEFT")
     frame.start.actionCamCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
-    frame.start.actionCamCheck.label:SetText("Use Cinematic Camera")
+    frame.start.actionCamCheck.label:SetText("ActionCam")
     frame.start.actionCamCheck.ruleKey = "actionCam"
     frame.start.actionCamCheck:SetScript("OnClick", function(btn)
         if IsActiveRun() and not frame.start.isModifyingRules then
@@ -2152,7 +2230,53 @@ function SC:OpenMasterWindow(focusTab)
         SetCameraRules(frame.start.selectedRules, frame.start.selectedCameraMode)
         SC:MasterUI_Refresh()
     end)
-    table.insert(frame.start.controls, frame.start.actionCamCheck)
+    RegisterRunControl(frame.start, frame.start.actionCamCheck, frame.start.travelSection)
+
+    frame.start.gearLabel = CreateLabel(frame.start.progressionSection.content, "Gear limit", 0, 0, "GameFontNormalSmall", 82)
+    RegisterRunControl(frame.start, frame.start.gearLabel, frame.start.progressionSection)
+    frame.start.gearDropdown = CreateDropdown(frame.start.progressionSection.content, "SoftcoreMasterGearDropdown", GEAR_OPTIONS, frame.start.selectedRules.gearQuality, function(value)
+        frame.start.selectedRules.gearQuality = value
+        SC:MasterUI_Refresh()
+    end, 145)
+    frame.start.gearDropdown:SetPoint("TOPLEFT", frame.start.progressionSection.content, "TOPLEFT", 92, 8)
+    RegisterRunControl(frame.start, frame.start.gearDropdown, frame.start.progressionSection)
+    frame.start.heirloomCheck = CreateAllowCheckbox(frame.start.progressionSection.content, frame.start.selectedRules, { label = "Allow Heirlooms", key = "heirlooms" }, 0, -40)
+    RegisterRunControl(frame.start, frame.start.heirloomCheck, frame.start.progressionSection)
+    frame.start.consumablesCheck = CreateAllowCheckbox(frame.start.progressionSection.content, frame.start.selectedRules, { label = "Allow Consumables", key = "consumables" }, 0, -70)
+    RegisterRunControl(frame.start, frame.start.consumablesCheck, frame.start.progressionSection)
+
+    frame.start.maxGapCheck = CreateFrame("CheckButton", nil, frame.start.progressionSection.content, "UICheckButtonTemplate")
+    frame.start.maxGapCheck:SetPoint("TOPLEFT", frame.start.progressionSection.content, "TOPLEFT", 0, -118)
+    frame.start.maxGapCheck.label = frame.start.maxGapCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.start.maxGapCheck.label:SetPoint("LEFT", frame.start.maxGapCheck, "RIGHT", 2, 0)
+    frame.start.maxGapCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+    frame.start.maxGapCheck.label:SetText("Enforce Level Gap")
+    frame.start.maxGapCheck:SetScript("OnClick", function(self)
+        frame.start.selectedRules.maxLevelGap = self:GetChecked() and DISALLOWED_OUTCOME or "ALLOWED"
+        SC:MasterUI_Refresh()
+    end)
+    RegisterRunControl(frame.start, frame.start.maxGapCheck, frame.start.progressionSection)
+    frame.start.maxGapLabel = CreateLabel(frame.start.progressionSection.content, "Max gap", 28, -154, "GameFontNormalSmall", 70)
+    RegisterRunControl(frame.start, frame.start.maxGapLabel, frame.start.progressionSection)
+    frame.start.maxGapBox = CreateFrame("EditBox", nil, frame.start.progressionSection.content, "InputBoxTemplate")
+    frame.start.maxGapBox:SetSize(42, 22)
+    frame.start.maxGapBox:SetPoint("TOPLEFT", frame.start.progressionSection.content, "TOPLEFT", 100, -148)
+    frame.start.maxGapBox:SetAutoFocus(false)
+    frame.start.maxGapBox:SetNumeric(true)
+    frame.start.maxGapBox:SetScript("OnTextChanged", function(self)
+        local value = tonumber(self:GetText())
+        if value then
+            frame.start.selectedRules.maxLevelGapValue = value
+        end
+    end)
+    frame.start.maxGapBox:SetScript("OnEditFocusLost", function()
+        SC:MasterUI_Refresh()
+    end)
+    RegisterRunControl(frame.start, frame.start.maxGapBox, frame.start.progressionSection)
+    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(frame.start.progressionSection.content, frame.start.selectedRules, { label = "Allow Repeated Dungeons", key = "dungeonRepeat" }, 0, -188)
+    RegisterRunControl(frame.start, frame.start.dungeonRepeatCheck, frame.start.progressionSection)
+    frame.start.instancedPvPCheck = CreateAllowCheckbox(frame.start.progressionSection.content, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 0, -218)
+    RegisterRunControl(frame.start, frame.start.instancedPvPCheck, frame.start.progressionSection)
 
     function frame.start:RefreshControls()
         if SC.ApplyGroupingMode then
