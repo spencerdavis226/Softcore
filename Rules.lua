@@ -474,6 +474,13 @@ function SC:AcceptRuleAmendment(amendmentId)
 
     for _, amendment in ipairs(db.ruleAmendments) do
         if amendment.id == amendmentId then
+            if amendment.detailsPending then
+                DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r Rule amendment details are still loading. Try again in a moment.")
+                if self.Sync_SendAmendmentDetailsRequest then
+                    self:Sync_SendAmendmentDetailsRequest(amendment.id, amendment.proposedBy)
+                end
+                return amendment
+            end
             if amendment.status == "PENDING" then
                 if IsAmendmentExpired(amendment) then
                     amendment.status = "EXPIRED"
@@ -590,23 +597,56 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
 
     local amendmentId = payload.amendmentId or payload.proposalId
     if not amendmentId then return end
+    local hasDetails = payload.newRules and payload.newRules ~= ""
 
     for _, existing in ipairs(db.ruleAmendments) do
-        if existing.id == amendmentId then return end
+        if existing.id == amendmentId then
+            if hasDetails and existing.detailsPending then
+                local newRules = self.DeserializePartialRules and self:DeserializePartialRules(payload.newRules) or {}
+                local previousRules = self.DeserializePartialRules and self:DeserializePartialRules(payload.previousRules) or {}
+                for ruleName, value in pairs(newRules) do
+                    if db.run.ruleset[ruleName] == nil or not IsValidRuleValue(ruleName, value) then
+                        return
+                    end
+                end
+                if payload.fullRulesProposal == "1" then
+                    local diffRules = {}
+                    previousRules = {}
+                    for ruleName, value in pairs(newRules) do
+                        local previousValue = db.run.ruleset[ruleName]
+                        if tostring(previousValue) ~= tostring(value) then
+                            diffRules[ruleName] = value
+                            previousRules[ruleName] = previousValue
+                        end
+                    end
+                    newRules = diffRules
+                    if not next(newRules) then
+                        return
+                    end
+                end
+                existing.newRules = newRules
+                existing.previousRules = previousRules
+                existing.reason = payload.reason or existing.reason
+                existing.fullRulesProposal = payload.fullRulesProposal == "1"
+                existing.detailsPending = false
+                if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+            end
+            return
+        end
     end
 
     for _, existing in ipairs(db.ruleAmendments) do
         if existing.status == "PENDING" then return end
     end
 
-    local newRules = self.DeserializePartialRules and self:DeserializePartialRules(payload.newRules) or {}
-    local previousRules = self.DeserializePartialRules and self:DeserializePartialRules(payload.previousRules) or {}
+    local newRules = hasDetails and self.DeserializePartialRules and self:DeserializePartialRules(payload.newRules) or {}
+    local previousRules = hasDetails and self.DeserializePartialRules and self:DeserializePartialRules(payload.previousRules) or {}
     for ruleName, value in pairs(newRules) do
         if db.run.ruleset[ruleName] == nil or not IsValidRuleValue(ruleName, value) then
             return
         end
     end
-    if payload.fullRulesProposal == "1" then
+    if hasDetails and payload.fullRulesProposal == "1" then
         local diffRules = {}
         previousRules = {}
         for ruleName, value in pairs(newRules) do
@@ -633,12 +673,16 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
         proposedBy = senderKey,
         fullRulesProposal = payload.fullRulesProposal == "1",
         remote = true,
+        detailsPending = not hasDetails,
     }
 
     table.insert(db.ruleAmendments, amendment)
     self:AddLog("RULE_AMENDMENT_RECEIVED", "Rule amendment proposed by " .. tostring(senderKey or "?"), {
         amendmentId = amendmentId,
     })
+    if not hasDetails and self.Sync_SendAmendmentDetailsRequest then
+        self:Sync_SendAmendmentDetailsRequest(amendmentId, senderKey)
+    end
 
     if self.PlayUISound then self:PlayUISound("PROPOSAL_RECEIVED") end
     if self.MasterUI_Refresh then self:MasterUI_Refresh() end

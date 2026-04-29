@@ -104,7 +104,7 @@ Declining cancels the proposal for everyone. Pending proposals expire after 30 m
 
 Softcore syncs over Blizzard addon messages using the `SOFTCORE` prefix. It supports normal parties only; raid groups are treated as local-only and show a raid-unsupported note instead of syncing or displaying a 40-player roster.
 
-Status heartbeats are sent every 10 seconds as a safety net, while user-driven changes send compact high-priority updates immediately. Reloading or rejoining may briefly show Unsynced until addon messages arrive. Use `/sc resync` or **Party Sync** in the Run tab if the display looks stale.
+Status heartbeats are sent every 10 seconds as a safety net, while user-driven changes send compact high-priority updates immediately. Proposals and rule amendments wake the Run tab with a tiny notice first, then fetch the larger rule details before acceptance is enabled. Reloading or rejoining may briefly show Unsynced until addon messages arrive. Use `/sc resync` or **Party Sync** in the Run tab if the display looks stale.
 
 Party state is display and compatibility data. Remote state should not reset, fail, or overwrite the local character's run.
 
@@ -115,7 +115,7 @@ Softcore sync is built around current WoW addon-message limits:
 - The `SOFTCORE` prefix is registered after login/reload and must fit the 16-byte prefix limit.
 - Addon message bodies are limited to 255 bytes and are delivered through `CHAT_MSG_ADDON`.
 - `C_ChatInfo.SendAddonMessage` success means the client enqueued the message, not that peers have received it.
-- Blizzard applies a per-prefix throttle; Softcore paces outbound messages through its send queue, prioritizes proposal/control/fresh-state traffic, coalesces disposable queued status updates, and chunks larger proposal/full-state payloads.
+- Blizzard applies a per-prefix throttle; Softcore paces outbound messages through its send queue, prioritizes proposal/control/fresh-state traffic, coalesces disposable queued status updates, and chunks larger detail/full-state payloads.
 - Proposal and control retries must remain paced. Do not bypass the send queue for chunked messages.
 - Rule serialization must preserve booleans exactly. `false` is a real rule value, not an empty string.
 - Every enforced rule that affects local behavior must be part of the canonical ruleset sync/hash order. Camera rules (`firstPersonOnly`, `actionCam`) are included so a synced run cannot silently enforce camera on one client but not another.
@@ -152,7 +152,7 @@ Use **Party Sync** in the Run tab when:
 
 Party Sync routes this case to a sync proposal for active run members. Accepting a sync proposal changes the accepting player's run ID to the proposer run ID. It does not wipe local deaths, violations, logs, or character progress.
 
-If rules differ, Party Sync sends the local player's full current rules as a rule amendment proposal to active run members first. Receivers compute and review only the values that differ from their own rules before accepting or declining. After an accepted stage settles, fresh sync responses wake the original clicker's Party Sync plan so it automatically continues to the next needed stage without waiting for the heartbeat.
+If rules differ, Party Sync sends a rule amendment notice to active run members first, then receivers request the full current rules for review. Receivers compute and review only the values that differ from their own rules before accepting or declining. After an accepted stage settles, fresh sync responses wake the original clicker's Party Sync plan so it automatically continues to the next needed stage without waiting for the heartbeat.
 
 Party Sync handles mixed parties in one staged plan: align active-run rules, align active-run IDs, then invite party members who are not in the run. Stale party rows use targeted full-state requests where possible; retry timers remain as a fallback for reloads, throttling, or lost chunks. Party members who never respond to Softcore addon messages must install/enable the addon or leave the party before they can be included.
 

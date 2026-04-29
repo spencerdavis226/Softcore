@@ -59,7 +59,7 @@ The channel is selected automatically:
 
 Raid groups are intentionally unsupported because the UI is designed for party-scale accountability, not raid-scale rosters. When a party converts to raid, Softcore should become local-only: stop party sync, avoid raid roster display, and expire pending group proposals/amendments rather than applying them late.
 
-Status heartbeats are sent periodically as a safety net. User-driven run, proposal, amendment, roster, and resync changes should also send compact fast status/control messages so Party Sync does not wait for the next heartbeat. Full rules/proposals may be chunked, but rule payloads use compact wire keys to keep first proposal delivery responsive. Incomplete chunk buffers expire and should never mutate run state.
+Status heartbeats are sent periodically as a safety net. User-driven run, proposal, amendment, roster, and resync changes should also send compact fast status/control messages so Party Sync does not wait for the next heartbeat. Proposals and amendments use a control-plane/data-plane split: send a tiny notice first, then let the receiver request targeted details before enabling acceptance. Full rules/details may be chunked, but rule payloads use compact wire keys to keep review delivery responsive. Incomplete chunk buffers expire and should never mutate run state.
 
 WoW addon-message API constraints are gospel for this project:
 
@@ -78,18 +78,18 @@ There is no separate HTTP or server “backend.” All multiplayer behavior is *
 
 **Where to look in code**
 
-- `Sync.lua`: prefix registration, inbound `CHAT_MSG_ADDON`, **chunk reassembly** (per-sender buffers that **expire** without applying partial state), **outbound send queue** (token-budget pacing, priority insertion, send failure retries), compact fast status nudges, targeted full-state request/response metadata, queued status coalescing before higher-priority traffic, **stale send drops** for obsolete queued items, and serialization/chunking to the 255-byte body limit.
+- `Sync.lua`: prefix registration, inbound `CHAT_MSG_ADDON`, **chunk reassembly** (per-sender buffers that **expire** without applying partial state), **outbound send queue** (token-budget pacing, priority insertion, send failure retries), compact fast status nudges, targeted full-state/proposal/amendment detail request-response metadata, queued status coalescing before higher-priority traffic, **stale send drops** for obsolete queued items, and serialization/chunking to the 255-byte body limit.
 - `Core.lua`: slash commands; **`/sc dc`** (`ClearDebugTrace`) clears the capped in-memory **debug trace** and resets **test-oriented `db.sync` counters** (stale send drops, coalesced status drops, last drop metadata, send failure count/last error, expired chunk buffer count/last expiry). **`/sc dl`** builds the CSV-style export that includes those fields.
 - `Events.lua`: game events that drive periodic **STATUS** heartbeats and other local hooks.
 - `ProposalUI.lua` / `MasterUI.lua`: Run-tab proposal UX; user actions enqueue outbound payloads through `Sync` rather than calling `SendAddonMessage` directly.
 
 **Outbound path**
 
-Structured payloads are queued (with a **priority** ordering so proposal/control/violation/fresh-state traffic can preempt bulky traffic), split into chunks when needed, then sent via `C_ChatInfo.SendAddonMessage` (or legacy equivalent). Queued `STATUS` chunks are disposable and may be coalesced or dropped ahead of proposal/control sends because fresh status will be sent again. Pacing and resend **attempt limits** live as constants near the top of `Sync.lua` (for example proposal resend spacing vs control-message retry behavior). Treat Blizzard throttling as real: never bypass the queue for large or repeated sends.
+Structured payloads are queued (with a **priority** ordering so proposal/control/violation/fresh-state traffic can preempt bulky traffic), split into chunks when needed, then sent via `C_ChatInfo.SendAddonMessage` (or legacy equivalent). Queued `STATUS` chunks are disposable and may be coalesced or dropped ahead of proposal/control sends because fresh status will be sent again. Proposal and amendment notices are intentionally small; detail responses are targeted and may be chunked. Pacing and resend **attempt limits** live as constants near the top of `Sync.lua` (for example proposal resend spacing vs control-message retry behavior). Treat Blizzard throttling as real: never bypass the queue for large or repeated sends.
 
 **Inbound path**
 
-Each received segment is either a standalone message or part of a **chunk sequence**. Reassembly uses a buffer key (sender + chunk id); **incomplete buffers expire** and must not mutate run state. Fully reassembled payloads dispatch to type-specific handlers (proposals, status, party log import, amendments, etc.). Fresh status/full-state responses also wake an active Party Sync plan so staged flows can continue without waiting on the fallback timer.
+Each received segment is either a standalone message or part of a **chunk sequence**. Reassembly uses a buffer key (sender + chunk id); **incomplete buffers expire** and must not mutate run state. Fully reassembled payloads dispatch to type-specific handlers (proposal/amendment notices, detail responses, status, party log import, etc.). Fresh status/full-state responses also wake an active Party Sync plan so staged flows can continue without waiting on the fallback timer.
 
 **Stale send drops (`SYNC_DROP_STALE_SEND`)**
 
@@ -124,10 +124,10 @@ Run proposals, run sync proposals, party invites, and rule amendments are explic
 
 Current behavior:
 
-- Group run start creates a Run-tab proposal.
+- Group run start creates a Run-tab proposal notice immediately; receivers request details and cannot accept until the rules arrive.
 - Separate active runs can align only through explicit Party Sync routing to a run sync proposal for the active run cohort; one Party Sync click should automatically continue to later stages after required approvals settle.
 - Active players can invite party members through Party Sync routing to a party invite proposal after active-run conflicts are resolved.
-- Ruleset mismatches route through Party Sync to a full-local-rules amendment proposal for active run members first; receivers compute the review diff against their own rules before accepting or declining.
+- Ruleset mismatches route through Party Sync to a full-local-rules amendment proposal notice for active run members first; receivers request details, compute the review diff against their own rules, and cannot accept until the details arrive.
 - Party Sync blocks members who never respond to Softcore addon messages after the initial grace period; they must install/enable the addon or leave the party before inclusion.
 - Party Sync may also route stale/unsynced display state to a targeted full-state resync without mutating local run state; fresh responses should advance the active Party Sync plan quickly, with retry timers only as fallback.
 - Mid-run rules change through `Modify Rules` and grouped amendment acceptance.

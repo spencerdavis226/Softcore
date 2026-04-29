@@ -265,8 +265,9 @@ local function GetMessagePriority(messageType)
     if messageType == "AMENDMENT_APPLIED" or messageType == "AMENDMENT_CANCELLED" then return 2 end
     if messageType == "FULL_STATE_REQUEST" or messageType == "FULL_STATE_RESPONSE" then return 3 end
     if messageType == "HELLO" then return 3 end
+    if messageType == "PROPOSAL_DETAILS_REQUEST" or messageType == "PROPOSAL_DETAILS" then return 3 end
     if messageType == "PROPOSAL_ACCEPT" or messageType == "PROPOSAL_DECLINE" then return 3 end
-    if messageType == "AMENDMENT_PROPOSE" then return 3 end
+    if messageType == "AMENDMENT_PROPOSE" or messageType == "AMENDMENT_DETAILS_REQUEST" or messageType == "AMENDMENT_DETAILS" then return 3 end
     if messageType == "AMENDMENT_ACCEPT" or messageType == "AMENDMENT_DECLINE" then return 3 end
     if messageType == "PROPOSAL" then return 3 end
     if messageType == "PARTY_LOG" then return 4 end
@@ -698,6 +699,8 @@ end
 
 local function IsProposalControlMessage(messageType)
     return messageType == "PROPOSAL"
+        or messageType == "PROPOSAL_DETAILS_REQUEST"
+        or messageType == "PROPOSAL_DETAILS"
         or messageType == "PROPOSAL_ACCEPT"
         or messageType == "PROPOSAL_DECLINE"
         or messageType == "PROPOSAL_CONFIRMED"
@@ -705,6 +708,8 @@ local function IsProposalControlMessage(messageType)
         or messageType == "FULL_STATE_REQUEST"
         or messageType == "FULL_STATE_RESPONSE"
         or messageType == "AMENDMENT_PROPOSE"
+        or messageType == "AMENDMENT_DETAILS_REQUEST"
+        or messageType == "AMENDMENT_DETAILS"
         or messageType == "AMENDMENT_ACCEPT"
         or messageType == "AMENDMENT_DECLINE"
         or messageType == "AMENDMENT_APPLIED"
@@ -996,8 +1001,6 @@ function SC:Sync_SendAmendmentProposal(amendment)
         type = "AMENDMENT_PROPOSE",
         amendmentId = amendment.id,
         runId = amendment.runId,
-        newRules = self.SerializePartialRules and self:SerializePartialRules(amendment.newRules) or "",
-        previousRules = self.SerializePartialRules and self:SerializePartialRules(amendment.previousRules) or "",
         reason = amendment.reason or "",
         fullRulesProposal = amendment.fullRulesProposal and "1" or "0",
         proposedBy = amendment.proposedBy or "",
@@ -1033,6 +1036,70 @@ function SC:Sync_SendAmendmentCancelled(amendment)
         amendmentId = amendment.id,
         runId = amendment.runId,
     }, 2)
+end
+
+function SC:Sync_SendProposalDetailsRequest(proposalId, proposerKey)
+    if not proposalId then return false end
+    return SendPayload({
+        type = "PROPOSAL_DETAILS_REQUEST",
+        proposalId = proposalId,
+        toPlayerKey = proposerKey,
+    }, {
+        priority = 3,
+    })
+end
+
+function SC:Sync_SendRunProposalDetails(proposal, requesterKey)
+    if not proposal then return false end
+    return SendPayload({
+        type = "PROPOSAL_DETAILS",
+        proposalId = proposal.proposalId,
+        runId = proposal.runId,
+        proposalRunId = proposal.runId,
+        runName = proposal.runName,
+        proposedAt = proposal.proposedAt,
+        proposalKind = proposal.proposalType or "RUN",
+        proposalTargetPlayerKey = proposal.targetPlayerKey,
+        preset = proposal.preset or "CUSTOM",
+        ruleset = self:SerializeRuleset(proposal.ruleset),
+        rulesetHash = proposal.rulesetHash,
+        proposalRulesetHash = proposal.rulesetHash,
+        voterKeys = SerializeKeySet(proposal.partyAtProposalTime),
+        toPlayerKey = requesterKey,
+    }, {
+        priority = 3,
+    })
+end
+
+function SC:Sync_SendAmendmentDetailsRequest(amendmentId, proposerKey)
+    if not amendmentId then return false end
+    return SendPayload({
+        type = "AMENDMENT_DETAILS_REQUEST",
+        amendmentId = amendmentId,
+        proposalId = amendmentId,
+        toPlayerKey = proposerKey,
+    }, {
+        priority = 3,
+    })
+end
+
+function SC:Sync_SendAmendmentDetails(amendment, requesterKey)
+    if not amendment then return false end
+    return SendPayload({
+        type = "AMENDMENT_DETAILS",
+        amendmentId = amendment.id,
+        proposalId = amendment.id,
+        runId = amendment.runId,
+        newRules = self.SerializePartialRules and self:SerializePartialRules(amendment.newRules) or "",
+        previousRules = self.SerializePartialRules and self:SerializePartialRules(amendment.previousRules) or "",
+        reason = amendment.reason or "",
+        fullRulesProposal = amendment.fullRulesProposal and "1" or "0",
+        proposedBy = amendment.proposedBy or "",
+        proposedAt = tostring(amendment.proposedAt or time()),
+        toPlayerKey = requesterKey,
+    }, {
+        priority = 3,
+    })
 end
 
 function SC:Sync_BroadcastLog(entry)
@@ -1098,17 +1165,20 @@ function SC:Sync_SendRunProposal(proposal)
         proposalKind = proposal.proposalType or "RUN",
         targetPlayerKey = proposal.targetPlayerKey,
         preset = proposal.preset or "CUSTOM",
-        ruleset = self:SerializeRuleset(proposal.ruleset),
         rulesetHash = proposal.rulesetHash,
         proposalRulesetHash = proposal.rulesetHash,
         voterKeys = SerializeKeySet(proposal.partyAtProposalTime),
     }
-    local sent = SendPayload(payload)
+    local sent = SendPayload(payload, {
+        priority = 3,
+    })
     if C_Timer and C_Timer.After then
         for attempt = 1, PROPOSAL_RESEND_ATTEMPTS do
             C_Timer.After(PROPOSAL_RESEND_SECONDS * attempt, function()
                 if proposal.status == "PENDING" then
-                    SendPayload(payload)
+                    SendPayload(payload, {
+                        priority = 3,
+                    })
                 end
             end)
         end
@@ -1309,6 +1379,29 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
         return
     end
 
+    if payload.type == "PROPOSAL_DETAILS_REQUEST" then
+        local toPlayerKey = payload.toPlayerKey
+        if toPlayerKey and toPlayerKey ~= "" and toPlayerKey ~= LocalPlayerKey() then
+            return
+        end
+        local proposal = payload.proposalId and db.proposals and db.proposals[payload.proposalId]
+        if proposal and proposal.proposedBy == LocalPlayerKey() and self.Sync_SendRunProposalDetails then
+            self:Sync_SendRunProposalDetails(proposal, key)
+        end
+        return
+    end
+
+    if payload.type == "PROPOSAL_DETAILS" then
+        local toPlayerKey = payload.toPlayerKey
+        if toPlayerKey and toPlayerKey ~= "" and toPlayerKey ~= LocalPlayerKey() then
+            return
+        end
+        if self.ReceiveRunProposal then
+            self:ReceiveRunProposal(payload, key)
+        end
+        return
+    end
+
     if payload.type == "PROPOSAL_ACCEPT" or payload.type == "PROPOSAL_DECLINE" then
         if self.ReceiveProposalResponse then
             self:ReceiveProposalResponse(payload, key)
@@ -1390,6 +1483,36 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
     end
 
     if payload.type == "AMENDMENT_PROPOSE" then
+        if self.ReceiveRuleAmendmentProposal then
+            self:ReceiveRuleAmendmentProposal(payload, key)
+        end
+        return
+    end
+
+    if payload.type == "AMENDMENT_DETAILS_REQUEST" then
+        local toPlayerKey = payload.toPlayerKey
+        if toPlayerKey and toPlayerKey ~= "" and toPlayerKey ~= LocalPlayerKey() then
+            return
+        end
+        local amendmentId = payload.amendmentId or payload.proposalId
+        if amendmentId then
+            for _, amendment in ipairs(db.ruleAmendments or {}) do
+                if amendment.id == amendmentId and amendment.proposedBy == LocalPlayerKey() then
+                    if self.Sync_SendAmendmentDetails then
+                        self:Sync_SendAmendmentDetails(amendment, key)
+                    end
+                    break
+                end
+            end
+        end
+        return
+    end
+
+    if payload.type == "AMENDMENT_DETAILS" then
+        local toPlayerKey = payload.toPlayerKey
+        if toPlayerKey and toPlayerKey ~= "" and toPlayerKey ~= LocalPlayerKey() then
+            return
+        end
         if self.ReceiveRuleAmendmentProposal then
             self:ReceiveRuleAmendmentProposal(payload, key)
         end

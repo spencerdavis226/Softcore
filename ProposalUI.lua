@@ -1059,14 +1059,15 @@ end
 
 function SC:ReceiveRunProposal(payload, proposerKey)
     local db = GetDB()
-    local ruleset = self:DeserializeRuleset(payload.ruleset)
-    local computedHash = self:ComputeRulesetHash(ruleset)
+    local hasDetails = payload.ruleset and payload.ruleset ~= ""
+    local ruleset = hasDetails and self:DeserializeRuleset(payload.ruleset) or self:GetDefaultRuleset()
+    local computedHash = hasDetails and self:ComputeRulesetHash(ruleset) or (payload.proposalRulesetHash or payload.rulesetHash or "")
 
     if payload.addonVersion and payload.addonVersion ~= self.version then
         self:AddLog("PROPOSAL_VERSION_MISMATCH", "Proposal from " .. proposerKey .. " uses addon version " .. tostring(payload.addonVersion) .. "; local version is " .. tostring(self.version) .. ".")
     end
 
-    if payload.proposalRulesetHash and payload.proposalRulesetHash ~= computedHash then
+    if hasDetails and payload.proposalRulesetHash and payload.proposalRulesetHash ~= computedHash then
         self:AddLog("PROPOSAL_HASH_MISMATCH", "Proposal ruleset hash mismatch detected for " .. tostring(proposerKey) .. ".")
     end
 
@@ -1084,8 +1085,9 @@ function SC:ReceiveRunProposal(payload, proposerKey)
         declinedBy = {},
         status = "PENDING",
         proposalType = payload.proposalKind or "RUN",
-        targetPlayerKey = payload.targetPlayerKey,
+        targetPlayerKey = payload.proposalTargetPlayerKey or payload.targetPlayerKey,
         partyAtProposalTime = voterKeys,
+        detailsPending = not hasDetails,
     }
     proposal.acceptedBy[proposerKey] = true
 
@@ -1124,20 +1126,30 @@ function SC:ReceiveRunProposal(payload, proposerKey)
     local sameExisting = db.proposals[proposal.proposalId]
     if sameExisting then
         sameExisting.runName = proposal.runName
-        sameExisting.ruleset = proposal.ruleset
+        if hasDetails then
+            sameExisting.ruleset = proposal.ruleset
+            sameExisting.detailsPending = false
+        end
         sameExisting.rulesetHash = proposal.rulesetHash
         sameExisting.preset = proposal.preset
         sameExisting.partyAtProposalTime = sameExisting.partyAtProposalTime or proposal.partyAtProposalTime
         sameExisting.acceptedBy = sameExisting.acceptedBy or {}
         sameExisting.acceptedBy[proposerKey] = true
+        sameExisting.targetPlayerKey = sameExisting.targetPlayerKey or proposal.targetPlayerKey
         if (sameExisting.status == "PENDING" or sameExisting.status == "ACCEPTED") and db.pendingProposalId ~= sameExisting.proposalId then
             db.pendingProposalId = sameExisting.proposalId
+        end
+        if (not hasDetails) and sameExisting.detailsPending and self.Sync_SendProposalDetailsRequest then
+            self:Sync_SendProposalDetailsRequest(sameExisting.proposalId, proposerKey)
         end
         if self.MasterUI_Refresh then self:MasterUI_Refresh() end
         return
     end
 
     self:StoreProposal(proposal)
+    if not hasDetails and self.Sync_SendProposalDetailsRequest then
+        self:Sync_SendProposalDetailsRequest(proposal.proposalId, proposerKey)
+    end
     if self.PlayUISound then self:PlayUISound("PROPOSAL_RECEIVED") end
     if self.OpenMasterWindow then
         self:OpenMasterWindow("RUN")
@@ -1158,6 +1170,13 @@ function SC:AcceptPendingProposal()
 
     if proposal.proposedBy == playerKey then
         Print("you already proposed this. Waiting for party responses.")
+        return
+    end
+    if proposal.detailsPending then
+        Print("proposal details are still loading. Try again in a moment.")
+        if self.Sync_SendProposalDetailsRequest then
+            self:Sync_SendProposalDetailsRequest(proposal.proposalId, proposal.proposedBy)
+        end
         return
     end
 

@@ -1215,16 +1215,21 @@ local function RefreshAmendmentPanel(frame, amendment, isProposer)
     panel.reason:SetText("Reason: " .. Trunc(amendment.reason or "", 90))
 
     local changeCount = 0
-    for _, ruleName in ipairs(EDITABLE_RULE_ORDER) do
-        local oldVal = amendment.previousRules[ruleName]
-        local newVal = amendment.newRules[ruleName]
-        if newVal ~= nil and tostring(oldVal) ~= tostring(newVal) then
-            changeCount = changeCount + 1
-            if changeCount <= 8 then
-                local label = RULE_DISPLAY_NAMES[ruleName] or ruleName
-                panel.changeLines[changeCount]:SetText(
-                    "- " .. label .. ": " .. FriendlyRuleValue(ruleName, oldVal) .. " -> " .. FriendlyRuleValue(ruleName, newVal)
-                )
+    if amendment.detailsPending then
+        changeCount = 1
+        panel.changeLines[1]:SetText("Loading rule details...")
+    else
+        for _, ruleName in ipairs(EDITABLE_RULE_ORDER) do
+            local oldVal = amendment.previousRules[ruleName]
+            local newVal = amendment.newRules[ruleName]
+            if newVal ~= nil and tostring(oldVal) ~= tostring(newVal) then
+                changeCount = changeCount + 1
+                if changeCount <= 8 then
+                    local label = RULE_DISPLAY_NAMES[ruleName] or ruleName
+                    panel.changeLines[changeCount]:SetText(
+                        "- " .. label .. ": " .. FriendlyRuleValue(ruleName, oldVal) .. " -> " .. FriendlyRuleValue(ruleName, newVal)
+                    )
+                end
             end
         end
     end
@@ -1241,6 +1246,7 @@ local function RefreshAmendmentPanel(frame, amendment, isProposer)
     panel.waitText:SetShown(isProposer)
 
     if not isProposer then
+        panel.acceptBtn:SetEnabled(not amendment.detailsPending)
         panel.acceptBtn:SetScript("OnClick", function()
             if SC.AcceptRuleAmendment then SC:AcceptRuleAmendment(amendment.id) end
             SC:MasterUI_Refresh()
@@ -1388,9 +1394,13 @@ local function RefreshRunPanel(frame)
         local proposer = FormatPlayerLabel(pendingProposal.proposedBy)
         local acceptBlocked = false
         local blockText = nil
+        if pendingProposal.detailsPending then
+            acceptBlocked = true
+            blockText = "Proposal details are still loading."
+        end
         if (not isProposer) and (not acceptedLocally) and active and db and db.run and db.run.ruleset then
             local localHash = SC.GetRulesetHash and SC:GetRulesetHash() or ""
-            if pendingProposal.rulesetHash and pendingProposal.rulesetHash ~= "" and localHash ~= "" and localHash ~= pendingProposal.rulesetHash then
+            if (not pendingProposal.detailsPending) and pendingProposal.rulesetHash and pendingProposal.rulesetHash ~= "" and localHash ~= "" and localHash ~= pendingProposal.rulesetHash then
                 acceptBlocked = true
                 blockText = "Rules do not match."
                 if SC.DescribeRulesetDifferences then
@@ -1431,7 +1441,11 @@ local function RefreshRunPanel(frame)
             end
         else
             if acceptBlocked then
-                frame.start.activeText:SetText("|cfff87171Sync blocked: " .. blockText .. "|r Use /sc conflicts or /sc syncdebug for full details.")
+                if pendingProposal.detailsPending then
+                    frame.start.activeText:SetText("|cffffd100Proposal from " .. proposer .. " received.|r Loading details...")
+                else
+                    frame.start.activeText:SetText("|cfff87171Sync blocked: " .. blockText .. "|r Use /sc conflicts or /sc syncdebug for full details.")
+                end
             elseif pendingProposal.proposalType == "SYNC_RUN" then
                 frame.start.activeText:SetText("|cffffd100Run sync proposal from " .. proposer .. ".|r Review the matching rules below, then Accept or Decline.")
             elseif pendingProposal.proposalType == "ADD_PARTICIPANT" then
