@@ -88,6 +88,7 @@ local EDITABLE_RULE_ORDER = {
     "flightPaths",
     "gearQuality",
     "heirlooms",
+    "enchants",
     "maxLevelGap",
     "maxLevelGapValue",
     "dungeonRepeat",
@@ -256,6 +257,7 @@ local LOG_VIOLATION_LABELS = {
     bank = "Bank",
     consumables = "Consumable",
     death = "Death",
+    enchants = "Enchant",
     flying = "Flying",
     gearQuality = "Gear",
     guildBank = "Guild Bank",
@@ -576,9 +578,13 @@ local function RefreshRunSections(start)
             start.travelSection:ClearAllPoints()
             start.travelSection:SetPoint("TOPLEFT", start.panel, "TOPLEFT", 0, bodyY - (start.accessSection and start.accessSection:GetHeight() or 0) - 12)
         end
-        if start.progressionSection then
-            start.progressionSection:ClearAllPoints()
-            start.progressionSection:SetPoint("TOPLEFT", start.panel, "TOPLEFT", 360, bodyY)
+        if start.gearSection then
+            start.gearSection:ClearAllPoints()
+            start.gearSection:SetPoint("TOPLEFT", start.panel, "TOPLEFT", 360, bodyY)
+        end
+        if start.partyDungeonSection then
+            start.partyDungeonSection:ClearAllPoints()
+            start.partyDungeonSection:SetPoint("TOPLEFT", start.panel, "TOPLEFT", 360, bodyY - (start.gearSection and start.gearSection:GetHeight() or 0) - 12)
         end
     end
 end
@@ -776,6 +782,11 @@ local function GetSelectedCameraMode(start)
     return nil
 end
 
+local CAMERA_MODE_OPTIONS = {
+    { text = "ActionCam", value = "CINEMATIC" },
+    { text = "First Person", value = "FIRST_PERSON" },
+}
+
 local function SetFontStringRGB(fontString, color)
     fontString:SetTextColor(color.r, color.g, color.b)
 end
@@ -861,6 +872,7 @@ local function ApplyStartPreset(frame, preset)
     rules.maxLevelGap = ironman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.maxLevelGapValue = 3
     rules.heirlooms = DISALLOWED_OUTCOME
+    rules.enchants = ironman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.dungeonRepeat = ironman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.instanceWithUnsyncedPlayers = "ALLOWED"
     rules.unsyncedMembers = "ALLOWED"
@@ -892,6 +904,7 @@ local function ApplyStartPreset(frame, preset)
         rules.mounts = "ALLOWED"
         rules.flying = DISALLOWED_OUTCOME
         rules.heirlooms = DISALLOWED_OUTCOME
+        rules.enchants = DISALLOWED_OUTCOME
         rules.consumables = "ALLOWED"
         rules.dungeonRepeat = "ALLOWED"
         rules.instancedPvP = DISALLOWED_OUTCOME
@@ -969,6 +982,7 @@ local RULE_DISPLAY_NAMES = {
     flightPaths    = "Flight Paths",
     gearQuality    = "Gear Limit",
     heirlooms      = "Heirlooms",
+    enchants       = "Enchants",
     maxLevelGap    = "Level Gap Enforcement",
     maxLevelGapValue = "Max Level Gap",
     dungeonRepeat  = "Repeated Dungeons",
@@ -1271,6 +1285,7 @@ end
 
 local function SetRunSetupEnabled(frame, enabled)
     local start = frame.start
+    start.setupEnabled = enabled
 
     start.casualBtn:SetEnabled(enabled)
     start.ironmanBtn:SetEnabled(enabled)
@@ -1286,9 +1301,11 @@ local function SetRunSetupEnabled(frame, enabled)
         if enabled then
             UIDropDownMenu_EnableDropDown(start.groupingDropdown)
             UIDropDownMenu_EnableDropDown(start.gearDropdown)
+            if start.cameraDropdown then UIDropDownMenu_EnableDropDown(start.cameraDropdown) end
         else
             UIDropDownMenu_DisableDropDown(start.groupingDropdown)
             UIDropDownMenu_DisableDropDown(start.gearDropdown)
+            if start.cameraDropdown then UIDropDownMenu_DisableDropDown(start.cameraDropdown) end
         end
     end
 
@@ -2079,11 +2096,13 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.charterSection = CreateRunSection(startPanel, "Run Charter", 0, -18, 690, 96)
     frame.start.accessSection = CreateRunSection(startPanel, "Access and Economy", 0, -126, 330, 228)
     frame.start.travelSection = CreateRunSection(startPanel, "Travel and Camera", 0, -366, 330, 164)
-    frame.start.progressionSection = CreateRunSection(startPanel, "Party, Dungeons, and Gear", 360, -126, 330, 294)
+    frame.start.gearSection = CreateRunSection(startPanel, "Gear and Items", 360, -126, 330, 188)
+    frame.start.partyDungeonSection = CreateRunSection(startPanel, "Party and Dungeons", 360, -326, 330, 176)
     table.insert(frame.start.sections, frame.start.charterSection)
     table.insert(frame.start.sections, frame.start.accessSection)
     table.insert(frame.start.sections, frame.start.travelSection)
-    table.insert(frame.start.sections, frame.start.progressionSection)
+    table.insert(frame.start.sections, frame.start.gearSection)
+    table.insert(frame.start.sections, frame.start.partyDungeonSection)
 
     frame.start.presetLabel = CreateLabel(frame.start.charterSection.content, "Presets", 0, -6, "GameFontNormalSmall", 60)
     frame.start.presetLabel:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
@@ -2152,13 +2171,42 @@ function SC:OpenMasterWindow(focusTab)
         y = y - 30
     end
 
-    frame.start.cameraHint = frame.start.travelSection.content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.start.cameraHint:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 0, -94)
-    frame.start.cameraHint:SetTextColor(MUTED_TEXT.r * 0.7, MUTED_TEXT.g * 0.7, MUTED_TEXT.b * 0.7)
-    frame.start.cameraHint:SetText("Camera mode")
-    RegisterRunControl(frame.start, frame.start.cameraHint, frame.start.travelSection)
+    frame.start.cameraRuleCheck = CreateFrame("CheckButton", nil, frame.start.travelSection.content, "UICheckButtonTemplate")
+    frame.start.cameraRuleCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 0, -96)
+    frame.start.cameraRuleCheck.label = frame.start.cameraRuleCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.start.cameraRuleCheck.label:SetPoint("LEFT", frame.start.cameraRuleCheck, "RIGHT", 2, 0)
+    frame.start.cameraRuleCheck.label:SetWidth(136)
+    frame.start.cameraRuleCheck.label:SetJustifyH("LEFT")
+    frame.start.cameraRuleCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+    frame.start.cameraRuleCheck.label:SetText("Require Camera")
+    frame.start.cameraRuleCheck.ruleKey = "firstPersonOnly"
+    frame.start.cameraRuleCheck:SetScript("OnClick", function(btn)
+        if IsActiveRun() and not frame.start.isModifyingRules then
+            local mode = btn:GetChecked() and (GetSelectedCameraMode(frame.start) or "CINEMATIC") or nil
+            if mode and SC.SetCameraMode then
+                SC:SetCameraMode(mode)
+            end
+            SC:MasterUI_Refresh()
+            return
+        end
+        frame.start.selectedCameraMode = btn:GetChecked() and (GetSelectedCameraMode(frame.start) or "CINEMATIC") or nil
+        SetCameraRules(frame.start.selectedRules, frame.start.selectedCameraMode)
+        SC:MasterUI_Refresh()
+    end)
+    RegisterRunControl(frame.start, frame.start.cameraRuleCheck, frame.start.travelSection)
+    frame.start.cameraDropdown = CreateDropdown(frame.start.travelSection.content, "SoftcoreMasterCameraDropdown", CAMERA_MODE_OPTIONS, GetSelectedCameraMode(frame.start) or "CINEMATIC", function(value)
+        frame.start.selectedCameraMode = value
+        if IsActiveRun() and not frame.start.isModifyingRules then
+            if SC.SetCameraMode then SC:SetCameraMode(value) end
+        else
+            SetCameraRules(frame.start.selectedRules, value)
+        end
+        SC:MasterUI_Refresh()
+    end, 116)
+    frame.start.cameraDropdown:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 164, -88)
+    RegisterRunControl(frame.start, frame.start.cameraDropdown, frame.start.travelSection)
     frame.start.firstPersonCheck = CreateFrame("CheckButton", nil, frame.start.travelSection.content, "UICheckButtonTemplate")
-    frame.start.firstPersonCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 0, -116)
+    frame.start.firstPersonCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", -200, -200)
     frame.start.firstPersonCheck.label = frame.start.firstPersonCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.start.firstPersonCheck.label:SetPoint("LEFT", frame.start.firstPersonCheck, "RIGHT", 2, 0)
     frame.start.firstPersonCheck.label:SetWidth(118)
@@ -2185,10 +2233,10 @@ function SC:OpenMasterWindow(focusTab)
         SetCameraRules(frame.start.selectedRules, frame.start.selectedCameraMode)
         SC:MasterUI_Refresh()
     end)
-    RegisterRunControl(frame.start, frame.start.firstPersonCheck, frame.start.travelSection)
+    frame.start.firstPersonCheck:Hide()
 
     frame.start.actionCamCheck = CreateFrame("CheckButton", nil, frame.start.travelSection.content, "UICheckButtonTemplate")
-    frame.start.actionCamCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 158, -116)
+    frame.start.actionCamCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", -200, -200)
     frame.start.actionCamCheck.label = frame.start.actionCamCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.start.actionCamCheck.label:SetPoint("LEFT", frame.start.actionCamCheck, "RIGHT", 2, 0)
     frame.start.actionCamCheck.label:SetWidth(118)
@@ -2215,23 +2263,25 @@ function SC:OpenMasterWindow(focusTab)
         SetCameraRules(frame.start.selectedRules, frame.start.selectedCameraMode)
         SC:MasterUI_Refresh()
     end)
-    RegisterRunControl(frame.start, frame.start.actionCamCheck, frame.start.travelSection)
+    frame.start.actionCamCheck:Hide()
 
-    frame.start.gearLabel = CreateLabel(frame.start.progressionSection.content, "Gear limit", 0, 0, "GameFontNormalSmall", 82)
-    RegisterRunControl(frame.start, frame.start.gearLabel, frame.start.progressionSection)
-    frame.start.gearDropdown = CreateDropdown(frame.start.progressionSection.content, "SoftcoreMasterGearDropdown", GEAR_OPTIONS, frame.start.selectedRules.gearQuality, function(value)
+    frame.start.gearLabel = CreateLabel(frame.start.gearSection.content, "Gear limit", 0, -6, "GameFontNormalSmall", 82)
+    RegisterRunControl(frame.start, frame.start.gearLabel, frame.start.gearSection)
+    frame.start.gearDropdown = CreateDropdown(frame.start.gearSection.content, "SoftcoreMasterGearDropdown", GEAR_OPTIONS, frame.start.selectedRules.gearQuality, function(value)
         frame.start.selectedRules.gearQuality = value
         SC:MasterUI_Refresh()
     end, 145)
-    frame.start.gearDropdown:SetPoint("TOPLEFT", frame.start.progressionSection.content, "TOPLEFT", 92, 8)
-    RegisterRunControl(frame.start, frame.start.gearDropdown, frame.start.progressionSection)
-    frame.start.heirloomCheck = CreateAllowCheckbox(frame.start.progressionSection.content, frame.start.selectedRules, { label = "Allow Heirlooms", key = "heirlooms" }, 0, -40)
-    RegisterRunControl(frame.start, frame.start.heirloomCheck, frame.start.progressionSection)
-    frame.start.consumablesCheck = CreateAllowCheckbox(frame.start.progressionSection.content, frame.start.selectedRules, { label = "Allow Consumables", key = "consumables" }, 0, -70)
-    RegisterRunControl(frame.start, frame.start.consumablesCheck, frame.start.progressionSection)
+    frame.start.gearDropdown:SetPoint("TOPLEFT", frame.start.gearSection.content, "TOPLEFT", 92, -8)
+    RegisterRunControl(frame.start, frame.start.gearDropdown, frame.start.gearSection)
+    frame.start.heirloomCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Heirlooms", key = "heirlooms" }, 0, -52)
+    RegisterRunControl(frame.start, frame.start.heirloomCheck, frame.start.gearSection)
+    frame.start.enchantsCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Enchants", key = "enchants" }, 0, -82)
+    RegisterRunControl(frame.start, frame.start.enchantsCheck, frame.start.gearSection)
+    frame.start.consumablesCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Consumables", key = "consumables" }, 0, -112)
+    RegisterRunControl(frame.start, frame.start.consumablesCheck, frame.start.gearSection)
 
-    frame.start.maxGapCheck = CreateFrame("CheckButton", nil, frame.start.progressionSection.content, "UICheckButtonTemplate")
-    frame.start.maxGapCheck:SetPoint("TOPLEFT", frame.start.progressionSection.content, "TOPLEFT", 0, -118)
+    frame.start.maxGapCheck = CreateFrame("CheckButton", nil, frame.start.partyDungeonSection.content, "UICheckButtonTemplate")
+    frame.start.maxGapCheck:SetPoint("TOPLEFT", frame.start.partyDungeonSection.content, "TOPLEFT", 0, 0)
     frame.start.maxGapCheck.label = frame.start.maxGapCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.start.maxGapCheck.label:SetPoint("LEFT", frame.start.maxGapCheck, "RIGHT", 2, 0)
     frame.start.maxGapCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
@@ -2240,12 +2290,12 @@ function SC:OpenMasterWindow(focusTab)
         frame.start.selectedRules.maxLevelGap = self:GetChecked() and DISALLOWED_OUTCOME or "ALLOWED"
         SC:MasterUI_Refresh()
     end)
-    RegisterRunControl(frame.start, frame.start.maxGapCheck, frame.start.progressionSection)
-    frame.start.maxGapLabel = CreateLabel(frame.start.progressionSection.content, "Max gap", 28, -154, "GameFontNormalSmall", 70)
-    RegisterRunControl(frame.start, frame.start.maxGapLabel, frame.start.progressionSection)
-    frame.start.maxGapBox = CreateFrame("EditBox", nil, frame.start.progressionSection.content, "InputBoxTemplate")
+    RegisterRunControl(frame.start, frame.start.maxGapCheck, frame.start.partyDungeonSection)
+    frame.start.maxGapLabel = CreateLabel(frame.start.partyDungeonSection.content, "Max gap", 28, -36, "GameFontNormalSmall", 70)
+    RegisterRunControl(frame.start, frame.start.maxGapLabel, frame.start.partyDungeonSection)
+    frame.start.maxGapBox = CreateFrame("EditBox", nil, frame.start.partyDungeonSection.content, "InputBoxTemplate")
     frame.start.maxGapBox:SetSize(42, 22)
-    frame.start.maxGapBox:SetPoint("TOPLEFT", frame.start.progressionSection.content, "TOPLEFT", 100, -148)
+    frame.start.maxGapBox:SetPoint("TOPLEFT", frame.start.partyDungeonSection.content, "TOPLEFT", 100, -30)
     frame.start.maxGapBox:SetAutoFocus(false)
     frame.start.maxGapBox:SetNumeric(true)
     frame.start.maxGapBox:SetScript("OnTextChanged", function(self)
@@ -2257,11 +2307,11 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.maxGapBox:SetScript("OnEditFocusLost", function()
         SC:MasterUI_Refresh()
     end)
-    RegisterRunControl(frame.start, frame.start.maxGapBox, frame.start.progressionSection)
-    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(frame.start.progressionSection.content, frame.start.selectedRules, { label = "Allow Repeated Dungeons", key = "dungeonRepeat" }, 0, -188)
-    RegisterRunControl(frame.start, frame.start.dungeonRepeatCheck, frame.start.progressionSection)
-    frame.start.instancedPvPCheck = CreateAllowCheckbox(frame.start.progressionSection.content, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 0, -218)
-    RegisterRunControl(frame.start, frame.start.instancedPvPCheck, frame.start.progressionSection)
+    RegisterRunControl(frame.start, frame.start.maxGapBox, frame.start.partyDungeonSection)
+    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(frame.start.partyDungeonSection.content, frame.start.selectedRules, { label = "Allow Repeated Dungeons", key = "dungeonRepeat" }, 0, -70)
+    RegisterRunControl(frame.start, frame.start.dungeonRepeatCheck, frame.start.partyDungeonSection)
+    frame.start.instancedPvPCheck = CreateAllowCheckbox(frame.start.partyDungeonSection.content, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 0, -100)
+    RegisterRunControl(frame.start, frame.start.instancedPvPCheck, frame.start.partyDungeonSection)
 
     function frame.start:RefreshControls()
         if SC.ApplyGroupingMode then
@@ -2372,6 +2422,7 @@ function SC:OpenMasterWindow(focusTab)
             end
         end
         self.heirloomCheck:SetChecked(not IsDisallowed(self.selectedRules.heirlooms))
+        self.enchantsCheck:SetChecked(not IsDisallowed(self.selectedRules.enchants))
         self.dungeonRepeatCheck:SetChecked(not IsDisallowed(self.selectedRules.dungeonRepeat))
         self.consumablesCheck:SetChecked(not IsDisallowed(self.selectedRules.consumables))
         self.instancedPvPCheck:SetChecked(not IsDisallowed(self.selectedRules.instancedPvP))
@@ -2379,7 +2430,25 @@ function SC:OpenMasterWindow(focusTab)
         local editingCamera = (not active) or self.isModifyingRules or self.isReviewingRuleAmendment
         local cameraRequired = active and (not self.isModifyingRules) and SC.IsCameraModeRequired and SC:IsCameraModeRequired()
         local cameraMode = editingCamera and GetSelectedCameraMode(self) or (SC.GetCameraMode and SC:GetCameraMode())
-        local cameraAvailable = (editingCamera or cameraRequired) and not self.isReviewingRuleAmendment
+        local cameraAvailable = (((self.setupEnabled ~= false) and editingCamera) or cameraRequired) and not self.isReviewingRuleAmendment
+        local cameraRuleOn = IsCameraRuleEnforced(self.selectedRules) or cameraRequired
+        self.cameraRuleCheck:SetChecked(cameraRuleOn)
+        UIDropDownMenu_SetText(self.cameraDropdown, GetOptionText(CAMERA_MODE_OPTIONS, cameraMode or GetSelectedCameraMode(self) or "CINEMATIC"))
+        if UIDropDownMenu_EnableDropDown and UIDropDownMenu_DisableDropDown then
+            if cameraAvailable and cameraRuleOn then
+                UIDropDownMenu_EnableDropDown(self.cameraDropdown)
+            else
+                UIDropDownMenu_DisableDropDown(self.cameraDropdown)
+            end
+        end
+        self.cameraRuleCheck:SetEnabled(((self.setupEnabled ~= false) and editingCamera) and not self.isReviewingRuleAmendment)
+        if highlightingRuleChanges
+            and (tostring(self.draftBaseRules.firstPersonOnly) ~= tostring(self.selectedRules.firstPersonOnly)
+                or tostring(self.draftBaseRules.actionCam) ~= tostring(self.selectedRules.actionCam)) then
+            SetFontStringRGB(self.cameraRuleCheck.label, cameraRuleOn and GREEN_TEXT or RED_TEXT)
+        else
+            SetFontStringRGB(self.cameraRuleCheck.label, BODY_TEXT)
+        end
         self.firstPersonCheck:SetChecked((cameraRequired or IsCameraRuleEnforced(self.selectedRules)) and cameraMode == "FIRST_PERSON")
         self.actionCamCheck:SetChecked((cameraRequired or IsCameraRuleEnforced(self.selectedRules)) and cameraMode == "CINEMATIC")
         ClearCameraCheckboxVisuals(self)

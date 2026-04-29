@@ -32,7 +32,7 @@ Open with `/sc menu`, the minimap button, or the HUD.
 - **Achievements**: account-level leveling, ruleset, and max-level milestones.
 
 When no run is active, the menu focuses on starting a run. When a run is active, it focuses on current status.
-The Run tab groups setup into Run Charter, Access and Economy, Travel and Camera, and Party, Dungeons, and Gear sections. The Run Charter section also includes compact own-character death announcement checkboxes beside the core run options.
+The Run tab groups setup into Run Charter, Access and Economy, Travel and Camera, Gear and Items, and Party and Dungeons sections. Camera enforcement is a single rule with a mode selector for the active camera preference. The Run Charter section also includes compact own-character death announcement checkboxes beside the core run options.
 
 The Ironman preset follows the common WoW Challenges shape and allows flight paths. No-flight-path completion is tracked as a stricter achievement, including the Ironman + no flight paths + camera mode milestone.
 
@@ -120,7 +120,7 @@ Softcore sync is built around current WoW addon-message limits:
 - Common sync payload keys and message types are compacted on the wire while the Lua code keeps readable field names.
 - Proposal and control retries must remain paced. Do not bypass the send queue for chunked messages.
 - Rule serialization must preserve booleans exactly. `false` is a real rule value, not an empty string.
-- Every enforced rule that affects local behavior must be part of the canonical ruleset sync/hash order. Camera rules (`firstPersonOnly`, `actionCam`) are included so a synced run cannot silently enforce camera on one client but not another.
+- Every enforced rule that affects local behavior must be part of the canonical ruleset sync/hash order. Enchants and camera rules (`firstPersonOnly`, `actionCam`) are included so a synced run cannot silently enforce them on one client but not another.
 
 If a party converts to a raid, Softcore stops party sync, clears remote roster display, and expires pending group proposals/amendments instead of applying them late. The local run remains active and locally tracked.
 
@@ -182,7 +182,7 @@ Pending amendments expire after 30 minutes. Late amendment messages are ignored 
 
 Death is permanent for the character.
 
-Non-death disallowed actions generally create violations. Examples include disallowed bank/mail/auction/trade access, movement rules, and equipped gear rules.
+Non-death disallowed actions generally create violations. Examples include disallowed bank/mail/auction/trade access, movement rules, equipped gear rules, and permanently enchanted gear when enchants are disallowed.
 
 Clearing a violation marks it cleared, records who cleared it and when, and preserves the audit trail. Death and fatal/character-fail violations are not clearable.
 
@@ -231,7 +231,7 @@ Boundary behavior:
 - Party proposals, sync proposals, and run invites
 - Party conflicts such as run mismatch, rules mismatch, version mismatch, unsynced members, and level-gap blockers
 - Dungeon repeat state
-- Equipped gear quality and heirloom checks
+- Equipped gear quality, heirloom, and permanent enchant checks
 - Economy/storage/movement/access rule events, including flight path use
 - Local PvP advisory warnings for War Mode, player PvP flagging, and PvP-flagged targets
 - Audit log entries and shared same-run audit events

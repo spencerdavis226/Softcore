@@ -33,7 +33,7 @@ Local character validity and progress should change only from:
 
 - the local character dying
 - the local character triggering a local disallowed action
-- the local character equipping disallowed gear
+- the local character equipping disallowed gear or permanently enchanted gear when enchants are disallowed
 - the local user accepting a proposal
 - the local user applying/accepting a rule amendment
 - the local user retiring, resetting, stopping, or starting a run
@@ -155,6 +155,7 @@ Examples of violations:
 - opening a trade window when disallowed
 - using disallowed mounts or flying
 - equipping disallowed gear
+- equipping permanently enchanted gear when enchants are disallowed
 
 Examples of group blockers/conflicts:
 

@@ -19,6 +19,7 @@ local RESTRICTION_RULES = {
     { id = "no_flying", name = "Grounded Champion", rule = "flying", label = "Flying Mounts" },
     { id = "no_flight_paths", name = "No Flight Plan", rule = "flightPaths", label = "Flight Paths" },
     { id = "no_heirlooms", name = "No Hand-Me-Downs", rule = "heirlooms", label = "Heirlooms" },
+    { id = "no_enchants", name = "Unenchanted", rule = "enchants", label = "Enchants" },
     { id = "no_consumables", name = "No Crutches", rule = "consumables", label = "Consumables" },
     { id = "level_gap_enforced", name = "Kept Together", rule = "maxLevelGap", description = "Reach max level with Level Gap Enforcement enabled from run start through max level." },
     { id = "no_repeat_dungeons", name = "One Clear Only", rule = "dungeonRepeat", label = "Repeated Dungeons" },
@@ -155,6 +156,7 @@ local function IsIronmanRules(rules)
         "mounts",
         "flying",
         "heirlooms",
+        "enchants",
         "consumables",
         "dungeonRepeat",
     }

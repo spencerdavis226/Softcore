@@ -51,6 +51,23 @@ local function GetItemInfoCompat(itemLink)
     return GetItemInfo(itemLink)
 end
 
+local function GetPermanentEnchantId(itemLink)
+    local itemString = string.match(tostring(itemLink or ""), "item:([^|]+)")
+    if not itemString then return nil end
+
+    local fields = {}
+    for field in string.gmatch(itemString .. ":", "([^:]*):") do
+        table.insert(fields, field)
+    end
+
+    local enchantId = tonumber(fields[2] or 0) or 0
+    if enchantId == 0 then
+        return nil
+    end
+
+    return enchantId
+end
+
 local function GetEquippedItems()
     local items = {}
 
@@ -64,6 +81,7 @@ local function GetEquippedItems()
                 link = itemLink,
                 name = name or itemLink,
                 quality = quality,
+                enchantId = GetPermanentEnchantId(itemLink),
             })
         end
     end
@@ -139,6 +157,14 @@ function SC:GetInvalidEquippedItems()
                 reason = "Disallowed quality for " .. tostring(gearRule),
             })
         end
+
+        if item.enchantId and self:GetRule("enchants") ~= "ALLOWED" then
+            table.insert(invalid, {
+                rule = "enchants",
+                item = item,
+                reason = "Permanent enchant applied",
+            })
+        end
     end
 
     return invalid
@@ -164,6 +190,11 @@ function SC:ScanEquippedGear(force)
                 self:ApplyRuleOutcome("heirlooms", {
                     playerKey = self:GetPlayerKey(),
                     detail = "Heirloom equipped: " .. tostring(item.link),
+                })
+            elseif invalid.rule == "enchants" then
+                self:ApplyRuleOutcome("enchants", {
+                    playerKey = self:GetPlayerKey(),
+                    detail = "Enchanted item equipped: " .. tostring(item.link),
                 })
             else
                 local db = GetDB()
@@ -436,6 +467,7 @@ function SC:PrintGearStatus()
     local rules = (GetDB() and GetDB().run and GetDB().run.ruleset) or {}
     Print("gearQuality = " .. tostring(rules.gearQuality))
     Print("heirlooms = " .. tostring(rules.heirlooms))
+    Print("enchants = " .. tostring(rules.enchants))
 
     local invalid = self:GetInvalidEquippedItems()
     if #invalid == 0 then
@@ -446,7 +478,11 @@ function SC:PrintGearStatus()
     Print("invalid equipped items:")
     for _, itemInfo in ipairs(invalid) do
         local item = itemInfo.item
-        Print(tostring(item.link) .. " - " .. itemInfo.reason .. " (quality " .. tostring(QUALITY_NAMES[item.quality] or item.quality or "unknown") .. ")")
+        local suffix = "quality " .. tostring(QUALITY_NAMES[item.quality] or item.quality or "unknown")
+        if item.enchantId then
+            suffix = suffix .. ", enchant " .. tostring(item.enchantId)
+        end
+        Print(tostring(item.link) .. " - " .. itemInfo.reason .. " (" .. suffix .. ")")
     end
 end
 

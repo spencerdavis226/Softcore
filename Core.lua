@@ -212,6 +212,7 @@ local function CreateDefaultRuleset()
         dungeonRepeat = "LOG_ONLY",
         gearQuality = "ALLOWED",
         heirlooms = "WARNING",
+        enchants = "ALLOWED",
         instanceWithUnsyncedPlayers = "WARNING",
         bank = "WARNING",
         warbandBank = "WARNING",
@@ -1866,6 +1867,7 @@ function SC:PrintRules()
         "dungeonRepeat",
         "gearQuality",
         "heirlooms",
+        "enchants",
         "instanceWithUnsyncedPlayers",
         "bank",
         "warbandBank",
@@ -2047,6 +2049,7 @@ local function BuildDebugExportText()
     AddCsvLine(lines, "Run", "Status", SC:GetStatusText())
     AddCsvLine(lines, "Run", "Party Status", SC:GetPartyStatus())
     AddCsvLine(lines, "Run", "Ruleset Hash", SC.GetRulesetHash and SC:GetRulesetHash() or "unknown")
+    AddCsvLine(lines, "Rule", "enchants", run.ruleset and run.ruleset.enchants or "")
     AddCsvLine(lines, "Rule", "firstPersonOnly", run.ruleset and run.ruleset.firstPersonOnly or "")
     AddCsvLine(lines, "Rule", "actionCam", run.ruleset and run.ruleset.actionCam or "")
     AddCsvLine(lines, "Rule", "cameraMode", run.cameraMode or "")

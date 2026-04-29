@@ -47,6 +47,7 @@ local function GetRulesetSyncOrder(self)
         "dungeonRepeat",
         "gearQuality",
         "heirlooms",
+        "enchants",
         "instanceWithUnsyncedPlayers",
         "bank",
         "warbandBank",
@@ -83,6 +84,7 @@ local RULE_WIRE_KEYS = {
     dungeonRepeat = "dr",
     gearQuality = "gq",
     heirlooms = "he",
+    enchants = "en",
     instanceWithUnsyncedPlayers = "iu",
     bank = "ba",
     warbandBank = "wb",
@@ -328,6 +330,7 @@ local function ProposalSummary(proposal)
         .. "  Trade: " .. FriendlyAllowed(proposal.ruleset.trade)
         .. "\nGear: " .. FriendlyGear(proposal.ruleset.gearQuality)
         .. "  Heirlooms: " .. FriendlyAllowed(proposal.ruleset.heirlooms)
+        .. "  Enchants: " .. FriendlyAllowed(proposal.ruleset.enchants)
 end
 
 local function PrintRuleDifferences(self, localRuleset, remoteRuleset)
