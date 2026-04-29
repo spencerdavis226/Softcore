@@ -271,7 +271,7 @@ Skip doc edits only for **pure refactors** with no observable behavior and no ar
 
 ## Commit Discipline
 
-After each working feature or bug fix, summarize changed files and commit.
+After each working feature or bug fix, summarize changed files, commit, and push the branch. Treat this as the user's standing preference for this repository unless they explicitly ask not to commit or push for a particular change.
 
 If the work changed architecture, sync, persistence, UI surfaces, or player-visible commands, **include the documentation updates above in the same commit**.
 

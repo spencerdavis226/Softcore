@@ -266,6 +266,7 @@ local function GetMessagePriority(messageType)
     if messageType == "FULL_STATE_REQUEST" or messageType == "FULL_STATE_RESPONSE" then return 3 end
     if messageType == "HELLO" then return 3 end
     if messageType == "PROPOSAL_ACCEPT" or messageType == "PROPOSAL_DECLINE" then return 3 end
+    if messageType == "AMENDMENT_PROPOSE" then return 3 end
     if messageType == "AMENDMENT_ACCEPT" or messageType == "AMENDMENT_DECLINE" then return 3 end
     if messageType == "PROPOSAL" then return 3 end
     if messageType == "PARTY_LOG" then return 4 end
@@ -991,7 +992,7 @@ function SC:Sync_SendProposal(proposalType, proposalId)
 end
 
 function SC:Sync_SendAmendmentProposal(amendment)
-    SendPayloadWithRepeats({
+    local payload = {
         type = "AMENDMENT_PROPOSE",
         amendmentId = amendment.id,
         runId = amendment.runId,
@@ -1001,7 +1002,21 @@ function SC:Sync_SendAmendmentProposal(amendment)
         fullRulesProposal = amendment.fullRulesProposal and "1" or "0",
         proposedBy = amendment.proposedBy or "",
         proposedAt = tostring(amendment.proposedAt or time()),
-    }, 2)
+    }
+
+    SendPayload(payload, {
+        priority = 3,
+    })
+
+    if C_Timer and C_Timer.After then
+        C_Timer.After(PROPOSAL_RESEND_SECONDS, function()
+            if amendment.status == "PENDING" then
+                SendPayload(payload, {
+                    priority = 3,
+                })
+            end
+        end)
+    end
 end
 
 function SC:Sync_SendAmendmentApplied(amendment)
