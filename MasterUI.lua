@@ -2179,15 +2179,16 @@ function SC:OpenMasterWindow(focusTab)
     local charterLabelWidth = 56
     local charterControlX = charterLeftX + 58
     local charterRightControlX = 156
-    -- Announce row spans full content width so "Announce Death" occupies the left column
-    -- and the channel checkboxes sit in the right column with clear separation.
-    -- Group step: checkbox(26) + label_gap + auto_label(~30 max) + inter_group(12) ≈ 72px.
-    local charterDeathControlX = charterRightX   -- first checkbox at the right-column start
+    -- Announce row is in the right column. "Announce Death" label sits at x=0 and the
+    -- checkboxes start just after it. Group step: checkbox(26) + label_gap(4) +
+    -- auto_label(~27 max) + inter_group(15) = 72px. First checkbox follows the label
+    -- (width 120) + gap (4) = x 124.
+    local charterDeathControlX = 124
     local charterDeathGroupWidth = 72
     local rowOneY = 0
     local rowTwoY = -runLayout.ROW_HEIGHT
     local charterModeRow = runLayout:CreateRow(frame.start.charterSection.content, charterRightX, rowOneY, runLayout.COLUMN_WIDTH)
-    local charterAnnounceRow = runLayout:CreateRow(frame.start.charterSection.content, 0, rowTwoY, runLayout.CONTENT_WIDTH)
+    local charterAnnounceRow = runLayout:CreateRow(frame.start.charterSection.content, charterRightX, rowTwoY, runLayout.COLUMN_WIDTH)
 
     frame.start.presetLabel = CreateLabel(frame.start.charterSection.content, "Presets", charterLeftX, rowOneY - 4, "GameFontNormalSmall", charterLabelWidth)
     frame.start.presetLabel:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
