@@ -17,7 +17,7 @@ The master menu is the primary interface. Group run proposals, run sync proposal
 Current menu tabs:
 
 - `Overview`: local run status, party status, participant snapshot, run ID, elapsed time, deaths, and active violation count (no Overview resync control; use `/sc resync` or Run tab Party Sync)
-- `Run`: start a run, review locked active rules in lightweight native-WoW styled rule groups, review highlighted rule amendment proposals in the normal rules layout, stop/reset a run, and use one shared action slot that shows Party Sync while party sync work/blockers exist or Modify Rules when the party is synced/local-only; do not use a top detail banner to explain run/proposal state
+- `Run`: start a run, review locked active rules in lightweight native-WoW styled rule groups on a consistent two-column grid, review highlighted rule amendment proposals in the normal rules layout, stop/reset a run, and use one shared action slot that shows Party Sync while party sync work/blockers exist or Modify Rules when the party is synced/local-only; do not use a top detail banner to explain run/proposal state
 - `Violations`: active clearable issues
 - `Log`: audit history, newest first
 

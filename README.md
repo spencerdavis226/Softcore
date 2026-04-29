@@ -32,7 +32,7 @@ Open with `/sc menu`, the minimap button, or the HUD.
 - **Achievements**: account-level leveling, ruleset, and max-level milestones.
 
 When no run is active, the menu focuses on starting a run. When a run is active, it focuses on current status.
-The Run tab groups setup into Run Charter, Access and Economy, Travel and Camera, Gear and Items, and Party and Dungeons sections. Camera enforcement is a single rule with a mode selector for the active camera preference. Gear restriction uses a checkbox; when unchecked, any gear quality is allowed, and when checked, the dropdown selects the limit. The Run Charter section also includes compact own-character death announcement checkboxes beside the core run options.
+The Run tab groups setup into Run Charter, Access and Economy, Travel and Camera, Gear and Items, and Party and Dungeons sections using a consistent two-column rule grid. Camera enforcement is a single rule with a mode selector for the active camera preference. Gear restriction uses a checkbox; when unchecked, any gear quality is allowed, and when checked, the dropdown selects the limit. The Run Charter section also includes compact own-character death announcement checkboxes beside the core run options.
 
 The Ironman preset follows the common WoW Challenges shape and allows flight paths. No-flight-path completion is tracked as a stricter achievement, including the Ironman + no flight paths + camera mode milestone.
 
