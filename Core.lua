@@ -558,6 +558,43 @@ function SC:CreateProposalId()
     return CreateStableId("proposal")
 end
 
+local function IsRuleTrackedInRunRuleset(ruleset, ruleKey)
+    if not ruleset or not ruleKey then
+        return false
+    end
+    local v = ruleset[ruleKey]
+    return v ~= nil and v ~= "ALLOWED" and v ~= false
+end
+
+--- Whether a stored log entry should appear in the master menu Log tab and /sc log chat output.
+--- Full history remains in SavedVariables and CSV/debug exports.
+function SC:ShouldDisplayLogEntryInUI(entry)
+    local kind = tostring(entry and entry.kind or "")
+    local db = EnsureDatabase()
+    local ruleset = db.run and db.run.ruleset
+
+    if kind == "PET_BATTLE_STARTED" or kind == "PET_BATTLE_ENDED" then
+        return false
+    end
+
+    if kind == "FORCED_MOVEMENT" or kind == "FORCED_MOVEMENT_ENDED" then
+        return IsRuleTrackedInRunRuleset(ruleset, "flightPaths")
+            or IsRuleTrackedInRunRuleset(ruleset, "mounts")
+            or IsRuleTrackedInRunRuleset(ruleset, "flying")
+    end
+
+    if kind == "LEVEL_GAP_EXCEEDED" then
+        return IsRuleTrackedInRunRuleset(ruleset, "maxLevelGap")
+    end
+
+    if kind == "INSTANCE_ENTERED" then
+        return IsRuleTrackedInRunRuleset(ruleset, "dungeonRepeat")
+            or IsRuleTrackedInRunRuleset(ruleset, "instanceWithUnsyncedPlayers")
+    end
+
+    return true
+end
+
 function SC:AddLog(kind, message, extra)
     local db = EnsureDatabase()
     local logEntryId = CreateStableId("log")
@@ -1910,9 +1947,16 @@ function SC:PrintLog()
     end
 
     Print("recent event log:")
+    local printed = 0
     for index = math.max(1, #db.eventLog - 9), #db.eventLog do
         local entry = db.eventLog[index]
-        Print(FormatTime(entry.time) .. " [" .. entry.kind .. "] " .. FormatPlayerLabel(entry.actorKey or entry.playerKey) .. ": " .. entry.message)
+        if self:ShouldDisplayLogEntryInUI(entry) then
+            Print(FormatTime(entry.time) .. " [" .. entry.kind .. "] " .. FormatPlayerLabel(entry.actorKey or entry.playerKey) .. ": " .. entry.message)
+            printed = printed + 1
+        end
+    end
+    if printed == 0 then
+        Print("(no entries in this window match the current run rules display filter.)")
     end
 end
 

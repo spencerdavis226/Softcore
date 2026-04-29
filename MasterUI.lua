@@ -190,6 +190,8 @@ local LOG_HIDDEN_EVENTS = {
 local LOG_EVENT_DISPLAY = {
     ACHIEVEMENT_EARNED = { label = "Achievement", group = "achievement" },
     DEATH = { label = "Death", group = "failure" },
+    FORCED_MOVEMENT = { label = "Forced Movement", group = "system" },
+    FORCED_MOVEMENT_ENDED = { label = "Forced Movement ..", group = "system" },
     GROUP_ROSTER = { label = "Group Changed", group = "party" },
     INSTANCE_ENTERED = { label = "Instance", group = "world" },
     LEVEL_GAP_EXCEEDED = { label = "Level Gap", group = "party" },
@@ -249,7 +251,14 @@ local function FormatLogEvent(entry)
 end
 
 local function ShouldShowLogEntry(entry)
-    return not LOG_HIDDEN_EVENTS[tostring(entry and entry.kind or "")]
+    local kind = tostring(entry and entry.kind or "")
+    if LOG_HIDDEN_EVENTS[kind] then
+        return false
+    end
+    if SC.ShouldDisplayLogEntryInUI and not SC:ShouldDisplayLogEntryInUI(entry) then
+        return false
+    end
+    return true
 end
 
 local function GetVisibleLogEntries(log)

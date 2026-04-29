@@ -28,7 +28,7 @@ Open with `/sc menu`, the minimap button, or the HUD.
 - **Overview**: local run status, party status, participants, run ID, elapsed time, deaths, and active violation count.
 - **Run**: start a run, review locked active rules in native-WoW styled rule groups, stop a run, invite party members, propose run sync, or modify rules. Proposal/amendment state is shown through the visible rule review and footer actions rather than a top detail banner.
 - **Violations**: active clearable issues with one-click Clear where allowed.
-- **Log**: audit history, newest first.
+- **Log**: audit history, newest first. The menu and `/sc log` omit entries that are not relevant to your current rules (for example pet battles, taxi/vehicle notes when movement rules are fully allowed, instance entries when no dungeon/unsynced-instance rules apply). Exports still include the full stored log.
 - **Achievements**: account-level leveling, ruleset, and max-level milestones.
 
 When no run is active, the menu focuses on starting a run. When a run is active, it focuses on current status.
@@ -138,7 +138,7 @@ Raid groups remain local-only. Raid and scenario entries are logged as audit con
 
 ## Graceful World Mechanics
 
-Pet battles are allowed by default. Starting and ending a pet battle is logged locally for audit context and does not create a violation.
+Pet battles are allowed by default and do not create a violation. They are still written to the stored audit log for exports but are hidden in the Log tab and `/sc log` as non-ruleset noise.
 
 Quest vehicles, vehicle UI, override action bars, taxis, and forced movement are allowed by default. While those states are active, Softcore suppresses mount/flying rule outcomes so normal quest mechanics and forced flights do not create false violations. Player-selected flight paths are still detected through the taxi-node action when that rule is enabled.
 
