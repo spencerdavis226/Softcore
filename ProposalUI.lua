@@ -12,6 +12,7 @@ local PARTY_SYNC_CONTINUE_SECONDS = 0.75
 local PARTY_SYNC_ACK_CONTINUE_SECONDS = 0.35
 local PARTY_SYNC_RESYNC_WAIT_SECONDS = 4
 local PARTY_SYNC_RESYNC_ATTEMPTS = 3
+local PARTY_SYNC_GOVERNANCE_SETTLE_SECONDS = 12
 
 local function FriendlyGroupingMode(value)
     if value == "SOLO_SELF_FOUND" then
@@ -653,6 +654,17 @@ local function HasPendingRuleAmendment(db)
     return false
 end
 
+local function HasRecentRuleGovernance(db)
+    local now = time()
+    for _, amendment in ipairs(db and db.ruleAmendments or {}) do
+        local settledAt = amendment.appliedAt or amendment.declinedAt or amendment.expiredAt or amendment.noChangesAt
+        if settledAt and now - tonumber(settledAt) <= PARTY_SYNC_GOVERNANCE_SETTLE_SECONDS then
+            return true
+        end
+    end
+    return false
+end
+
 local function AddPartySyncVoter(voters, playerKey)
     if playerKey and playerKey ~= "" then
         voters[playerKey] = true
@@ -738,7 +750,7 @@ function SC:PartySync_ContinuePlan(reason)
         return nil
     end
 
-    local route = self:GetPartySyncAction()
+    local route = self:GetPartySyncAction(true)
     if self.TraceDebug then
         self:TraceDebug("PARTY_SYNC_CONTINUE", {
             reason = reason,
@@ -773,7 +785,7 @@ function SC:PartySync_ContinuePlan(reason)
     return self:RunPartySyncAction(true)
 end
 
-function SC:GetPartySyncAction()
+function SC:GetPartySyncAction(allowActivePlan)
     local db = GetDB()
     if IsInRaid() then
         return {
@@ -797,6 +809,15 @@ function SC:GetPartySyncAction()
         }
     end
 
+    local activePlan = db.partySyncPlan
+    if (not allowActivePlan) and activePlan and activePlan.active and activePlan.owner == self:GetPlayerKey() then
+        return {
+            action = "BLOCKED",
+            enabled = false,
+            message = "Party Sync is already working. Wait for the current stage to settle, or cancel the visible proposal/amendment.",
+        }
+    end
+
     local pending = self:GetPendingProposal()
     if pending and (pending.status == "PENDING" or pending.status == "ACCEPTED") then
         return {
@@ -810,6 +831,13 @@ function SC:GetPartySyncAction()
             action = "BLOCKED",
             enabled = true,
             message = "Finish or cancel the current rule amendment before starting another party sync.",
+        }
+    end
+    if HasRecentRuleGovernance(db) then
+        return {
+            action = "RESYNC",
+            enabled = true,
+            message = "Rule changes are still settling. Party Sync will request fresh party state before proposing another change.",
         }
     end
 
@@ -939,7 +967,7 @@ function SC:GetPartySyncAction()
 end
 
 function SC:RunPartySyncAction(continueExisting)
-    local route = self:GetPartySyncAction()
+    local route = self:GetPartySyncAction(continueExisting == true)
     if not route or route.action == "HIDDEN" then
         return nil
     end

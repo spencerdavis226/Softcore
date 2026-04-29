@@ -81,7 +81,7 @@ There is no separate HTTP or server “backend.” All multiplayer behavior is *
 - `Sync.lua`: prefix registration, inbound `CHAT_MSG_ADDON`, compact wire key/type aliases, **chunk reassembly** (per-sender buffers that **expire** without applying partial state), **outbound send queue** (token-budget pacing, priority insertion, send failure retries), compact fast status nudges, targeted full-state/proposal/amendment detail request-response metadata, queued status coalescing before higher-priority traffic, delayed bulk party-log sends, **stale send drops** for obsolete queued items, and serialization/chunking to the 255-byte body limit.
 - `Core.lua`: slash commands; **`/sc dc`** (`ClearDebugTrace`) clears the capped in-memory **debug trace** and resets **test-oriented `db.sync` counters** (stale send drops, coalesced status drops, last drop metadata, send failure count/last error, expired chunk buffer count/last expiry). **`/sc dl`** builds the CSV-style export that includes those fields.
 - `Events.lua`: game events that drive periodic **STATUS** heartbeats and other local hooks.
-- `ProposalUI.lua` / `MasterUI.lua`: Run-tab proposal UX; user actions enqueue outbound payloads through `Sync` rather than calling `SendAddonMessage` directly.
+- `ProposalUI.lua` / `MasterUI.lua`: Run-tab proposal UX; user actions enqueue outbound payloads through `Sync` rather than calling `SendAddonMessage` directly. Party Sync treats pending governance and just-applied rule changes as settling states, and detail-loading accept buttons become retry actions instead of dead ends.
 
 **Outbound path**
 
@@ -128,6 +128,8 @@ Current behavior:
 - Separate active runs can align only through explicit Party Sync routing to a run sync proposal for the active run cohort; one Party Sync click should automatically continue to later stages after required approvals settle.
 - Active players can invite party members through Party Sync routing to a party invite proposal after active-run conflicts are resolved.
 - Ruleset mismatches route through Party Sync to a full-local-rules amendment proposal notice for active run members first; receivers request details, compute the review diff against their own rules, and cannot accept until the details arrive.
+- If a full-local-rules amendment detail response has no receiver-side diff, the receiver clears the pending detail state and acknowledges the amendment instead of leaving the Run tab in a loading state.
+- While a proposal/amendment is pending or a rule change just settled, Party Sync should not start a second governance action; it should wait, request fresh state, or expose cancel/decline/retry controls.
 - Party Sync blocks members who never respond to Softcore addon messages after the initial grace period; they must install/enable the addon or leave the party before inclusion.
 - Party Sync may also route stale/unsynced display state to a targeted full-state resync without mutating local run state; fresh responses should advance the active Party Sync plan quickly, with retry timers only as fallback.
 - Mid-run rules change through `Modify Rules` and grouped amendment acceptance.

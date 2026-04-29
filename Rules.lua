@@ -180,6 +180,14 @@ local function CountKeys(values)
     return count
 end
 
+local function MarkAmendmentNoOp(amendment, reason)
+    amendment.status = "NO_CHANGES"
+    amendment.detailsPending = false
+    amendment.detailsReceivedAt = time()
+    amendment.noChangesAt = amendment.detailsReceivedAt
+    amendment.noChangesReason = reason or "No local rule changes were needed."
+end
+
 function SC:ClearStaleRuleAmendments()
     local db = GetDB()
     local changed = false
@@ -629,6 +637,20 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
                     end
                     newRules = diffRules
                     if not next(newRules) then
+                        MarkAmendmentNoOp(existing, "Full-rules amendment already matched local rules.")
+                        if self.TraceDebug then
+                            self:TraceDebug("AMENDMENT_DETAILS_NO_CHANGES", {
+                                amendmentId = existing.id,
+                            })
+                        end
+                        self:AddLog("RULE_AMENDMENT_NO_CHANGES", "Rule amendment already matched local rules.", {
+                            amendmentId = existing.id,
+                        })
+                        if self.Sync_SendProposal then
+                            self:Sync_SendProposal("AMENDMENT_ACCEPT", existing.id)
+                        end
+                        if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+                        if self.HUD_Refresh then self:HUD_Refresh() end
                         return
                     end
                 end
@@ -673,6 +695,18 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
         end
         newRules = diffRules
         if not next(newRules) then
+            if self.TraceDebug then
+                self:TraceDebug("AMENDMENT_NOTICE_NO_CHANGES", {
+                    amendmentId = amendmentId,
+                    senderKey = senderKey,
+                })
+            end
+            self:AddLog("RULE_AMENDMENT_NO_CHANGES", "Rule amendment already matched local rules.", {
+                amendmentId = amendmentId,
+            })
+            if self.Sync_SendProposal then
+                self:Sync_SendProposal("AMENDMENT_ACCEPT", amendmentId)
+            end
             return
         end
     end

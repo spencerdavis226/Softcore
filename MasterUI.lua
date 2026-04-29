@@ -1246,7 +1246,8 @@ local function RefreshAmendmentPanel(frame, amendment, isProposer)
     panel.waitText:SetShown(isProposer)
 
     if not isProposer then
-        panel.acceptBtn:SetEnabled(not amendment.detailsPending)
+        panel.acceptBtn:SetText(amendment.detailsPending and "Retry Details" or "Accept")
+        panel.acceptBtn:SetEnabled(true)
         panel.acceptBtn:SetScript("OnClick", function()
             if SC.AcceptRuleAmendment then SC:AcceptRuleAmendment(amendment.id) end
             SC:MasterUI_Refresh()
@@ -1256,6 +1257,7 @@ local function RefreshAmendmentPanel(frame, amendment, isProposer)
             SC:MasterUI_Refresh()
         end)
     else
+        panel.acceptBtn:SetText("Accept")
         panel.cancelBtn:SetScript("OnClick", function()
             local db = SC.db or SoftcoreDB
             for _, a in ipairs(db and db.ruleAmendments or {}) do
@@ -1469,7 +1471,8 @@ local function RefreshRunPanel(frame)
         frame.start.applyChangesBtn:Hide()
         frame.start.cancelChangesBtn:Hide()
         frame.start.proposalAcceptBtn:SetShown((not isProposer) and not acceptedLocally)
-        frame.start.proposalAcceptBtn:SetEnabled(not acceptBlocked)
+        frame.start.proposalAcceptBtn:SetText(pendingProposal.detailsPending and "Retry Details" or "Accept")
+        frame.start.proposalAcceptBtn:SetEnabled((not acceptBlocked) or pendingProposal.detailsPending)
         frame.start.proposalDeclineBtn:SetShown((not isProposer) and not acceptedLocally)
         frame.start.proposalDeclineBtn:SetEnabled(true)
         frame.start.proposalCancelBtn:SetShown(isProposer or acceptedLocally)
@@ -1572,6 +1575,7 @@ local function RefreshRunPanel(frame)
     if frame.start.proposalDeclineBtn then frame.start.proposalDeclineBtn:SetScript("OnClick", nil) end
     if frame.start.proposalCancelBtn then frame.start.proposalCancelBtn:SetScript("OnClick", nil) end
     if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:SetEnabled(true) end
+    if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:SetText("Accept") end
     if frame.start.proposalDeclineBtn then frame.start.proposalDeclineBtn:SetEnabled(true) end
     if frame.start.proposalCancelBtn then frame.start.proposalCancelBtn:SetEnabled(true) end
     SetRunSetupEnabled(frame, (not active) or modifying)
@@ -2370,8 +2374,8 @@ function SC:OpenMasterWindow(focusTab)
             GameTooltip:AddLine(route.message, 0.94, 0.86, 0.68, true)
         end
         GameTooltip:AddLine("One click starts a staged sync plan. Required member approvals still use the Run tab.", 0.68, 0.56, 0.38, true)
-        GameTooltip:AddLine("After each accepted stage, Softcore waits about 2 seconds for addon messages to settle, then continues automatically.", 0.68, 0.56, 0.38, true)
-        GameTooltip:AddLine("If state is stale, Softcore may wait about 12 seconds for a full-state response before continuing.", 0.68, 0.56, 0.38, true)
+        GameTooltip:AddLine("After each accepted stage, Softcore waits briefly for addon messages to settle, then continues automatically.", 0.68, 0.56, 0.38, true)
+        GameTooltip:AddLine("If state is stale, Softcore requests fresh state before proposing another change.", 0.68, 0.56, 0.38, true)
         GameTooltip:Show()
     end)
     frame.start.partySyncBtn:SetScript("OnLeave", function()
