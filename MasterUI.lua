@@ -2130,8 +2130,8 @@ function SC:OpenMasterWindow(focusTab)
 
     local charterLeftX = 0
     local charterRightX = runLayout.CONTENT_WIDTH - 292
-    local charterLabelWidth = 64
-    local charterControlX = charterLeftX + 74
+    local charterLabelWidth = 56
+    local charterControlX = charterLeftX + 58
     local charterRightControlX = charterRightX + 92
     local rowOneY = 0
     local rowTwoY = -36
@@ -2343,11 +2343,12 @@ function SC:OpenMasterWindow(focusTab)
         SC:MasterUI_Refresh()
     end)
     RegisterRunControl(frame.start, frame.start.maxGapCheck, frame.start.partyDungeonSection)
-    frame.start.maxGapLabel = CreateLabel(frame.start.partyDungeonSection.content, "Max gap", 158, -4, "GameFontNormalSmall", 62)
+    frame.start.maxGapLabel = CreateLabel(frame.start.partyDungeonSection.content, "Gap", 214, -4, "GameFontHighlightSmall", 42)
+    frame.start.maxGapLabel:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
     RegisterRunControl(frame.start, frame.start.maxGapLabel, frame.start.partyDungeonSection)
     frame.start.maxGapBox = CreateFrame("EditBox", nil, frame.start.partyDungeonSection.content, "InputBoxTemplate")
     frame.start.maxGapBox:SetSize(42, 22)
-    frame.start.maxGapBox:SetPoint("TOPLEFT", frame.start.partyDungeonSection.content, "TOPLEFT", 224, 0)
+    frame.start.maxGapBox:SetPoint("TOPLEFT", frame.start.partyDungeonSection.content, "TOPLEFT", 258, 0)
     frame.start.maxGapBox:SetAutoFocus(false)
     frame.start.maxGapBox:SetNumeric(true)
     frame.start.maxGapBox:SetScript("OnTextChanged", function(self)
@@ -2360,9 +2361,9 @@ function SC:OpenMasterWindow(focusTab)
         SC:MasterUI_Refresh()
     end)
     RegisterRunControl(frame.start, frame.start.maxGapBox, frame.start.partyDungeonSection)
-    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(frame.start.partyDungeonSection.content, frame.start.selectedRules, { label = "Allow Repeated Dungeons", key = "dungeonRepeat" }, 0, -runLayout.ROW_HEIGHT - 10)
+    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(frame.start.partyDungeonSection.content, frame.start.selectedRules, { label = "Allow Repeated Dungeons", key = "dungeonRepeat" }, 0, -runLayout.ROW_HEIGHT)
     RegisterRunControl(frame.start, frame.start.dungeonRepeatCheck, frame.start.partyDungeonSection)
-    frame.start.instancedPvPCheck = CreateAllowCheckbox(frame.start.partyDungeonSection.content, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 0, -(runLayout.ROW_HEIGHT * 2) - 10)
+    frame.start.instancedPvPCheck = CreateAllowCheckbox(frame.start.partyDungeonSection.content, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 0, -(runLayout.ROW_HEIGHT * 2))
     RegisterRunControl(frame.start, frame.start.instancedPvPCheck, frame.start.partyDungeonSection)
 
     function frame.start:RefreshControls()
@@ -2423,7 +2424,7 @@ function SC:OpenMasterWindow(focusTab)
                 if highlightingRuleChanges and tostring(self.draftBaseRules.maxLevelGapValue) ~= tostring(self.selectedRules.maxLevelGapValue) then
                     SetFontStringRGB(self.maxGapLabel, GREEN_TEXT)
                 else
-                    SetFontStringRGB(self.maxGapLabel, BODY_TEXT)
+                    SetFontStringRGB(self.maxGapLabel, MUTED_TEXT)
                 end
             elseif highlightingRuleChanges then
                 local baseVal = self.draftBaseRules.maxLevelGapValue
@@ -2431,10 +2432,10 @@ function SC:OpenMasterWindow(focusTab)
                 if tostring(baseVal) ~= tostring(curVal) then
                     SetFontStringRGB(self.maxGapLabel, GREEN_TEXT)
                 else
-                    SetFontStringRGB(self.maxGapLabel, BODY_TEXT)
+                    SetFontStringRGB(self.maxGapLabel, MUTED_TEXT)
                 end
             else
-                SetFontStringRGB(self.maxGapLabel, BODY_TEXT)
+                SetFontStringRGB(self.maxGapLabel, MUTED_TEXT)
             end
         end
         if self.groupingLabel then
