@@ -125,9 +125,10 @@ Run proposals, run sync proposals, party invites, and rule amendments are explic
 Current behavior:
 
 - Group run start creates a Run-tab proposal.
-- Separate active runs can align only through explicit Party Sync routing to a run sync proposal.
-- Active players can invite party members through Party Sync routing to a party invite proposal.
-- Ruleset mismatches can route through Party Sync to a rule amendment proposal using the local player's differing rule values.
+- Separate active runs can align only through explicit Party Sync routing to a run sync proposal for the active run cohort; one Party Sync click should automatically continue to later stages after required approvals settle.
+- Active players can invite party members through Party Sync routing to a party invite proposal after active-run conflicts are resolved.
+- Ruleset mismatches route through Party Sync to a full-local-rules amendment proposal for active run members first; receivers compute the review diff against their own rules before accepting or declining.
+- Party Sync blocks members who never respond to Softcore addon messages after the initial grace period; they must install/enable the addon or leave the party before inclusion.
 - Party Sync may also route stale/unsynced display state to a full-state resync without mutating local run state.
 - Mid-run rules change through `Modify Rules` and grouped amendment acceptance.
 - Pending proposals expire after 30 minutes.

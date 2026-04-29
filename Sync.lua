@@ -116,6 +116,15 @@ local function Unescape(value)
     end)
 end
 
+local function SerializeKeySet(keys)
+    local parts = {}
+    for key in pairs(keys or {}) do
+        table.insert(parts, tostring(key))
+    end
+    table.sort(parts)
+    return table.concat(parts, ";")
+end
+
 local function Encode(payload)
     local parts = {}
 
@@ -880,6 +889,7 @@ function SC:Sync_SendAmendmentProposal(amendment)
         newRules = self.SerializePartialRules and self:SerializePartialRules(amendment.newRules) or "",
         previousRules = self.SerializePartialRules and self:SerializePartialRules(amendment.previousRules) or "",
         reason = amendment.reason or "",
+        fullRulesProposal = amendment.fullRulesProposal and "1" or "0",
         proposedBy = amendment.proposedBy or "",
         proposedAt = tostring(amendment.proposedAt or time()),
     }, 2)
@@ -967,6 +977,7 @@ function SC:Sync_SendRunProposal(proposal)
         ruleset = self:SerializeRuleset(proposal.ruleset),
         rulesetHash = proposal.rulesetHash,
         proposalRulesetHash = proposal.rulesetHash,
+        voterKeys = SerializeKeySet(proposal.partyAtProposalTime),
     }
     local sent = SendPayload(payload)
     if C_Timer and C_Timer.After then

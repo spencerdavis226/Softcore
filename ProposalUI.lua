@@ -7,6 +7,10 @@ local PAIR_SEPARATOR = "\030"
 local PROPOSAL_TIMEOUT_SECONDS = 30 * 60
 local ACCEPT_RETRY_SECONDS = 5
 local ACCEPT_RETRY_LIMIT = 6
+local PARTY_SYNC_NO_ADDON_GRACE_SECONDS = 30
+local PARTY_SYNC_CONTINUE_SECONDS = 2
+local PARTY_SYNC_RESYNC_WAIT_SECONDS = 12
+local PARTY_SYNC_RESYNC_ATTEMPTS = 3
 
 local function FriendlyGroupingMode(value)
     if value == "SOLO_SELF_FOUND" then
@@ -129,6 +133,14 @@ local function GetCurrentPartyKeys()
         end
     end
 
+    return keys
+end
+
+local function ParseKeySet(serialized)
+    local keys = {}
+    for key in string.gmatch(tostring(serialized or ""), "([^;]+)") do
+        keys[key] = true
+    end
     return keys
 end
 
@@ -407,6 +419,9 @@ function SC:CheckPendingProposalOnRosterUpdate()
         else
             Print("all present members accepted. Run started.")
         end
+        if proposal.proposalType == "SYNC_RUN" or proposal.proposalType == "ADD_PARTICIPANT" then
+            self:PartySync_ScheduleContinue("PROPOSAL_CONFIRMED")
+        end
     end
 end
 
@@ -459,12 +474,15 @@ function SC:ConfirmPendingProposalPeerActive(playerKey, runId, rulesetHash)
         Print("run started from party acceptance.")
     end
 
+    if proposal.proposalType == "SYNC_RUN" or proposal.proposalType == "ADD_PARTICIPANT" then
+        self:PartySync_ScheduleContinue("PROPOSAL_CONFIRMED")
+    end
     if self.MasterUI_Refresh then self:MasterUI_Refresh() end
     if self.HUD_Refresh then self:HUD_Refresh() end
     return true
 end
 
-function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, runId)
+function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, runId, options)
     if IsInRaid() then
         Print("raid groups are not supported for run proposals.")
         return nil
@@ -476,6 +494,7 @@ function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, r
     end
 
     local db = GetDB()
+    options = options or {}
     local existing = self:GetPendingProposal()
     if existing and (existing.status == "PENDING" or existing.status == "ACCEPTED") then
         Print("finish or cancel the current proposal before creating another.")
@@ -507,7 +526,7 @@ function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, r
         status = "PENDING",
         proposalType = proposalType or "RUN",
         targetPlayerKey = targetPlayerKey,
-        partyAtProposalTime = GetCurrentPartyKeys(),
+        partyAtProposalTime = options.partyAtProposalTime or GetCurrentPartyKeys(),
     }
 
     proposal.acceptedBy[proposal.proposedBy] = true
@@ -525,7 +544,7 @@ function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, r
     return proposal
 end
 
-function SC:CreateRunSyncProposal()
+function SC:CreateRunSyncProposal(partyAtProposalTime)
     local db = GetDB()
     if not IsInGroup() or IsInRaid() then
         Print(IsInRaid() and "raid groups are not supported for run sync proposals." or "run sync proposals require a party.")
@@ -536,10 +555,12 @@ function SC:CreateRunSyncProposal()
         return nil
     end
 
-    return self:CreateRunProposal(db.run.runName or "Softcore Run", db.run.ruleset, "SYNC_RUN", nil, db.run.runId)
+    return self:CreateRunProposal(db.run.runName or "Softcore Run", db.run.ruleset, "SYNC_RUN", nil, db.run.runId, {
+        partyAtProposalTime = partyAtProposalTime,
+    })
 end
 
-function SC:CreateRunInviteProposal()
+function SC:CreateRunInviteProposal(targetPlayerKey, partyAtProposalTime)
     local db = GetDB()
     if not IsInGroup() or IsInRaid() then
         Print(IsInRaid() and "raid groups are not supported for party invites." or "party invites require a party.")
@@ -550,7 +571,9 @@ function SC:CreateRunInviteProposal()
         return nil
     end
 
-    return self:CreateRunProposal(db.run.runName or "Softcore Run", db.run.ruleset, "ADD_PARTICIPANT", nil, db.run.runId)
+    return self:CreateRunProposal(db.run.runName or "Softcore Run", db.run.ruleset, "ADD_PARTICIPANT", targetPlayerKey, db.run.runId, {
+        partyAtProposalTime = partyAtProposalTime,
+    })
 end
 
 local function CountRuleChanges(changes)
@@ -561,17 +584,104 @@ local function CountRuleChanges(changes)
     return count
 end
 
-local function BuildLocalRuleAmendment(self, localRuleset, remoteRuleset)
-    if not self.DescribeRulesetDifferences then
-        return nil, 0
+local function CopyLocalRulesForAlignment(self, ruleset)
+    if self.NormalizeRulesetForSync then
+        return self:NormalizeRulesetForSync(ruleset or {})
     end
 
     local changes = {}
-    for _, diff in ipairs(self:DescribeRulesetDifferences(localRuleset, remoteRuleset)) do
-        changes[diff.ruleName] = diff.localValue
+    for key, value in pairs(ruleset or {}) do
+        changes[key] = value
+    end
+    return changes
+end
+
+local function HasPendingRuleAmendment(db)
+    for _, amendment in ipairs(db and db.ruleAmendments or {}) do
+        if amendment.status == "PENDING" or amendment.status == "ACCEPTED" then
+            return true
+        end
+    end
+    return false
+end
+
+local function AddPartySyncVoter(voters, playerKey)
+    if playerKey and playerKey ~= "" then
+        voters[playerKey] = true
+    end
+end
+
+function SC:PartySync_StartPlan()
+    local db = GetDB()
+    db.partySyncPlan = {
+        active = true,
+        owner = self:GetPlayerKey(),
+        startedAt = time(),
+        resyncAttempts = 0,
+    }
+end
+
+function SC:PartySync_StopPlan(reason)
+    local db = GetDB()
+    db.partySyncPlan = nil
+    if reason and reason ~= "" then
+        Print(reason)
+    end
+end
+
+function SC:PartySync_ScheduleContinue(reason, delaySeconds)
+    local db = GetDB()
+    local plan = db.partySyncPlan
+    if not plan or not plan.active or plan.owner ~= self:GetPlayerKey() then
+        return
     end
 
-    return changes, CountRuleChanges(changes)
+    local delay = delaySeconds or PARTY_SYNC_CONTINUE_SECONDS
+    if C_Timer and C_Timer.After then
+        C_Timer.After(delay, function()
+            if SC.PartySync_ContinuePlan then
+                SC:PartySync_ContinuePlan(reason)
+            end
+        end)
+    else
+        self:PartySync_ContinuePlan(reason)
+    end
+end
+
+function SC:PartySync_ContinuePlan(reason)
+    local db = GetDB()
+    local plan = db.partySyncPlan
+    if not plan or not plan.active or plan.owner ~= self:GetPlayerKey() then
+        return nil
+    end
+
+    local route = self:GetPartySyncAction()
+    if not route or route.action == "HIDDEN" then
+        self:PartySync_StopPlan()
+        return nil
+    end
+
+    if route.action == "NONE" then
+        self:PartySync_StopPlan("Party Sync complete.")
+        return nil
+    end
+    if route.action == "BLOCKED" then
+        self:PartySync_StopPlan(route.message or "Party Sync stopped.")
+        return nil
+    end
+    if route.action == "RESYNC" then
+        plan.resyncAttempts = (tonumber(plan.resyncAttempts) or 0) + 1
+        if plan.resyncAttempts > PARTY_SYNC_RESYNC_ATTEMPTS then
+            self:PartySync_StopPlan(route.message or "Party Sync is still waiting on fresh party state.")
+            return nil
+        end
+        self:RunPartySyncAction(true)
+        self:PartySync_ScheduleContinue("RESYNC", PARTY_SYNC_RESYNC_WAIT_SECONDS)
+        return route
+    end
+
+    plan.resyncAttempts = 0
+    return self:RunPartySyncAction(true)
 end
 
 function SC:GetPartySyncAction()
@@ -606,56 +716,60 @@ function SC:GetPartySyncAction()
             message = "Finish or cancel the current proposal before starting another party sync.",
         }
     end
+    if HasPendingRuleAmendment(db) then
+        return {
+            action = "BLOCKED",
+            enabled = true,
+            message = "Finish or cancel the current rule amendment before starting another party sync.",
+        }
+    end
 
     local localRunId = db.run.runId
     local localHash = self.GetRulesetHash and self:GetRulesetHash() or ""
     local rows = self.Sync_GetGroupRows and self:Sync_GetGroupRows() or {}
     local wantsInvite, wantsSync, wantsResync
-    local wantsAmendRules, ruleChanges, ruleChangeCount
+    local wantsInviteKey
+    local wantsAmendRules
+    local ruleVoters = {}
+    local syncVoters = {}
     local blocked
+    local unsupportedMember
+    AddPartySyncVoter(ruleVoters, self:GetPlayerKey())
+    AddPartySyncVoter(syncVoters, self:GetPlayerKey())
 
     for _, peer in ipairs(rows) do
         local status = tostring(peer.participantStatus or "")
         local label = self.FormatPlayerLabel and self:FormatPlayerLabel(peer.playerKey or peer.name) or tostring(peer.playerKey or peer.name or "party member")
+        local hasNeverSeenAddon = (not peer.lastSeen or peer.lastSeen <= 0)
+        local rosterAge = time() - (tonumber(peer.rosterSeen) or time())
 
-        if peer.unsynced or status == "UNSYNCED" or status == "PENDING" or not peer.lastSeen or peer.lastSeen <= 0 then
+        if hasNeverSeenAddon then
+            if rosterAge >= PARTY_SYNC_NO_ADDON_GRACE_SECONDS then
+                unsupportedMember = unsupportedMember or label
+            else
+                wantsResync = wantsResync or label
+            end
+        elseif peer.unsynced or status == "UNSYNCED" or status == "PENDING" then
             wantsResync = wantsResync or label
         elseif status == "ADDON_VERSION_MISMATCH" or (peer.addonVersion and peer.addonVersion ~= self.version) then
             blocked = blocked or ("Version mismatch with " .. label .. ". Update/reload both addons, then try Party Sync again.")
         elseif status == "RULESET_MISMATCH" then
-            if peer.remoteRuleset then
-                local changes, count = BuildLocalRuleAmendment(self, db.run.ruleset, peer.remoteRuleset)
-                if count > 0 then
-                    wantsAmendRules = wantsAmendRules or label
-                    ruleChanges = ruleChanges or changes
-                    ruleChangeCount = ruleChangeCount or count
-                else
-                    wantsResync = wantsResync or label
-                end
-            else
-                wantsResync = wantsResync or label
-            end
+            wantsAmendRules = wantsAmendRules or label
+            AddPartySyncVoter(ruleVoters, peer.playerKey)
         elseif not peer.active or status == "NOT_IN_RUN" then
             wantsInvite = wantsInvite or label
+            wantsInviteKey = wantsInviteKey or peer.playerKey
         elseif localRunId and peer.runId and peer.runId ~= localRunId then
             if localHash ~= "" and peer.rulesetHash and peer.rulesetHash ~= "" and peer.rulesetHash ~= localHash then
-                if peer.remoteRuleset then
-                    local changes, count = BuildLocalRuleAmendment(self, db.run.ruleset, peer.remoteRuleset)
-                    if count > 0 then
-                        wantsAmendRules = wantsAmendRules or label
-                        ruleChanges = ruleChanges or changes
-                        ruleChangeCount = ruleChangeCount or count
-                    else
-                        wantsResync = wantsResync or label
-                    end
-                else
-                    wantsResync = wantsResync or label
-                end
+                wantsAmendRules = wantsAmendRules or label
+                AddPartySyncVoter(ruleVoters, peer.playerKey)
             else
                 wantsSync = wantsSync or label
+                AddPartySyncVoter(syncVoters, peer.playerKey)
             end
         elseif status == "RUN_MISMATCH" then
             wantsSync = wantsSync or label
+            AddPartySyncVoter(syncVoters, peer.playerKey)
         end
     end
 
@@ -665,20 +779,11 @@ function SC:GetPartySyncAction()
             if conflict.type == "ADDON_VERSION_MISMATCH" then
                 blocked = blocked or ("Version mismatch with " .. label .. ". Update/reload both addons, then try Party Sync again.")
             elseif conflict.type == "RULESET_MISMATCH" then
-                if conflict.remoteRuleset then
-                    local changes, count = BuildLocalRuleAmendment(self, db.run.ruleset, conflict.remoteRuleset)
-                    if count > 0 then
-                        wantsAmendRules = wantsAmendRules or label
-                        ruleChanges = ruleChanges or changes
-                        ruleChangeCount = ruleChangeCount or count
-                    else
-                        wantsResync = wantsResync or label
-                    end
-                else
-                    wantsResync = wantsResync or label
-                end
+                wantsAmendRules = wantsAmendRules or label
+                AddPartySyncVoter(ruleVoters, conflict.playerKey)
             elseif conflict.type == "RUN_MISMATCH" then
                 wantsSync = wantsSync or label
+                AddPartySyncVoter(syncVoters, conflict.playerKey)
             end
         end
     end
@@ -690,26 +795,12 @@ function SC:GetPartySyncAction()
             message = blocked,
         }
     end
-    if wantsResync then
-        return {
-            action = "RESYNC",
-            enabled = true,
-            message = "Party state looks stale for " .. wantsResync .. ". Party Sync will request fresh state.",
-        }
-    end
-    if wantsInvite then
-        return {
-            action = "INVITE",
-            enabled = true,
-            message = wantsInvite .. " is not in this run. Party Sync will send a run invite.",
-        }
-    end
     if wantsAmendRules then
         return {
             action = "AMEND_RULES",
             enabled = true,
-            message = "Rules differ from " .. wantsAmendRules .. ". Party Sync will propose " .. tostring(ruleChangeCount or CountRuleChanges(ruleChanges)) .. " local rule change(s).",
-            ruleChanges = ruleChanges,
+            message = "Rules differ from " .. wantsAmendRules .. ". Party Sync will send your full local rules for review.",
+            partyAtProposalTime = ruleVoters,
         }
     end
     if wantsSync then
@@ -717,6 +808,33 @@ function SC:GetPartySyncAction()
             action = "SYNC_RUN",
             enabled = true,
             message = wantsSync .. " is on a different run ID. Party Sync will propose aligning runs.",
+            partyAtProposalTime = syncVoters,
+        }
+    end
+    if unsupportedMember then
+        return {
+            action = "BLOCKED",
+            enabled = true,
+            message = unsupportedMember .. " is not responding to Softcore. They need to install/enable the addon or leave the party before syncing.",
+        }
+    end
+    if wantsInvite then
+        local inviteVoters = {}
+        AddPartySyncVoter(inviteVoters, self:GetPlayerKey())
+        AddPartySyncVoter(inviteVoters, wantsInviteKey)
+        return {
+            action = "INVITE",
+            enabled = true,
+            message = wantsInvite .. " is not in this run. Party Sync will send a run invite.",
+            targetPlayerKey = wantsInviteKey,
+            partyAtProposalTime = inviteVoters,
+        }
+    end
+    if wantsResync then
+        return {
+            action = "RESYNC",
+            enabled = true,
+            message = "Party state looks stale for " .. wantsResync .. ". Party Sync will request fresh state.",
         }
     end
 
@@ -727,7 +845,7 @@ function SC:GetPartySyncAction()
     }
 end
 
-function SC:RunPartySyncAction()
+function SC:RunPartySyncAction(continueExisting)
     local route = self:GetPartySyncAction()
     if not route or route.action == "HIDDEN" then
         return nil
@@ -740,6 +858,9 @@ function SC:RunPartySyncAction()
         Print(route.message or "party sync is blocked.")
         return nil
     elseif route.action == "RESYNC" then
+        if not continueExisting then
+            self:PartySync_StartPlan()
+        end
         if self.Sync_RequestFullState then
             self:Sync_RequestFullState()
             Print("requested fresh party state.")
@@ -749,26 +870,40 @@ function SC:RunPartySyncAction()
         else
             Print("sync is not ready yet.")
         end
+        if not continueExisting then
+            self:PartySync_ScheduleContinue("RESYNC", PARTY_SYNC_RESYNC_WAIT_SECONDS)
+        end
         return route
     elseif route.action == "INVITE" then
-        return self:CreateRunInviteProposal()
+        if not continueExisting then
+            self:PartySync_StartPlan()
+        end
+        return self:CreateRunInviteProposal(route.targetPlayerKey, route.partyAtProposalTime)
     elseif route.action == "AMEND_RULES" then
         if not self.ProposeRuleAmendment then
             Print("rule amendment handling is not loaded.")
             return nil
         end
-        if CountRuleChanges(route.ruleChanges) == 0 then
-            Print("no rule differences available yet. Requesting fresh party state.")
-            if self.Sync_RequestFullState then
-                self:Sync_RequestFullState()
-            end
-            return route
+        if not continueExisting then
+            self:PartySync_StartPlan()
         end
-        local amendment = self:ProposeRuleAmendment(route.ruleChanges, "Party Sync proposed local rule alignment.")
-        Print("rule amendment proposed through Party Sync.")
+        local db = GetDB()
+        local localRules = CopyLocalRulesForAlignment(self, db.run and db.run.ruleset or {})
+        if CountRuleChanges(localRules) == 0 then
+            Print("no local rules available to send.")
+            return nil
+        end
+        local amendment = self:ProposeRuleAmendment(localRules, "Party Sync proposed local run rules.", {
+            fullRulesProposal = true,
+            partyAtProposalTime = route.partyAtProposalTime,
+        })
+        Print("sent local run rules for party review.")
         return amendment
     elseif route.action == "SYNC_RUN" then
-        return self:CreateRunSyncProposal()
+        if not continueExisting then
+            self:PartySync_StartPlan()
+        end
+        return self:CreateRunSyncProposal(route.partyAtProposalTime)
     end
 
     Print(route.message or "party sync could not choose an action.")
@@ -838,6 +973,7 @@ function SC:ReceiveRunProposal(payload, proposerKey)
         self:AddLog("PROPOSAL_HASH_MISMATCH", "Proposal ruleset hash mismatch detected for " .. tostring(proposerKey) .. ".")
     end
 
+    local voterKeys = payload.voterKeys and payload.voterKeys ~= "" and ParseKeySet(payload.voterKeys) or GetCurrentPartyKeys()
     local proposal = {
         proposalId = payload.proposalId,
         runId = payload.proposalRunId,
@@ -852,15 +988,23 @@ function SC:ReceiveRunProposal(payload, proposerKey)
         status = "PENDING",
         proposalType = payload.proposalKind or "RUN",
         targetPlayerKey = payload.targetPlayerKey,
-        partyAtProposalTime = GetCurrentPartyKeys(),
+        partyAtProposalTime = voterKeys,
     }
     proposal.acceptedBy[proposerKey] = true
 
-    if proposal.targetPlayerKey and proposal.targetPlayerKey ~= self:GetPlayerKey() then
+    local localKey = self:GetPlayerKey()
+    if proposal.targetPlayerKey and proposal.targetPlayerKey ~= localKey then
         db.proposals[proposal.proposalId] = proposal
         self:AddLog("PROPOSAL_OBSERVED", "Observed proposal for " .. proposal.targetPlayerKey, {
             proposalId = proposal.proposalId,
             targetPlayerKey = proposal.targetPlayerKey,
+        })
+        return
+    end
+    if payload.voterKeys and payload.voterKeys ~= "" and not voterKeys[localKey] then
+        db.proposals[proposal.proposalId] = proposal
+        self:AddLog("PROPOSAL_OBSERVED", "Observed party sync proposal outside local stage.", {
+            proposalId = proposal.proposalId,
         })
         return
     end
@@ -1206,6 +1350,9 @@ function SC:ReceiveProposalResponse(payload, playerKey)
                 else
                     Print("all members accepted. Run started.")
                 end
+                if proposal.proposalType == "SYNC_RUN" or proposal.proposalType == "ADD_PARTICIPANT" then
+                    self:PartySync_ScheduleContinue("PROPOSAL_CONFIRMED")
+                end
             end
         end
 
@@ -1233,6 +1380,9 @@ function SC:ReceiveProposalResponse(payload, playerKey)
 
             if self.Sync_SendProposalCancelled then
                 self:Sync_SendProposalCancelled(proposal)
+            end
+            if self.PartySync_StopPlan then
+                self:PartySync_StopPlan("Party Sync stopped: proposal declined.")
             end
 
             if self.HUD_Refresh then

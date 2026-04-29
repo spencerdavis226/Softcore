@@ -424,12 +424,13 @@ function SC:ApplyRuleOutcome(ruleName, context)
     return evaluation
 end
 
-function SC:ProposeRuleAmendment(newRules, reason)
+function SC:ProposeRuleAmendment(newRules, reason, options)
     if IsInRaid() then
         DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r Raid groups are not supported for rule amendments. Changes will stay local.")
     end
 
     local db = GetDB()
+    options = options or {}
     local amendment = {
         id = CreateAmendmentId(),
         runId = db.run.runId,
@@ -444,8 +445,9 @@ function SC:ProposeRuleAmendment(newRules, reason)
         declinedAt = nil,
         declinedBy = nil,
         appliedAt = nil,
+        fullRulesProposal = options.fullRulesProposal == true,
         acceptances = {},
-        partyAtProposalTime = GetCurrentPartyKeys(),
+        partyAtProposalTime = options.partyAtProposalTime or GetCurrentPartyKeys(),
     }
     amendment.acceptances[amendment.proposedBy] = true
 
@@ -544,16 +546,18 @@ function SC:ApplyRuleAmendment(amendmentId)
             if amendment.status ~= "APPLIED" then
                 for ruleName, value in pairs(amendment.newRules) do
                     local oldValue = amendment.previousRules[ruleName]
-                    db.run.ruleset[ruleName] = value
-                    if self.Achievements_OnRuleChanged then
-                        self:Achievements_OnRuleChanged(ruleName, oldValue, value)
+                    if tostring(oldValue) ~= tostring(value) then
+                        db.run.ruleset[ruleName] = value
+                        if self.Achievements_OnRuleChanged then
+                            self:Achievements_OnRuleChanged(ruleName, oldValue, value)
+                        end
+                        self:AddLog("RULE_CHANGED", ruleName .. " changed to " .. tostring(value), {
+                            amendmentId = amendment.id,
+                            ruleName = ruleName,
+                            newValue = value,
+                            oldValue = oldValue,
+                        })
                     end
-                    self:AddLog("RULE_CHANGED", ruleName .. " changed to " .. tostring(value), {
-                        amendmentId = amendment.id,
-                        ruleName = ruleName,
-                        newValue = value,
-                        oldValue = oldValue,
-                    })
                 end
 
                 if self.ApplyGroupingMode then
@@ -567,6 +571,9 @@ function SC:ApplyRuleAmendment(amendmentId)
                 self:AddLog("RULE_AMENDMENT_APPLIED", "Rule amendment applied prospectively.", {
                     amendmentId = amendment.id,
                 })
+                if self.Sync_BroadcastStatus then
+                    self:Sync_BroadcastStatus("RULE_AMENDMENT_APPLIED")
+                end
             end
 
             return amendment
@@ -599,6 +606,21 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
             return
         end
     end
+    if payload.fullRulesProposal == "1" then
+        local diffRules = {}
+        previousRules = {}
+        for ruleName, value in pairs(newRules) do
+            local previousValue = db.run.ruleset[ruleName]
+            if tostring(previousValue) ~= tostring(value) then
+                diffRules[ruleName] = value
+                previousRules[ruleName] = previousValue
+            end
+        end
+        newRules = diffRules
+        if not next(newRules) then
+            return
+        end
+    end
 
     local amendment = {
         id = amendmentId,
@@ -609,6 +631,7 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
         status = "PENDING",
         proposedAt = tonumber(payload.proposedAt) or time(),
         proposedBy = senderKey,
+        fullRulesProposal = payload.fullRulesProposal == "1",
         remote = true,
     }
 
@@ -663,6 +686,9 @@ function SC:ReceiveRuleAmendmentResponse(payload, senderKey)
                         self:Sync_SendAmendmentApplied(amendment)
                     end
                     DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r Rule amendment accepted by all — applied.")
+                    if self.PartySync_ScheduleContinue then
+                        self:PartySync_ScheduleContinue("RULES_APPLIED")
+                    end
                 end
 
             elseif payload.type == "AMENDMENT_DECLINE" then
@@ -671,6 +697,9 @@ function SC:ReceiveRuleAmendmentResponse(payload, senderKey)
                 amendment.declinedBy = senderKey
                 if self.Sync_SendAmendmentCancelled then
                     self:Sync_SendAmendmentCancelled(amendment)
+                end
+                if self.PartySync_StopPlan then
+                    self:PartySync_StopPlan("Party Sync stopped: rule amendment declined.")
                 end
                 DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r |cfffbbf24Rule amendment declined by " .. tostring(senderKey or "?") .. ".|r")
             end

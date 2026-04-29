@@ -1216,11 +1216,11 @@ local function RefreshAmendmentPanel(frame, amendment, isProposer)
 
     local changeCount = 0
     for _, ruleName in ipairs(EDITABLE_RULE_ORDER) do
-        if amendment.newRules[ruleName] ~= nil then
+        local oldVal = amendment.previousRules[ruleName]
+        local newVal = amendment.newRules[ruleName]
+        if newVal ~= nil and tostring(oldVal) ~= tostring(newVal) then
             changeCount = changeCount + 1
             if changeCount <= 8 then
-                local oldVal = amendment.previousRules[ruleName]
-                local newVal = amendment.newRules[ruleName]
                 local label = RULE_DISPLAY_NAMES[ruleName] or ruleName
                 panel.changeLines[changeCount]:SetText(
                     "- " .. label .. ": " .. FriendlyRuleValue(ruleName, oldVal) .. " -> " .. FriendlyRuleValue(ruleName, newVal)
@@ -2344,6 +2344,22 @@ function SC:OpenMasterWindow(focusTab)
             Print("party sync is not loaded.")
         end
         SC:MasterUI_Refresh()
+    end)
+    frame.start.partySyncBtn:SetScript("OnEnter", function(self)
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Party Sync", 1, 0.82, 0.2)
+        local route = SC.GetPartySyncAction and SC:GetPartySyncAction()
+        if route and route.message then
+            GameTooltip:AddLine(route.message, 0.94, 0.86, 0.68, true)
+        end
+        GameTooltip:AddLine("One click starts a staged sync plan. Required member approvals still use the Run tab.", 0.68, 0.56, 0.38, true)
+        GameTooltip:AddLine("After each accepted stage, Softcore waits about 2 seconds for addon messages to settle, then continues automatically.", 0.68, 0.56, 0.38, true)
+        GameTooltip:AddLine("If state is stale, Softcore may wait about 12 seconds for a full-state response before continuing.", 0.68, 0.56, 0.38, true)
+        GameTooltip:Show()
+    end)
+    frame.start.partySyncBtn:SetScript("OnLeave", function()
+        if GameTooltip then GameTooltip:Hide() end
     end)
     frame.start.applyChangesBtn = CreateButton(startPanel, "Apply Changes", 120, 24)
     frame.start.applyChangesBtn:SetPoint("LEFT", frame.start.primaryBtn, "RIGHT", 8, 0)

@@ -150,9 +150,11 @@ Use **Party Sync** in the Run tab when:
 - rules match
 - the players explicitly want to align to one shared run ID
 
-Party Sync routes this case to a sync proposal. Accepting a sync proposal changes the accepting player's run ID to the proposer run ID. It does not wipe local deaths, violations, logs, or character progress.
+Party Sync routes this case to a sync proposal for active run members. Accepting a sync proposal changes the accepting player's run ID to the proposer run ID. It does not wipe local deaths, violations, logs, or character progress.
 
-If rules differ, Party Sync routes to a rule amendment proposal using the local player's current rule values. Members still review and accept the amendment before rules change. After rules match, use Party Sync again if run IDs also need alignment.
+If rules differ, Party Sync sends the local player's full current rules as a rule amendment proposal to active run members first. Receivers compute and review only the values that differ from their own rules before accepting or declining. After an accepted stage settles, the original clicker's Party Sync plan automatically continues to the next needed stage.
+
+Party Sync handles mixed parties in one staged plan: align active-run rules, align active-run IDs, then invite party members who are not in the run. Party members who never respond to Softcore addon messages must install/enable the addon or leave the party before they can be included.
 
 ## Inviting Party Members
 
@@ -164,7 +166,7 @@ Targeted invites are also available with `/sc propose-add Player-Realm`.
 
 ## Rule Amendments
 
-Active run rules are locked by default. Use **Modify Rules** in the Run tab to create a draft, or use **Party Sync** when the party is already in a rules conflict and you want to propose your local rule differences.
+Active run rules are locked by default. Use **Modify Rules** in the Run tab to create a draft, or use **Party Sync** when the party is already in a rules conflict and you want to send your current local rules for review.
 
 - Solo: Apply Changes applies immediately and logs the old/new values.
 - Grouped: Propose to Party creates a Run-tab amendment proposal.
