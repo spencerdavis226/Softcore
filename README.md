@@ -25,7 +25,7 @@ There are no proposal popup windows. Incoming group proposals and rule amendment
 
 Open with `/sc menu`, the minimap button, or the HUD.
 
-- **Overview**: local run status, party status, participants, run ID, elapsed time, deaths, and active violation count.
+- **Overview**: local run status, party status, participants (party ledger shows each member’s current level and, when their client reports it, level at run join), run ID, elapsed time, deaths, and active violation count.
 - **Run**: start a run, review locked active rules in native-WoW styled rule groups, stop a run, invite party members, propose run sync, or modify rules. Proposal/amendment state is shown through the visible rule review and footer actions rather than a top detail banner.
 - **Violations**: active clearable issues with one-click Clear where allowed.
 - **Log**: audit history, newest first. The menu and `/sc log` omit entries that are not relevant to your current rules (for example pet battles; taxi trips when flight paths are allowed even if mounts/flying are restricted; vehicle/override-bar notes when mounts and flying are both allowed; instance entries when no dungeon/unsynced-instance rules apply). Exports still include the full stored log. A successful rule amendment produces one **Rules Amended** row per changed rule in plain language (for example “Auction house: restricted (was allowed)”); applying changes that match the current rules adds no log line.

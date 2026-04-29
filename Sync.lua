@@ -88,6 +88,7 @@ local WIRE_KEYS = {
     realm = "rm",
     class = "c",
     level = "l",
+    levelAtJoin = "lj",
     zone = "z",
     active = "a",
     valid = "v",
@@ -976,6 +977,11 @@ function SC:Sync_BuildPayload(reason, options)
         rulesetHash = status.rulesetHash,
     })
 
+    local joinLevel = tonumber(status.levelAtJoin)
+    if joinLevel and joinLevel > 0 then
+        payload.levelAtJoin = joinLevel
+    end
+
     if options.includeRules and self.SerializeRuleset then
         local db = self.db or SoftcoreDB
         if db and db.run and db.run.ruleset then
@@ -1089,6 +1095,10 @@ function SC:Sync_SendFullState(options)
         rulesetVersion = status.rulesetVersion,
         rulesetHash = status.rulesetHash,
     })
+    local joinLevel = tonumber(status.levelAtJoin)
+    if joinLevel and joinLevel > 0 then
+        payload.levelAtJoin = joinLevel
+    end
     if options.includeRules and self.SerializeRuleset and db.run and db.run.ruleset then
         payload.ruleset = self:SerializeRuleset(db.run.ruleset)
     end
@@ -1782,6 +1792,7 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
         ClearConflict(key, "ADDON_VERSION_MISMATCH")
     end
 
+    local peerJoinLevel = tonumber(payload.levelAtJoin)
     self.groupStatuses[key] = {
         name = name,
         realm = realm,
@@ -1789,6 +1800,7 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
         playerKey = key,
         class = payload.class,
         level = tonumber(payload.level) or payload.level or "?",
+        levelAtJoin = (peerJoinLevel and peerJoinLevel > 0) and peerJoinLevel or nil,
         zone = payload.zone,
         active = payload.active == "1",
         valid = payload.valid == "1",
@@ -1858,6 +1870,10 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
             participant.class = payload.class
             participant.currentLevel = tonumber(payload.level) or participant.currentLevel
             participant.joinedAt = participant.joinedAt or time()
+
+            if key ~= LocalPlayerKey() and peerJoinLevel and peerJoinLevel > 0 and (tonumber(participant.levelAtJoin) or 0) <= 0 then
+                participant.levelAtJoin = peerJoinLevel
+            end
 
             if participantStatus == "RUN_MISMATCH" or participantStatus == "RULESET_MISMATCH" or participantStatus == "ADDON_VERSION_MISMATCH" then
                 participant.status = participantStatus

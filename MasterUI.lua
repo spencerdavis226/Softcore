@@ -1215,10 +1215,13 @@ local function GetPartyDisplayRows()
         end
 
         if peerKey and not seen[peerKey] and #displayRows < OVERVIEW_PARTY_ROWS then
+            local pRow = participants[peerKey]
+            local pStart = pRow and pRow.levelAtJoin
+            local startLevel = (tonumber(pStart) and tonumber(pStart) > 0) and pStart or peer.levelAtJoin
             table.insert(displayRows, {
                 name = peer.name or peer.playerKey or "Unknown",
                 level = peer.level,
-                startLevel = participants[peerKey] and participants[peerKey].levelAtJoin,
+                startLevel = startLevel,
                 status = displayStatus,
                 totalViolations = CountAllViolations(peer.playerKey or ""),
             })

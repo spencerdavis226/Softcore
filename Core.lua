@@ -842,10 +842,15 @@ function SC:GetLocalPlayerStatus()
     local playerKey = GetPlayerKey(db.character)
     local participant = db.run.participants[playerKey]
 
+    local levelAtJoin = 0
     if db.run.active then
         participant = self:GetOrCreateParticipant(playerKey)
         participant.currentLevel = db.character.level
         participant.class = db.character.class
+        levelAtJoin = tonumber(participant.levelAtJoin) or 0
+        if levelAtJoin <= 0 then
+            levelAtJoin = tonumber(db.run.startLevel) or 0
+        end
     end
 
     return {
@@ -856,6 +861,7 @@ function SC:GetLocalPlayerStatus()
         realm = db.character.realm,
         class = db.character.class,
         level = db.character.level,
+        levelAtJoin = levelAtJoin,
         zone = db.character.zone,
         active = db.run.active,
         valid = db.run.valid,

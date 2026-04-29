@@ -85,7 +85,7 @@ There is no separate HTTP or server “backend.” All multiplayer behavior is *
 
 **Outbound path**
 
-Structured payloads are queued (with a **priority** ordering so proposal/control/violation/fresh-state traffic can preempt bulky traffic), encoded with compact wire aliases, split into chunks when needed, then sent via `C_ChatInfo.SendAddonMessage` (or legacy equivalent). Queued `STATUS` chunks are disposable and may be coalesced or dropped ahead of proposal/control sends because fresh status will be sent again. Party audit logs are delayed briefly and sent as low-priority bulk traffic. Proposal and amendment notices are intentionally small; detail responses are targeted and may be chunked. Pacing and resend **attempt limits** live as constants near the top of `Sync.lua` (for example proposal resend spacing vs control-message retry behavior). Treat Blizzard throttling as real: never bypass the queue for large or repeated sends.
+Structured payloads are queued (with a **priority** ordering so proposal/control/violation/fresh-state traffic can preempt bulky traffic), encoded with compact wire aliases, split into chunks when needed, then sent via `C_ChatInfo.SendAddonMessage` (or legacy equivalent). `STATUS` and `FULL_STATE_RESPONSE` include **`lj` (level at join)** only when the sender has a positive value so packet size stays minimal. Queued `STATUS` chunks are disposable and may be coalesced or dropped ahead of proposal/control sends because fresh status will be sent again. Party audit logs are delayed briefly and sent as low-priority bulk traffic. Proposal and amendment notices are intentionally small; detail responses are targeted and may be chunked. Pacing and resend **attempt limits** live as constants near the top of `Sync.lua` (for example proposal resend spacing vs control-message retry behavior). Treat Blizzard throttling as real: never bypass the queue for large or repeated sends.
 
 **Inbound path**
 
@@ -104,7 +104,7 @@ Rules that affect integrity outcomes or proposal diffing (including boolean togg
 Incoming sync can update:
 
 - remote player status
-- peer display data
+- peer display data (including **level at join** for the Party Ledger: optional compact wire key `lj` on `STATUS` / `FULL_STATE_RESPONSE`, applied once to the peer’s participant row when still unknown; omitted when zero to keep heartbeats small)
 - party status display
 - compatibility warnings/conflicts
 - proposal state
