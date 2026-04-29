@@ -115,7 +115,7 @@ Softcore sync is built around current WoW addon-message limits:
 - The `SOFTCORE` prefix is registered after login/reload and must fit the 16-byte prefix limit.
 - Addon message bodies are limited to 255 bytes and are delivered through `CHAT_MSG_ADDON`.
 - `C_ChatInfo.SendAddonMessage` success means the client enqueued the message, not that peers have received it.
-- Blizzard applies a per-prefix throttle; Softcore paces outbound messages through its send queue, prioritizes control/fresh-state traffic, and chunks larger proposal/full-state payloads.
+- Blizzard applies a per-prefix throttle; Softcore paces outbound messages through its send queue, prioritizes proposal/control/fresh-state traffic, coalesces disposable queued status updates, and chunks larger proposal/full-state payloads.
 - Proposal and control retries must remain paced. Do not bypass the send queue for chunked messages.
 - Rule serialization must preserve booleans exactly. `false` is a real rule value, not an empty string.
 - Every enforced rule that affects local behavior must be part of the canonical ruleset sync/hash order. Camera rules (`firstPersonOnly`, `actionCam`) are included so a synced run cannot silently enforce camera on one client but not another.

@@ -62,6 +62,53 @@ local function GetRulesetSyncOrder(self)
     }
 end
 
+local RULE_WIRE_KEYS = {
+    death = "d",
+    groupingMode = "g",
+    failedMemberBlocksParty = "fb",
+    allowLateJoin = "lj",
+    allowReplacementCharacters = "rc",
+    requireLeaderApprovalForJoin = "la",
+    auctionHouse = "ah",
+    mailbox = "mb",
+    trade = "tr",
+    mounts = "mo",
+    flying = "fl",
+    flightPaths = "fp",
+    outsiderGrouping = "og",
+    unsyncedMembers = "um",
+    maxLevelGap = "lg",
+    maxLevelGapValue = "lv",
+    dungeonRepeat = "dr",
+    gearQuality = "gq",
+    heirlooms = "he",
+    instanceWithUnsyncedPlayers = "iu",
+    bank = "ba",
+    warbandBank = "wb",
+    guildBank = "gb",
+    voidStorage = "vs",
+    craftingOrders = "co",
+    vendor = "ve",
+    consumables = "cu",
+    instancedPvP = "pv",
+    firstPersonOnly = "fo",
+    actionCam = "ac",
+    maxDeaths = "md",
+    maxDeathsValue = "mv",
+}
+local CANONICAL_RULE_KEYS = {}
+for ruleName, wireKey in pairs(RULE_WIRE_KEYS) do
+    CANONICAL_RULE_KEYS[wireKey] = ruleName
+end
+
+local function RuleWireKey(ruleName)
+    return RULE_WIRE_KEYS[ruleName] or ruleName
+end
+
+local function CanonicalRuleKey(ruleName)
+    return CANONICAL_RULE_KEYS[ruleName] or ruleName
+end
+
 local function FriendlyAllowed(value)
     if value == "ALLOWED" or value == "LOG_ONLY" then
         return "Allowed"
@@ -185,7 +232,7 @@ function SC:SerializeRuleset(ruleset)
 
     for _, key in ipairs(GetRulesetSyncOrder(self)) do
         if normalized[key] ~= nil then
-            table.insert(parts, Escape(key) .. "=" .. Escape(normalized[key]))
+            table.insert(parts, Escape(RuleWireKey(key)) .. "=" .. Escape(normalized[key]))
         end
     end
 
@@ -195,7 +242,7 @@ end
 function SC:SerializePartialRules(rules)
     local parts = {}
     for key, value in pairs(rules or {}) do
-        table.insert(parts, Escape(key) .. "=" .. Escape(value))
+        table.insert(parts, Escape(RuleWireKey(key)) .. "=" .. Escape(value))
     end
     return table.concat(parts, PAIR_SEPARATOR)
 end
@@ -205,7 +252,7 @@ function SC:DeserializePartialRules(serialized)
     for pair in string.gmatch(serialized or "", "([^" .. PAIR_SEPARATOR .. "]+)") do
         local key, value = string.match(pair, "^([^=]+)=(.*)$")
         if key then
-            key = Unescape(key)
+            key = CanonicalRuleKey(Unescape(key))
             value = Unescape(value)
             if value == "true" then
                 rules[key] = true
@@ -227,7 +274,7 @@ function SC:DeserializeRuleset(serialized)
     for pair in string.gmatch(serialized or "", "([^" .. PAIR_SEPARATOR .. "]+)") do
         local key, value = string.match(pair, "^([^=]+)=(.*)$")
         if key then
-            key = Unescape(key)
+            key = CanonicalRuleKey(Unescape(key))
             value = Unescape(value)
             if value == "true" then
                 ruleset[key] = true

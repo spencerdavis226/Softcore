@@ -401,6 +401,8 @@ function SC:ClearDebugTrace(reason)
     if db.sync then
         db.sync.staleSendDrops = 0
         db.sync.lastStaleSendDrop = nil
+        db.sync.coalescedStatusDrops = 0
+        db.sync.lastCoalescedStatusDrop = nil
         db.sync.sendFailureCount = 0
         db.sync.lastSendError = nil
         db.sync.expiredChunkBuffers = 0
@@ -2055,6 +2057,8 @@ local function BuildDebugExportText()
     AddKeyValueCsv(lines, "Sync", "Last Reassembled Chunk", db.sync and db.sync.lastReassembledChunk)
     AddCsvLine(lines, "Sync", "Stale Send Drops", db.sync and db.sync.staleSendDrops or 0)
     AddKeyValueCsv(lines, "Sync", "Last Stale Send Drop", db.sync and db.sync.lastStaleSendDrop)
+    AddCsvLine(lines, "Sync", "Coalesced Status Drops", db.sync and db.sync.coalescedStatusDrops or 0)
+    AddKeyValueCsv(lines, "Sync", "Last Coalesced Status Drop", db.sync and db.sync.lastCoalescedStatusDrop)
 
     local proposal = SC.GetPendingProposal and SC:GetPendingProposal() or nil
     if proposal then

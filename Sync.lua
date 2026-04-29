@@ -6,17 +6,17 @@ local PREFIX = "SOFTCORE"
 local UNSYNCED_AFTER = 30
 local HEARTBEAT_SECONDS = 10
 local MAX_AUDIT_TEXT = 120
-local MAX_MESSAGE_BYTES = 230
-local MAX_CHUNK_DATA_BYTES = 150
+local MAX_MESSAGE_BYTES = 245
+local MAX_CHUNK_DATA_BYTES = 175
 local CHUNK_TIMEOUT_SECONDS = 30
 local CONTROL_RETRY_SECONDS = 1
 local CONTROL_RETRY_LIMIT = 3
-local PROPOSAL_RESEND_SECONDS = 8
+local PROPOSAL_RESEND_SECONDS = 20
 local PROPOSAL_RESEND_ATTEMPTS = 1
 local CONTROL_REPEAT_ATTEMPTS = 1
 local SEND_QUEUE_TICK_SECONDS = 0.25
 local SEND_TOKEN_REFILL_SECONDS = 1.05
-local SEND_TOKEN_MAX = 8
+local SEND_TOKEN_MAX = 10
 local STATUS_NUDGE_SECONDS = 0.5
 
 SC.syncEnabled = true
@@ -267,10 +267,42 @@ local function GetMessagePriority(messageType)
     if messageType == "HELLO" then return 3 end
     if messageType == "PROPOSAL_ACCEPT" or messageType == "PROPOSAL_DECLINE" then return 3 end
     if messageType == "AMENDMENT_ACCEPT" or messageType == "AMENDMENT_DECLINE" then return 3 end
+    if messageType == "PROPOSAL" then return 3 end
     if messageType == "PARTY_LOG" then return 4 end
-    if messageType == "PROPOSAL" then return 5 end
     if messageType == "STATUS" then return 6 end
     return 4
+end
+
+local function DropQueuedStatus(reason)
+    local dropped = 0
+    for index = #sendQueue, 1, -1 do
+        if sendQueue[index].messageType == "STATUS" then
+            table.remove(sendQueue, index)
+            dropped = dropped + 1
+        end
+    end
+
+    if dropped <= 0 then
+        return
+    end
+
+    local db = SoftcoreDB
+    if db and db.sync then
+        db.sync.coalescedStatusDrops = (db.sync.coalescedStatusDrops or 0) + dropped
+        db.sync.lastCoalescedStatusDrop = {
+            count = dropped,
+            reason = reason,
+            time = time(),
+        }
+        db.sync.sendQueueDepth = #sendQueue
+    end
+
+    if SC.TraceDebug then
+        SC:TraceDebug("SYNC_DROP_QUEUED_STATUS", {
+            count = dropped,
+            reason = reason,
+        })
+    end
 end
 
 local function IsQueuedMessageStale(item)
@@ -295,6 +327,11 @@ end
 
 local function QueueSendItem(item)
     item.priority = item.priority or GetMessagePriority(item.messageType)
+    if item.messageType == "STATUS" then
+        DropQueuedStatus("STATUS_COALESCE")
+    elseif item.priority <= 3 then
+        DropQueuedStatus("PRIORITY_PREEMPT")
+    end
 
     local insertAt = #sendQueue + 1
     for index, queued in ipairs(sendQueue) do
@@ -728,11 +765,6 @@ local function AddViolationSnapshot(payload)
         payload.latestViolationType = latest.type
         payload.latestViolationDetail = latest.detail
         payload.latestViolationAt = latest.createdAt
-    else
-        payload.latestViolationId = ""
-        payload.latestViolationType = ""
-        payload.latestViolationDetail = ""
-        payload.latestViolationAt = ""
     end
 
     return payload
@@ -810,23 +842,17 @@ function SC:Sync_BuildPayload(reason, options)
     local payload = AddViolationSnapshot({
         type = "STATUS",
         reason = reason or "UPDATE",
-        runName = status.runName,
-        name = status.name,
-        realm = status.realm,
         class = status.class,
         level = status.level,
-        zone = status.zone,
         active = status.active and 1 or 0,
         valid = status.valid and 1 or 0,
         failed = status.failed and 1 or 0,
         deaths = status.deaths or 0,
         warnings = status.warnings or 0,
         participantStatus = status.participantStatus,
-        version = status.version,
         addonVersion = status.version,
         rulesetVersion = status.rulesetVersion,
         rulesetHash = status.rulesetHash,
-        timestamp = status.timestamp,
     })
 
     if options.includeRules and self.SerializeRuleset then
@@ -1579,6 +1605,7 @@ function SC:PrintSyncDebug()
     end
     Print("  send queue: " .. tostring(db.sync.sendQueueDepth or #sendQueue))
     Print("  stale send drops: " .. tostring(db.sync.staleSendDrops or 0))
+    Print("  coalesced status drops: " .. tostring(db.sync.coalescedStatusDrops or 0))
 
     local pendingCount = 0
     for _, buffer in pairs(pendingChunks) do

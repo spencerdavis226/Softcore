@@ -59,7 +59,7 @@ The channel is selected automatically:
 
 Raid groups are intentionally unsupported because the UI is designed for party-scale accountability, not raid-scale rosters. When a party converts to raid, Softcore should become local-only: stop party sync, avoid raid roster display, and expire pending group proposals/amendments rather than applying them late.
 
-Status heartbeats are sent periodically as a safety net. User-driven run, proposal, amendment, roster, and resync changes should also send compact fast status/control messages so Party Sync does not wait for the next heartbeat. Full rules/proposals may be chunked. Incomplete chunk buffers expire and should never mutate run state.
+Status heartbeats are sent periodically as a safety net. User-driven run, proposal, amendment, roster, and resync changes should also send compact fast status/control messages so Party Sync does not wait for the next heartbeat. Full rules/proposals may be chunked, but rule payloads use compact wire keys to keep first proposal delivery responsive. Incomplete chunk buffers expire and should never mutate run state.
 
 WoW addon-message API constraints are gospel for this project:
 
@@ -78,14 +78,14 @@ There is no separate HTTP or server “backend.” All multiplayer behavior is *
 
 **Where to look in code**
 
-- `Sync.lua`: prefix registration, inbound `CHAT_MSG_ADDON`, **chunk reassembly** (per-sender buffers that **expire** without applying partial state), **outbound send queue** (token-budget pacing, priority insertion, send failure retries), compact fast status nudges, targeted full-state request/response metadata, **stale send drops** for obsolete queued items, and serialization/chunking to the 255-byte body limit.
-- `Core.lua`: slash commands; **`/sc dc`** (`ClearDebugTrace`) clears the capped in-memory **debug trace** and resets **test-oriented `db.sync` counters** (stale send drops, last stale drop metadata, send failure count/last error, expired chunk buffer count/last expiry). **`/sc dl`** builds the CSV-style export that includes those fields.
+- `Sync.lua`: prefix registration, inbound `CHAT_MSG_ADDON`, **chunk reassembly** (per-sender buffers that **expire** without applying partial state), **outbound send queue** (token-budget pacing, priority insertion, send failure retries), compact fast status nudges, targeted full-state request/response metadata, queued status coalescing before higher-priority traffic, **stale send drops** for obsolete queued items, and serialization/chunking to the 255-byte body limit.
+- `Core.lua`: slash commands; **`/sc dc`** (`ClearDebugTrace`) clears the capped in-memory **debug trace** and resets **test-oriented `db.sync` counters** (stale send drops, coalesced status drops, last drop metadata, send failure count/last error, expired chunk buffer count/last expiry). **`/sc dl`** builds the CSV-style export that includes those fields.
 - `Events.lua`: game events that drive periodic **STATUS** heartbeats and other local hooks.
 - `ProposalUI.lua` / `MasterUI.lua`: Run-tab proposal UX; user actions enqueue outbound payloads through `Sync` rather than calling `SendAddonMessage` directly.
 
 **Outbound path**
 
-Structured payloads are queued (with a **priority** ordering so control/violation/fresh-state traffic can preempt bulky traffic), split into chunks when needed, then sent via `C_ChatInfo.SendAddonMessage` (or legacy equivalent). Pacing and resend **attempt limits** live as constants near the top of `Sync.lua` (for example proposal resend spacing vs control-message retry behavior). Treat Blizzard throttling as real: never bypass the queue for large or repeated sends.
+Structured payloads are queued (with a **priority** ordering so proposal/control/violation/fresh-state traffic can preempt bulky traffic), split into chunks when needed, then sent via `C_ChatInfo.SendAddonMessage` (or legacy equivalent). Queued `STATUS` chunks are disposable and may be coalesced or dropped ahead of proposal/control sends because fresh status will be sent again. Pacing and resend **attempt limits** live as constants near the top of `Sync.lua` (for example proposal resend spacing vs control-message retry behavior). Treat Blizzard throttling as real: never bypass the queue for large or repeated sends.
 
 **Inbound path**
 
@@ -239,7 +239,7 @@ Useful commands:
 - `/sc dungeons`
 - `/sc resync`
 
-`/sc dc` clears the in-memory debug trace and resets test-oriented sync counters such as stale send drops, send failures, and expired chunk buffers. Use it at the start of every A/B test so pasted exports describe only that test pass.
+`/sc dc` clears the in-memory debug trace and resets test-oriented sync counters such as stale send drops, coalesced status drops, send failures, and expired chunk buffers. Use it at the start of every A/B test so pasted exports describe only that test pass.
 
 Check for:
 
