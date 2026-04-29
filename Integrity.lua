@@ -187,7 +187,7 @@ function SC:GetInvalidEquippedItems()
                 })
             end
         elseif IsGearQualityInvalid(gearRule, item.quality) then
-            local selfCraftedAllowed = self:GetRule("selfCraftedGearAllowed") == "ALLOWED"
+            local selfCraftedAllowed = self:GetRule("selfCraftedGearAllowed") == true
             if not (selfCraftedAllowed and IsItemSelfCrafted(item.slotId)) then
                 table.insert(invalid, {
                     rule = "gearQuality",

@@ -211,6 +211,7 @@ local function CreateDefaultRuleset()
         maxLevelGapValue = 3,
         dungeonRepeat = "LOG_ONLY",
         gearQuality = "ALLOWED",
+        selfCraftedGearAllowed = false,
         heirlooms = "WARNING",
         enchants = "ALLOWED",
         instanceWithUnsyncedPlayers = "WARNING",

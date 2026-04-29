@@ -26,6 +26,7 @@ local RULE_ORDER = {
     "maxLevelGapValue",
     "dungeonRepeat",
     "gearQuality",
+    "selfCraftedGearAllowed",
     "heirlooms",
     "enchants",
     "instanceWithUnsyncedPlayers",
@@ -61,6 +62,7 @@ local HASH_RULE_ORDER = {
     "maxLevelGapValue",
     "dungeonRepeat",
     "gearQuality",
+    "selfCraftedGearAllowed",
     "heirlooms",
     "enchants",
     "instanceWithUnsyncedPlayers",
@@ -91,6 +93,7 @@ local BOOLEAN_RULES = {
     allowReplacementCharacters = true,
     requireLeaderApprovalForJoin = true,
     maxDeaths = true,
+    selfCraftedGearAllowed = true,
 }
 
 local ACCESS_RULES = {

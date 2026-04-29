@@ -39,7 +39,8 @@
     "MerchantFrame",
     "FauxScrollFrame_Update",
     "FauxScrollFrame_GetOffset",
-    "FauxScrollFrame_OnVerticalScroll"
+    "FauxScrollFrame_OnVerticalScroll",
+    "WorldFrame"
   ],
   "Lua.type.weakUnionCheck": true
 }

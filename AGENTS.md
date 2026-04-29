@@ -17,7 +17,7 @@ The master menu is the primary interface. Group run proposals, run sync proposal
 Current menu tabs:
 
 - `Overview`: local run status, party status, participant snapshot, run ID, elapsed time, deaths, and active violation count (no Overview resync control; use `/sc resync` or Run tab Party Sync)
-- `Run`: start a run, review locked active rules in lightweight native-WoW styled rule groups on a consistent two-column grid, review highlighted rule amendment proposals in the normal rules layout, stop/reset a run, and use one shared action slot that shows Party Sync while party sync work/blockers exist or Modify Rules when the party is synced/local-only; do not use a top detail banner to explain run/proposal state
+- `Run`: start a run, review locked active rules in lightweight native-WoW styled rule groups on a consistent two-column grid, review highlighted rule amendment proposals in the normal rules layout, stop/reset a run, and use one shared action slot that shows Party Sync while party sync work/blockers exist or Modify Rules when the party is synced/local-only; keep the self-crafted gear exemption as a subordinate gear toggle that only applies while gear restriction is enabled; do not use a top detail banner to explain run/proposal state
 - `Violations`: active clearable issues
 - `Log`: audit history, newest first
 
@@ -98,6 +98,8 @@ When the queue is about to send an item, `Sync.lua` may drop it if it is no long
 **Documentation vs code**
 
 Keep this section as a **map** (transport, modules, invariants). For exact thresholds, message-type lists, and handler behavior, **trust the code** and search `Sync.lua` first; update this subsection when the model changes, not every tweak.
+
+Rules that affect integrity outcomes or proposal diffing (including boolean toggles like the self-crafted gear exemption) must be present in canonical default rules, editable-rule diff order, sync/hash order, and wire-key serialization so Modify Rules, amendment review, and party sync all see the same value transitions.
 
 Incoming sync can update:
 

@@ -100,6 +100,7 @@ local EDITABLE_RULE_ORDER = {
     "flying",
     "flightPaths",
     "gearQuality",
+    "selfCraftedGearAllowed",
     "heirlooms",
     "enchants",
     "maxLevelGap",
@@ -1023,6 +1024,7 @@ local RULE_DISPLAY_NAMES = {
     flying         = "Flying Mounts",
     flightPaths    = "Flight Paths",
     gearQuality    = "Gear Limit",
+    selfCraftedGearAllowed = "Self-crafted Gear Exemption",
     heirlooms      = "Heirlooms",
     enchants       = "Enchants",
     maxLevelGap    = "Level Gap Enforcement",
@@ -1046,6 +1048,9 @@ local function FriendlyRuleValue(ruleName, value)
         return tostring(value)
     end
     if ruleName == "maxDeaths" then
+        return value and "enabled" or "disabled"
+    end
+    if ruleName == "selfCraftedGearAllowed" then
         return value and "enabled" or "disabled"
     end
     if value == "ALLOWED" or value == "LOG_ONLY" then return "allowed" end
@@ -2283,9 +2288,9 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.selfCraftedCheck.label:SetWidth(0)
     frame.start.selfCraftedCheck.label:SetJustifyH("LEFT")
     frame.start.selfCraftedCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
-    frame.start.selfCraftedCheck.label:SetText("Allow self-crafted gear")
+    frame.start.selfCraftedCheck.label:SetText("Allow any self-crafted gear")
     frame.start.selfCraftedCheck:SetScript("OnClick", function(btn)
-        frame.start.selectedRules.selfCraftedGearAllowed = btn:GetChecked() and "ALLOWED" or nil
+        frame.start.selectedRules.selfCraftedGearAllowed = btn:GetChecked() == true
         SC:MasterUI_Refresh()
     end)
     RegisterRunControl(frame.start, frame.start.selfCraftedCheck, frame.start.gearSection)
@@ -2462,7 +2467,7 @@ function SC:OpenMasterWindow(focusTab)
         self.dungeonRepeatCheck:SetChecked(not IsDisallowed(self.selectedRules.dungeonRepeat))
         self.consumablesCheck:SetChecked(not IsDisallowed(self.selectedRules.consumables))
         self.instancedPvPCheck:SetChecked(not IsDisallowed(self.selectedRules.instancedPvP))
-        local selfCraftedActive = self.selectedRules.selfCraftedGearAllowed == "ALLOWED"
+        local selfCraftedActive = self.selectedRules.selfCraftedGearAllowed == true
         self.selfCraftedCheck:SetChecked(selfCraftedActive)
         self.selfCraftedCheck:SetEnabled(canEdit and gearRestricted)
         if self.selfCraftedCheck.label then

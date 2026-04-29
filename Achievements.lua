@@ -145,6 +145,7 @@ local function IsIronmanRules(rules)
     if not rules then return false end
     if rules.groupingMode ~= "SOLO_SELF_FOUND" then return false end
     if rules.gearQuality ~= "WHITE_GRAY_ONLY" then return false end
+    if rules.selfCraftedGearAllowed == true then return false end
 
     local requiredDisallowed = {
         "auctionHouse",
@@ -225,6 +226,7 @@ function SC:GetAchievementDefinitions()
     end
 
     AddDefinition(result, "char_white_knuckles", "ACCOUNT", "Rules", "White Knuckles", "Reach max level with white/gray gear quality enforced from run start.", "GEAR_QUALITY_MAX", nil, "WHITE_GRAY_ONLY")
+    AddDefinition(result, "char_self_forged", "ACCOUNT", "Rules", "Self-Forged", "Reach max level with white/gray gear quality while self-crafted gear exemption stays enabled from run start.", "GEAR_QUALITY_CRAFTED_MAX", nil, "WHITE_GRAY_ONLY")
 
     return result
 end
@@ -385,7 +387,32 @@ local function BuildProgress(definition, earned)
         if eligibility.ruleChanges and eligibility.ruleChanges.gearQuality then
             return 0, "Gear quality changed"
         end
+        if eligibility.initialRules and eligibility.initialRules.selfCraftedGearAllowed == true then
+            return 0, "Self-crafted exemption enabled"
+        end
+        if db and db.run and db.run.ruleset and db.run.ruleset.selfCraftedGearAllowed == true then
+            return 0, "Self-crafted exemption enabled"
+        end
         return math.min(currentLevel / maxLevel, 1), "Eligible: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
+    end
+
+    if definition.progressKind == "GEAR_QUALITY_CRAFTED_MAX" then
+        if not eligibility.startedAtOrBelow10 then
+            return 0, "Started above level 10"
+        end
+        if not eligibility.initialRules or eligibility.initialRules.gearQuality ~= definition.ruleName then
+            return 0, "Wrong gear quality at start"
+        end
+        if eligibility.ruleChanges and eligibility.ruleChanges.gearQuality then
+            return 0, "Gear quality changed"
+        end
+        if not (eligibility.initialRules and eligibility.initialRules.selfCraftedGearAllowed == true) then
+            return 0, "Self-crafted exemption not enabled at start"
+        end
+        if not (db and db.run and db.run.ruleset and db.run.ruleset.selfCraftedGearAllowed == true) then
+            return 0, "Self-crafted exemption disabled"
+        end
+        return math.min(currentLevel / maxLevel, 1), "Self-forged: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
     end
 
     if definition.progressKind == "RULE_MAX" then
@@ -557,8 +584,17 @@ function SC:Achievements_OnLevelChanged(level)
     end
 
     if eligibility.initialRules and eligibility.initialRules.gearQuality == "WHITE_GRAY_ONLY"
-       and not (eligibility.ruleChanges and eligibility.ruleChanges.gearQuality) then
+       and not (eligibility.ruleChanges and eligibility.ruleChanges.gearQuality)
+       and eligibility.initialRules.selfCraftedGearAllowed ~= true
+       and db.run.ruleset.selfCraftedGearAllowed ~= true then
         Earn("char_white_knuckles", "CHARACTER", "White Knuckles")
+    end
+
+    if eligibility.initialRules and eligibility.initialRules.gearQuality == "WHITE_GRAY_ONLY"
+       and not (eligibility.ruleChanges and eligibility.ruleChanges.gearQuality)
+       and eligibility.initialRules.selfCraftedGearAllowed == true
+       and db.run.ruleset.selfCraftedGearAllowed == true then
+        Earn("char_self_forged", "CHARACTER", "Self-Forged")
     end
 
     for _, spec in ipairs(RESTRICTION_RULES) do
