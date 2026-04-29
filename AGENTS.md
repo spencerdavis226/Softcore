@@ -127,6 +127,7 @@ Current behavior:
 - Group run start creates a Run-tab proposal.
 - Separate active runs can align only through explicit Party Sync routing to a run sync proposal.
 - Active players can invite party members through Party Sync routing to a party invite proposal.
+- Ruleset mismatches can route through Party Sync to a rule amendment proposal using the local player's differing rule values.
 - Party Sync may also route stale/unsynced display state to a full-state resync without mutating local run state.
 - Mid-run rules change through `Modify Rules` and grouped amendment acceptance.
 - Pending proposals expire after 30 minutes.

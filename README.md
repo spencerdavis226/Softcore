@@ -152,7 +152,7 @@ Use **Party Sync** in the Run tab when:
 
 Party Sync routes this case to a sync proposal. Accepting a sync proposal changes the accepting player's run ID to the proposer run ID. It does not wipe local deaths, violations, logs, or character progress.
 
-If rules differ, sync acceptance is blocked and the party remains in conflict until rules are aligned through accepted rule changes or another explicit choice.
+If rules differ, Party Sync routes to a rule amendment proposal using the local player's current rule values. Members still review and accept the amendment before rules change. After rules match, use Party Sync again if run IDs also need alignment.
 
 ## Inviting Party Members
 
@@ -164,7 +164,7 @@ Targeted invites are also available with `/sc propose-add Player-Realm`.
 
 ## Rule Amendments
 
-Active run rules are locked by default. Use **Modify Rules** in the Run tab to create a draft.
+Active run rules are locked by default. Use **Modify Rules** in the Run tab to create a draft, or use **Party Sync** when the party is already in a rules conflict and you want to propose your local rule differences.
 
 - Solo: Apply Changes applies immediately and logs the old/new values.
 - Grouped: Propose to Party creates a Run-tab amendment proposal.

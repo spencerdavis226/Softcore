@@ -1580,8 +1580,6 @@ local function RefreshRunPanel(frame)
         else
             if confirmingStop then
                 frame.start.activeText:SetText("|cfffbbf24End run requested.|r This will reset local run progress.")
-            elseif rulesConflict then
-                frame.start.activeText:SetText("|cfffbbf24Rules conflict detected with " .. FormatPlayerLabel(rulesConflict.playerKey) .. ".|r Use Modify Rules to align rules, then Party Sync.")
             elseif partySyncRoute and partySyncRoute.message and IsInGroup() and not IsInRaid() then
                 if partySyncRoute.action == "NONE" then
                     frame.start.activeText:SetText("|cff4ade80" .. partySyncRoute.message .. "|r Active run rules are locked.")
@@ -1590,6 +1588,8 @@ local function RefreshRunPanel(frame)
                 else
                     frame.start.activeText:SetText("|cffffd100" .. partySyncRoute.message .. "|r")
                 end
+            elseif rulesConflict then
+                frame.start.activeText:SetText("|cfffbbf24Rules conflict detected with " .. FormatPlayerLabel(rulesConflict.playerKey) .. ".|r Use Party Sync to propose your local rule differences.")
             else
                 frame.start.activeText:SetText("Active run rules are locked. Camera mode can be switched anytime without a rule amendment.")
             end

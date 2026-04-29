@@ -553,6 +553,27 @@ function SC:CreateRunInviteProposal()
     return self:CreateRunProposal(db.run.runName or "Softcore Run", db.run.ruleset, "ADD_PARTICIPANT", nil, db.run.runId)
 end
 
+local function CountRuleChanges(changes)
+    local count = 0
+    for _ in pairs(changes or {}) do
+        count = count + 1
+    end
+    return count
+end
+
+local function BuildLocalRuleAmendment(self, localRuleset, remoteRuleset)
+    if not self.DescribeRulesetDifferences then
+        return nil, 0
+    end
+
+    local changes = {}
+    for _, diff in ipairs(self:DescribeRulesetDifferences(localRuleset, remoteRuleset)) do
+        changes[diff.ruleName] = diff.localValue
+    end
+
+    return changes, CountRuleChanges(changes)
+end
+
 function SC:GetPartySyncAction()
     local db = GetDB()
     if IsInRaid() then
@@ -590,6 +611,7 @@ function SC:GetPartySyncAction()
     local localHash = self.GetRulesetHash and self:GetRulesetHash() or ""
     local rows = self.Sync_GetGroupRows and self:Sync_GetGroupRows() or {}
     local wantsInvite, wantsSync, wantsResync
+    local wantsAmendRules, ruleChanges, ruleChangeCount
     local blocked
 
     for _, peer in ipairs(rows) do
@@ -601,12 +623,34 @@ function SC:GetPartySyncAction()
         elseif status == "ADDON_VERSION_MISMATCH" or (peer.addonVersion and peer.addonVersion ~= self.version) then
             blocked = blocked or ("Version mismatch with " .. label .. ". Update/reload both addons, then try Party Sync again.")
         elseif status == "RULESET_MISMATCH" then
-            blocked = blocked or ("Rules mismatch with " .. label .. ". Use Modify Rules to align rules before syncing runs.")
+            if peer.remoteRuleset then
+                local changes, count = BuildLocalRuleAmendment(self, db.run.ruleset, peer.remoteRuleset)
+                if count > 0 then
+                    wantsAmendRules = wantsAmendRules or label
+                    ruleChanges = ruleChanges or changes
+                    ruleChangeCount = ruleChangeCount or count
+                else
+                    wantsResync = wantsResync or label
+                end
+            else
+                wantsResync = wantsResync or label
+            end
         elseif not peer.active or status == "NOT_IN_RUN" then
             wantsInvite = wantsInvite or label
         elseif localRunId and peer.runId and peer.runId ~= localRunId then
             if localHash ~= "" and peer.rulesetHash and peer.rulesetHash ~= "" and peer.rulesetHash ~= localHash then
-                blocked = blocked or ("Rules mismatch with " .. label .. ". Use Modify Rules to align rules before syncing runs.")
+                if peer.remoteRuleset then
+                    local changes, count = BuildLocalRuleAmendment(self, db.run.ruleset, peer.remoteRuleset)
+                    if count > 0 then
+                        wantsAmendRules = wantsAmendRules or label
+                        ruleChanges = ruleChanges or changes
+                        ruleChangeCount = ruleChangeCount or count
+                    else
+                        wantsResync = wantsResync or label
+                    end
+                else
+                    wantsResync = wantsResync or label
+                end
             else
                 wantsSync = wantsSync or label
             end
@@ -621,7 +665,18 @@ function SC:GetPartySyncAction()
             if conflict.type == "ADDON_VERSION_MISMATCH" then
                 blocked = blocked or ("Version mismatch with " .. label .. ". Update/reload both addons, then try Party Sync again.")
             elseif conflict.type == "RULESET_MISMATCH" then
-                blocked = blocked or ("Rules mismatch with " .. label .. ". Use Modify Rules to align rules before syncing runs.")
+                if conflict.remoteRuleset then
+                    local changes, count = BuildLocalRuleAmendment(self, db.run.ruleset, conflict.remoteRuleset)
+                    if count > 0 then
+                        wantsAmendRules = wantsAmendRules or label
+                        ruleChanges = ruleChanges or changes
+                        ruleChangeCount = ruleChangeCount or count
+                    else
+                        wantsResync = wantsResync or label
+                    end
+                else
+                    wantsResync = wantsResync or label
+                end
             elseif conflict.type == "RUN_MISMATCH" then
                 wantsSync = wantsSync or label
             end
@@ -647,6 +702,14 @@ function SC:GetPartySyncAction()
             action = "INVITE",
             enabled = true,
             message = wantsInvite .. " is not in this run. Party Sync will send a run invite.",
+        }
+    end
+    if wantsAmendRules then
+        return {
+            action = "AMEND_RULES",
+            enabled = true,
+            message = "Rules differ from " .. wantsAmendRules .. ". Party Sync will propose " .. tostring(ruleChangeCount or CountRuleChanges(ruleChanges)) .. " local rule change(s).",
+            ruleChanges = ruleChanges,
         }
     end
     if wantsSync then
@@ -689,6 +752,21 @@ function SC:RunPartySyncAction()
         return route
     elseif route.action == "INVITE" then
         return self:CreateRunInviteProposal()
+    elseif route.action == "AMEND_RULES" then
+        if not self.ProposeRuleAmendment then
+            Print("rule amendment handling is not loaded.")
+            return nil
+        end
+        if CountRuleChanges(route.ruleChanges) == 0 then
+            Print("no rule differences available yet. Requesting fresh party state.")
+            if self.Sync_RequestFullState then
+                self:Sync_RequestFullState()
+            end
+            return route
+        end
+        local amendment = self:ProposeRuleAmendment(route.ruleChanges, "Party Sync proposed local rule alignment.")
+        Print("rule amendment proposed through Party Sync.")
+        return amendment
     elseif route.action == "SYNC_RUN" then
         return self:CreateRunSyncProposal()
     end
