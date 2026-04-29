@@ -272,19 +272,37 @@ local function HandleAccessEvent(event)
     end
 end
 
+local function IsWarbandBankUIVisible()
+    local panel = _G.AccountBankPanel
+    if panel and panel.IsShown and panel:IsShown() then
+        return true
+    end
+    if C_Bank and C_Bank.IsBankOpen and Enum and Enum.BankType then
+        local ok, open = pcall(C_Bank.IsBankOpen, Enum.BankType.Account)
+        if ok and open then
+            return true
+        end
+    end
+    return false
+end
+
 local function IsWarbandBankAccessEvent(event, ...)
     local bankType = ...
 
-    -- In-game verification note: Warband bank access is account-bank based in The War Within.
-    -- ACCOUNT_BANK_PANEL_OPENED appears in community API references, while BANK_TABS_CHANGED
-    -- and PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED are account-bank adjacent. Keep all detection
-    -- isolated here and verify the exact open-path events with /etrace on Retail.
-    if event == "ACCOUNT_BANK_PANEL_OPENED" or event == "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED" then
+    -- Warband / account bank (The War Within+). ACCOUNT_BANK_PANEL_OPENED is a direct open signal.
+    -- PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED and BANK_TABS_CHANGED (Account) can fire from client
+    -- sync without the bank UI shown — e.g. around flight masters / taxi — so require a visible
+    -- account-bank panel (or C_Bank.IsBankOpen) for those.
+    if event == "ACCOUNT_BANK_PANEL_OPENED" then
         return true
     end
 
+    if event == "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED" then
+        return IsWarbandBankUIVisible()
+    end
+
     if Enum and Enum.BankType and bankType == Enum.BankType.Account then
-        return true
+        return IsWarbandBankUIVisible()
     end
 
     return false
