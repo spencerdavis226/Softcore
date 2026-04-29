@@ -912,7 +912,8 @@ local function ApplyStartPreset(frame, preset)
     local chef = preset == "CHEF_SPECIAL"
 
     rules.groupingMode = ironman and "SOLO_SELF_FOUND" or "SYNCED_GROUP_ALLOWED"
-    rules.gearQuality = ironman and "WHITE_GRAY_ONLY" or (chef and "GREEN_OR_LOWER" or "ALLOWED")
+    rules.gearQuality = (ironman or chef) and "WHITE_GRAY_ONLY" or "ALLOWED"
+    rules.selfCraftedGearAllowed = ironman and false or true
     rules.maxLevelGap = ironman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.maxLevelGapValue = 3
     rules.heirlooms = DISALLOWED_OUTCOME
@@ -939,20 +940,31 @@ local function ApplyStartPreset(frame, preset)
 
     if chef then
         rules.auctionHouse = DISALLOWED_OUTCOME
-        rules.mailbox = DISALLOWED_OUTCOME
-        rules.trade = DISALLOWED_OUTCOME
-        rules.bank = DISALLOWED_OUTCOME
+        rules.mailbox = "ALLOWED"
+        rules.trade = "ALLOWED"
+        rules.bank = "ALLOWED"
         rules.warbandBank = DISALLOWED_OUTCOME
         rules.guildBank = DISALLOWED_OUTCOME
         rules.mounts = "ALLOWED"
         rules.flying = DISALLOWED_OUTCOME
+        rules.flightPaths = "ALLOWED"
         rules.heirlooms = DISALLOWED_OUTCOME
-        rules.enchants = DISALLOWED_OUTCOME
+        rules.enchants = "ALLOWED"
         rules.consumables = "ALLOWED"
         rules.dungeonRepeat = "ALLOWED"
         rules.instancedPvP = DISALLOWED_OUTCOME
         frame.start.selectedCameraMode = "CINEMATIC"
         SetCameraRules(rules, frame.start.selectedCameraMode)
+    elseif not ironman then
+        -- Casual: minimal restrictions for a lightweight baseline run.
+        rules.auctionHouse = "ALLOWED"
+        rules.mailbox = "ALLOWED"
+        rules.trade = "ALLOWED"
+        rules.bank = "ALLOWED"
+        rules.warbandBank = "ALLOWED"
+        rules.guildBank = "ALLOWED"
+        rules.heirlooms = "ALLOWED"
+        rules.selfCraftedGearAllowed = false
     end
 
     rules.maxDeaths = false
@@ -2290,6 +2302,13 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.selfCraftedCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
     frame.start.selfCraftedCheck.label:SetText("Allow any self-crafted gear")
     frame.start.selfCraftedCheck:SetScript("OnClick", function(btn)
+        local ironmanSelected = frame.start.selectedPreset == "IRONMAN"
+        if ironmanSelected then
+            frame.start.selectedRules.selfCraftedGearAllowed = false
+            btn:SetChecked(false)
+            SC:MasterUI_Refresh()
+            return
+        end
         frame.start.selectedRules.selfCraftedGearAllowed = btn:GetChecked() == true
         SC:MasterUI_Refresh()
     end)
@@ -2467,13 +2486,17 @@ function SC:OpenMasterWindow(focusTab)
         self.dungeonRepeatCheck:SetChecked(not IsDisallowed(self.selectedRules.dungeonRepeat))
         self.consumablesCheck:SetChecked(not IsDisallowed(self.selectedRules.consumables))
         self.instancedPvPCheck:SetChecked(not IsDisallowed(self.selectedRules.instancedPvP))
+        local ironmanSelected = self.selectedPreset == "IRONMAN"
+        if ironmanSelected then
+            self.selectedRules.selfCraftedGearAllowed = false
+        end
         local selfCraftedActive = self.selectedRules.selfCraftedGearAllowed == true
         self.selfCraftedCheck:SetChecked(selfCraftedActive)
-        self.selfCraftedCheck:SetEnabled(canEdit and gearRestricted)
+        self.selfCraftedCheck:SetEnabled(canEdit and gearRestricted and not ironmanSelected)
         if self.selfCraftedCheck.label then
             if highlightingRuleChanges and tostring(self.draftBaseRules.selfCraftedGearAllowed) ~= tostring(self.selectedRules.selfCraftedGearAllowed) then
                 SetFontStringRGB(self.selfCraftedCheck.label, selfCraftedActive and GREEN_TEXT or RED_TEXT)
-            elseif canEdit and gearRestricted then
+            elseif canEdit and gearRestricted and not ironmanSelected then
                 SetFontStringRGB(self.selfCraftedCheck.label, BODY_TEXT)
             else
                 SetFontStringRGB(self.selfCraftedCheck.label, MUTED_TEXT)

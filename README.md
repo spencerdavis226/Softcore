@@ -33,8 +33,10 @@ Open with `/sc menu`, the minimap button, or the HUD.
 
 When no run is active, the menu focuses on starting a run. When a run is active, it focuses on current status.
 The Run tab groups setup into Run Charter, Access and Economy, Travel and Camera, Gear and Items, and Party and Dungeons sections using a consistent two-column rule grid. Restrict Camera is a single rule with a mode selector for the active camera preference. Gear restriction uses a checkbox; when unchecked, any gear quality is allowed, and when checked, the dropdown selects the limit. A subordinate `Allow any self-crafted gear` checkbox is only active while gear restriction is enabled and is included in Modify Rules/amendment diffing. The Run Charter section also includes compact own-character death announcement checkboxes beside the core run options.
+The `Casual` preset is the low-restriction baseline: grouped mode, no gear restriction, no enforced level gap, economy access allowed (including auction/mail/trade/banks), mounts/flying/flight paths allowed, heirlooms/enchants/consumables/repeated dungeons allowed, and instanced PvP disallowed.
+The `Chef's Special` preset is the addon creator's personal preferred run profile: grouped play with white/gray gear limits, mailbox/trade/bank allowed while auction/warband/guild banks stay disallowed, mounts and flight paths allowed (but not flying mounts), and enchants/consumables/repeated dungeons enabled.
 
-The Ironman preset follows the common WoW Challenges shape and allows flight paths. No-flight-path completion is tracked as a stricter achievement, including the Ironman + no flight paths + camera mode milestone. White/gray-only progression is split so `White Knuckles` requires no self-crafted exemption, while `Self-Forged` tracks white/gray-only runs that keep the self-crafted exemption enabled from start to max level.
+The Ironman preset follows the common WoW Challenges shape, allows flight paths, and locks the `Allow any self-crafted gear` exemption off. No-flight-path completion is tracked as a stricter achievement, including the Ironman + no flight paths + camera mode milestone. White/gray-only progression is split so `White Knuckles` requires no self-crafted exemption, while `Self-Forged` tracks white/gray-only runs that keep the self-crafted exemption enabled from start to max level.
 
 ## HUD
 
