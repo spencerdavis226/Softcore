@@ -497,8 +497,7 @@ local function CreateRunSection(parent, title, x, y, width, height)
     local section = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     section:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     section:SetSize(width, height)
-    section.expandedHeight = height
-    section.collapsedHeight = 30
+    section.fixedHeight = height
     section.children = {}
     if section.SetBackdrop then
         section:SetBackdrop({
@@ -515,16 +514,10 @@ local function CreateRunSection(parent, title, x, y, width, height)
 
     section.title = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     section.title:SetPoint("TOPLEFT", section, "TOPLEFT", 12, -8)
-    section.title:SetWidth(width - 48)
+    section.title:SetWidth(width - 24)
     section.title:SetJustifyH("LEFT")
     section.title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
     section.title:SetText(title)
-
-    section.toggle = CreateFrame("Button", nil, section)
-    section.toggle:SetSize(20, 20)
-    section.toggle:SetPoint("TOPRIGHT", section, "TOPRIGHT", -7, -5)
-    section.toggle.text = section.toggle:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    section.toggle.text:SetPoint("CENTER", section.toggle, "CENTER", 0, 0)
 
     section.divider = section:CreateTexture(nil, "ARTWORK")
     section.divider:SetHeight(1)
@@ -536,21 +529,12 @@ local function CreateRunSection(parent, title, x, y, width, height)
     section.content:SetPoint("TOPLEFT", section, "TOPLEFT", 10, -36)
     section.content:SetPoint("BOTTOMRIGHT", section, "BOTTOMRIGHT", -10, 8)
 
-    section.toggle:SetScript("OnClick", function()
-        section.collapsed = not section.collapsed
-        if SC.MasterUI_Refresh then
-            SC:MasterUI_Refresh()
-        end
-    end)
-
     function section:Refresh()
-        local expanded = not self.collapsed
-        self:SetHeight(expanded and self.expandedHeight or self.collapsedHeight)
-        self.toggle.text:SetText(expanded and "-" or "+")
-        self.content:SetShown(expanded)
-        self.divider:SetShown(expanded)
+        self:SetHeight(self.fixedHeight)
+        self.content:Show()
+        self.divider:Show()
         for _, child in ipairs(self.children) do
-            child:SetShown(expanded and child.softcoreDesiredShown ~= false)
+            child:SetShown(child.softcoreDesiredShown ~= false)
         end
     end
 
@@ -570,12 +554,7 @@ end
 local function SetRunControlShown(control, shown)
     if not control then return end
     control.softcoreDesiredShown = shown
-    local section = control.softcoreRunSection
-    if section and section.collapsed and shown then
-        control:SetShown(false)
-    else
-        control:SetShown(shown)
-    end
+    control:SetShown(shown)
 end
 
 local function RefreshRunSections(start)
@@ -1701,6 +1680,12 @@ local function RefreshRunPanel(frame)
     if frame.start.RefreshControls then
         frame.start:RefreshControls()
     end
+    if active then
+        if frame.start.presetLabel then SetRunControlShown(frame.start.presetLabel, false) end
+        SetRunControlShown(frame.start.casualBtn, false)
+        SetRunControlShown(frame.start.ironmanBtn, false)
+        if frame.start.chefBtn then SetRunControlShown(frame.start.chefBtn, false) end
+    end
     RefreshRunSections(frame.start)
     AnchorRunFooterButtons(frame)
 end
@@ -2091,10 +2076,10 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.activeText:Hide()
 
     frame.start.sections = {}
-    frame.start.charterSection = CreateRunSection(startPanel, "Run Charter", 0, -18, 690, 104)
-    frame.start.accessSection = CreateRunSection(startPanel, "Access and Economy", 0, -134, 330, 228)
-    frame.start.travelSection = CreateRunSection(startPanel, "Travel and Camera", 0, -374, 330, 142)
-    frame.start.progressionSection = CreateRunSection(startPanel, "Party, Dungeons, and Gear", 360, -134, 330, 382)
+    frame.start.charterSection = CreateRunSection(startPanel, "Run Charter", 0, -18, 690, 96)
+    frame.start.accessSection = CreateRunSection(startPanel, "Access and Economy", 0, -126, 330, 228)
+    frame.start.travelSection = CreateRunSection(startPanel, "Travel and Camera", 0, -366, 330, 164)
+    frame.start.progressionSection = CreateRunSection(startPanel, "Party, Dungeons, and Gear", 360, -126, 330, 294)
     table.insert(frame.start.sections, frame.start.charterSection)
     table.insert(frame.start.sections, frame.start.accessSection)
     table.insert(frame.start.sections, frame.start.travelSection)
@@ -2125,7 +2110,7 @@ function SC:OpenMasterWindow(focusTab)
     RegisterRunControl(frame.start, frame.start.chefBtn, frame.start.charterSection)
     RegisterRunControl(frame.start, frame.start.ironmanBtn, frame.start.charterSection)
     RegisterRunControl(frame.start, CreateLabel(frame.start.charterSection.content, "Death is permanent. A death fails this character only.", 0, -38, "GameFontHighlightSmall", 320), frame.start.charterSection)
-    frame.start.groupingLabel = CreateLabel(frame.start.charterSection.content, "Mode", 360, -7, "GameFontNormalSmall", 70)
+    frame.start.groupingLabel = CreateLabel(frame.start.charterSection.content, "Mode", 348, -7, "GameFontNormalSmall", 70)
     RegisterRunControl(frame.start, frame.start.groupingLabel, frame.start.charterSection)
     frame.start.groupingDropdown = CreateDropdown(frame.start.charterSection.content, "SoftcoreMasterGroupingDropdown", GROUPING_OPTIONS, frame.start.selectedRules.groupingMode, function(value)
         frame.start.selectedRules.groupingMode = value
@@ -2134,16 +2119,16 @@ function SC:OpenMasterWindow(focusTab)
         end
         SC:MasterUI_Refresh()
     end, 140)
-    frame.start.groupingDropdown:SetPoint("TOPLEFT", frame.start.charterSection.content, "TOPLEFT", 432, -1)
+    frame.start.groupingDropdown:SetPoint("TOPLEFT", frame.start.charterSection.content, "TOPLEFT", 420, -1)
     RegisterRunControl(frame.start, frame.start.groupingDropdown, frame.start.charterSection)
 
-    frame.start.deathAnnounceLabel = CreateLabel(frame.start.charterSection.content, "Announce Death", 360, -34, "GameFontNormalSmall", 100)
+    frame.start.deathAnnounceLabel = CreateLabel(frame.start.charterSection.content, "Announce Death", 348, -34, "GameFontNormalSmall", 100)
     RegisterRunControl(frame.start, frame.start.deathAnnounceLabel, frame.start.charterSection)
-    frame.start.deathAnnounceChatCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "CHAT", "Chat", 466, -26)
+    frame.start.deathAnnounceChatCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "CHAT", "Chat", 454, -26)
     RegisterRunControl(frame.start, frame.start.deathAnnounceChatCheck, frame.start.charterSection)
-    frame.start.deathAnnouncePartyCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "PARTY", "Party", 532, -26)
+    frame.start.deathAnnouncePartyCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "PARTY", "Party", 520, -26)
     RegisterRunControl(frame.start, frame.start.deathAnnouncePartyCheck, frame.start.charterSection)
-    frame.start.deathAnnounceGuildCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "GUILD", "Guild", 606, -26)
+    frame.start.deathAnnounceGuildCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "GUILD", "Guild", 594, -26)
     RegisterRunControl(frame.start, frame.start.deathAnnounceGuildCheck, frame.start.charterSection)
 
     local y = 0
@@ -2168,12 +2153,12 @@ function SC:OpenMasterWindow(focusTab)
     end
 
     frame.start.cameraHint = frame.start.travelSection.content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.start.cameraHint:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 128, -92)
+    frame.start.cameraHint:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 0, -94)
     frame.start.cameraHint:SetTextColor(MUTED_TEXT.r * 0.7, MUTED_TEXT.g * 0.7, MUTED_TEXT.b * 0.7)
-    frame.start.cameraHint:SetText("Camera can toggle freely.")
+    frame.start.cameraHint:SetText("Camera mode")
     RegisterRunControl(frame.start, frame.start.cameraHint, frame.start.travelSection)
     frame.start.firstPersonCheck = CreateFrame("CheckButton", nil, frame.start.travelSection.content, "UICheckButtonTemplate")
-    frame.start.firstPersonCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 0, -90)
+    frame.start.firstPersonCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 0, -116)
     frame.start.firstPersonCheck.label = frame.start.firstPersonCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.start.firstPersonCheck.label:SetPoint("LEFT", frame.start.firstPersonCheck, "RIGHT", 2, 0)
     frame.start.firstPersonCheck.label:SetWidth(118)
@@ -2203,7 +2188,7 @@ function SC:OpenMasterWindow(focusTab)
     RegisterRunControl(frame.start, frame.start.firstPersonCheck, frame.start.travelSection)
 
     frame.start.actionCamCheck = CreateFrame("CheckButton", nil, frame.start.travelSection.content, "UICheckButtonTemplate")
-    frame.start.actionCamCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 158, -90)
+    frame.start.actionCamCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 158, -116)
     frame.start.actionCamCheck.label = frame.start.actionCamCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     frame.start.actionCamCheck.label:SetPoint("LEFT", frame.start.actionCamCheck, "RIGHT", 2, 0)
     frame.start.actionCamCheck.label:SetWidth(118)

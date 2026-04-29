@@ -26,13 +26,13 @@ There are no proposal popup windows. Incoming group proposals and rule amendment
 Open with `/sc menu`, the minimap button, or the HUD.
 
 - **Overview**: local run status, party status, participants, run ID, elapsed time, deaths, and active violation count.
-- **Run**: start a run, review locked active rules in collapsible native-WoW styled rule groups, stop a run, invite party members, propose run sync, or modify rules. Proposal/amendment state is shown through the visible rule review and footer actions rather than a top detail banner.
+- **Run**: start a run, review locked active rules in native-WoW styled rule groups, stop a run, invite party members, propose run sync, or modify rules. Proposal/amendment state is shown through the visible rule review and footer actions rather than a top detail banner.
 - **Violations**: active clearable issues with one-click Clear where allowed.
 - **Log**: audit history, newest first.
 - **Achievements**: account-level leveling, ruleset, and max-level milestones.
 
 When no run is active, the menu focuses on starting a run. When a run is active, it focuses on current status.
-The Run tab groups setup into Run Charter, Access and Economy, Travel and Camera, and Party, Dungeons, and Gear sections. Each section can collapse to keep the rule review compact. The Run Charter section also includes compact own-character death announcement checkboxes beside the core run options.
+The Run tab groups setup into Run Charter, Access and Economy, Travel and Camera, and Party, Dungeons, and Gear sections. The Run Charter section also includes compact own-character death announcement checkboxes beside the core run options.
 
 The Ironman preset follows the common WoW Challenges shape and allows flight paths. No-flight-path completion is tracked as a stricter achievement, including the Ironman + no flight paths + camera mode milestone.
 
