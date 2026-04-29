@@ -2129,12 +2129,13 @@ function SC:OpenMasterWindow(focusTab)
     table.insert(frame.start.sections, frame.start.partyDungeonSection)
 
     local charterLeftX = 0
-    local charterRightX = runLayout.CONTENT_WIDTH - 292
+    local charterRightX = runLayout.RIGHT_COLUMN_X
     local charterLabelWidth = 56
     local charterControlX = charterLeftX + 58
-    local charterRightControlX = charterRightX + 92
+    local charterRightControlX = charterRightX + 156
+    local charterDeathControlX = charterRightX + 136
     local rowOneY = 0
-    local rowTwoY = -36
+    local rowTwoY = -runLayout.ROW_HEIGHT
 
     frame.start.presetLabel = CreateLabel(frame.start.charterSection.content, "Presets", charterLeftX, rowOneY - 4, "GameFontNormalSmall", charterLabelWidth)
     frame.start.presetLabel:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
@@ -2146,13 +2147,13 @@ function SC:OpenMasterWindow(focusTab)
     end)
 
     frame.start.chefBtn = CreateButton(frame.start.charterSection.content, "Chef's Special", 116, 22)
-    frame.start.chefBtn:SetPoint("LEFT", frame.start.casualBtn, "RIGHT", 8, 0)
+    frame.start.chefBtn:SetPoint("LEFT", frame.start.casualBtn, "RIGHT", 6, 0)
     frame.start.chefBtn:SetScript("OnClick", function()
         ApplyStartPreset(frame, "CHEF_SPECIAL")
     end)
 
     frame.start.ironmanBtn = CreateButton(frame.start.charterSection.content, "Ironman", 86, 22)
-    frame.start.ironmanBtn:SetPoint("LEFT", frame.start.chefBtn, "RIGHT", 8, 0)
+    frame.start.ironmanBtn:SetPoint("TOPLEFT", frame.start.charterSection.content, "TOPLEFT", charterControlX, rowTwoY - 1)
     frame.start.ironmanBtn:SetScript("OnClick", function()
         ApplyStartPreset(frame, "IRONMAN")
     end)
@@ -2160,7 +2161,6 @@ function SC:OpenMasterWindow(focusTab)
     RegisterRunControl(frame.start, frame.start.casualBtn, frame.start.charterSection)
     RegisterRunControl(frame.start, frame.start.chefBtn, frame.start.charterSection)
     RegisterRunControl(frame.start, frame.start.ironmanBtn, frame.start.charterSection)
-    RegisterRunControl(frame.start, CreateLabel(frame.start.charterSection.content, "Death is permanent. A death fails this character only.", charterLeftX, rowTwoY - 3, "GameFontHighlightSmall", 330), frame.start.charterSection)
     frame.start.groupingLabel = CreateLabel(frame.start.charterSection.content, "Mode", charterRightX, rowOneY - 4, "GameFontNormalSmall", 90)
     RegisterRunControl(frame.start, frame.start.groupingLabel, frame.start.charterSection)
     frame.start.groupingDropdown = CreateDropdown(frame.start.charterSection.content, "SoftcoreMasterGroupingDropdown", GROUPING_OPTIONS, frame.start.selectedRules.groupingMode, function(value)
@@ -2172,16 +2172,16 @@ function SC:OpenMasterWindow(focusTab)
     end, 140)
     runLayout:SetDropdownPoint(frame.start.groupingDropdown, frame.start.charterSection.content, charterRightControlX, rowOneY - 8)
     RegisterRunControl(frame.start, frame.start.groupingDropdown, frame.start.charterSection)
-    runLayout:AnchorLabelToControl(frame.start.groupingLabel, frame.start.groupingDropdown, -76, 1)
+    runLayout:AnchorLabelToControl(frame.start.groupingLabel, frame.start.groupingDropdown, -140, 1)
 
     frame.start.deathAnnounceLabel = CreateLabel(frame.start.charterSection.content, "Announce Death", charterRightX, rowTwoY - 4, "GameFontNormalSmall", 96)
     RegisterRunControl(frame.start, frame.start.deathAnnounceLabel, frame.start.charterSection)
-    frame.start.deathAnnounceChatCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "CHAT", "Chat", charterRightControlX, rowTwoY)
+    frame.start.deathAnnounceChatCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "CHAT", "Chat", charterDeathControlX, rowTwoY)
     RegisterRunControl(frame.start, frame.start.deathAnnounceChatCheck, frame.start.charterSection)
-    runLayout:AnchorLabelToControl(frame.start.deathAnnounceLabel, frame.start.deathAnnounceChatCheck, -92, 0)
-    frame.start.deathAnnouncePartyCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "PARTY", "Party", charterRightControlX + 66, rowTwoY)
+    runLayout:AnchorLabelToControl(frame.start.deathAnnounceLabel, frame.start.deathAnnounceChatCheck, -140, 0)
+    frame.start.deathAnnouncePartyCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "PARTY", "Party", charterDeathControlX + 56, rowTwoY)
     RegisterRunControl(frame.start, frame.start.deathAnnouncePartyCheck, frame.start.charterSection)
-    frame.start.deathAnnounceGuildCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "GUILD", "Guild", charterRightControlX + 138, rowTwoY)
+    frame.start.deathAnnounceGuildCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "GUILD", "Guild", charterDeathControlX + 112, rowTwoY)
     RegisterRunControl(frame.start, frame.start.deathAnnounceGuildCheck, frame.start.charterSection)
 
     local y = 0
@@ -2343,12 +2343,12 @@ function SC:OpenMasterWindow(focusTab)
         SC:MasterUI_Refresh()
     end)
     RegisterRunControl(frame.start, frame.start.maxGapCheck, frame.start.partyDungeonSection)
-    frame.start.maxGapLabel = CreateLabel(frame.start.partyDungeonSection.content, "Gap", 214, -4, "GameFontHighlightSmall", 42)
+    frame.start.maxGapLabel = CreateLabel(frame.start.partyDungeonSection.content, "Gap", 180, -4, "GameFontHighlightSmall", 34)
     frame.start.maxGapLabel:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
     RegisterRunControl(frame.start, frame.start.maxGapLabel, frame.start.partyDungeonSection)
     frame.start.maxGapBox = CreateFrame("EditBox", nil, frame.start.partyDungeonSection.content, "InputBoxTemplate")
     frame.start.maxGapBox:SetSize(42, 22)
-    frame.start.maxGapBox:SetPoint("TOPLEFT", frame.start.partyDungeonSection.content, "TOPLEFT", 258, 0)
+    frame.start.maxGapBox:SetPoint("TOPLEFT", frame.start.partyDungeonSection.content, "TOPLEFT", 214, -1)
     frame.start.maxGapBox:SetAutoFocus(false)
     frame.start.maxGapBox:SetNumeric(true)
     frame.start.maxGapBox:SetScript("OnTextChanged", function(self)
