@@ -220,6 +220,7 @@ local LOG_EVENT_DISPLAY = {
     RULE_AMENDMENT_DECLINED = { label = "Rule Declined", group = "rules" },
     RULE_AMENDMENT_PROPOSED = { label = "Rule Proposal", group = "rules" },
     RULE_AMENDMENT_RECEIVED = { label = "Rule Proposal", group = "rules" },
+    RULE_AMENDMENT_SUMMARY = { label = "Rules Amended", group = "rules" },
     RULE_CHANGED = { label = "Rule Changed", group = "rules" },
     RULE_LOG = { label = "Rule Notice", group = "rules" },
     RULE_UNKNOWN_OUTCOME = { label = "Rule Notice", group = "rules" },
@@ -2642,7 +2643,9 @@ function SC:OpenMasterWindow(focusTab)
             end
         else
             if SC.ProposeRuleAmendment and SC.AcceptRuleAmendment and SC.ApplyRuleAmendment then
-                local amendment = SC:ProposeRuleAmendment(changes, "Run rules modified from the Run tab.")
+                local amendment = SC:ProposeRuleAmendment(changes, "Run rules modified from the Run tab.", {
+                    suppressProposalAcceptLogs = true,
+                })
                 SC:AcceptRuleAmendment(amendment.id)
                 SC:ApplyRuleAmendment(amendment.id)
                 frame.start.isModifyingRules = false

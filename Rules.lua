@@ -369,7 +369,7 @@ function SC:SetRule(ruleName, value)
 
     local amendment = self:ProposeRuleAmendment({
         [ruleName] = normalized,
-    }, "Local slash command rule change.")
+    }, "Local slash command rule change.", { suppressProposalAcceptLogs = true })
 
     self:AcceptRuleAmendment(amendment.id)
     self:ApplyRuleAmendment(amendment.id)
@@ -461,15 +461,18 @@ function SC:ProposeRuleAmendment(newRules, reason, options)
         partyAtProposalTime = options.partyAtProposalTime or GetCurrentPartyKeys(),
     }
     amendment.acceptances[amendment.proposedBy] = true
+    amendment.suppressProposalAcceptLogs = options.suppressProposalAcceptLogs == true
 
     for ruleName in pairs(newRules or {}) do
         amendment.previousRules[ruleName] = db.run.ruleset[ruleName]
     end
 
     table.insert(db.ruleAmendments, amendment)
-    self:AddLog("RULE_AMENDMENT_PROPOSED", amendment.reason, {
-        amendmentId = amendment.id,
-    })
+    if not amendment.suppressProposalAcceptLogs then
+        self:AddLog("RULE_AMENDMENT_PROPOSED", amendment.reason, {
+            amendmentId = amendment.id,
+        })
+    end
 
     if self.Sync_SendAmendmentProposal then
         self:Sync_SendAmendmentProposal(amendment)
@@ -508,9 +511,11 @@ function SC:AcceptRuleAmendment(amendmentId)
                 amendment.acceptedBy = self:GetPlayerKey()
                 amendment.acceptances = amendment.acceptances or {}
                 amendment.acceptances[amendment.acceptedBy] = true
-                self:AddLog("RULE_AMENDMENT_ACCEPTED", "Rule amendment accepted.", {
-                    amendmentId = amendment.id,
-                })
+                if not amendment.suppressProposalAcceptLogs then
+                    self:AddLog("RULE_AMENDMENT_ACCEPTED", "Rule amendment accepted.", {
+                        amendmentId = amendment.id,
+                    })
+                end
                 if self.Sync_SendProposal then
                     self:Sync_SendProposal("AMENDMENT_ACCEPT", amendment.id)
                 end
@@ -571,35 +576,52 @@ function SC:ApplyRuleAmendment(amendmentId)
             end
 
             if amendment.status ~= "APPLIED" then
+                local changed = {}
                 for ruleName, value in pairs(amendment.newRules) do
                     local oldValue = amendment.previousRules[ruleName]
                     if tostring(oldValue) ~= tostring(value) then
-                        db.run.ruleset[ruleName] = value
-                        if self.Achievements_OnRuleChanged then
-                            self:Achievements_OnRuleChanged(ruleName, oldValue, value)
-                        end
-                        self:AddLog("RULE_CHANGED", ruleName .. " changed to " .. tostring(value), {
-                            amendmentId = amendment.id,
+                        table.insert(changed, {
                             ruleName = ruleName,
-                            newValue = value,
                             oldValue = oldValue,
+                            value = value,
                         })
                     end
                 end
 
-                if self.ApplyGroupingMode then
-                    self:ApplyGroupingMode(db.run.ruleset)
-                end
+                if #changed == 0 then
+                    amendment.status = "APPLIED"
+                    amendment.appliedAt = time()
+                else
+                    for _, c in ipairs(changed) do
+                        db.run.ruleset[c.ruleName] = c.value
+                        if self.Achievements_OnRuleChanged then
+                            self:Achievements_OnRuleChanged(c.ruleName, c.oldValue, c.value)
+                        end
+                    end
 
-                db.run.ruleset.version = (tonumber(db.run.ruleset.version) or 1) + 1
+                    if self.ApplyGroupingMode then
+                        self:ApplyGroupingMode(db.run.ruleset)
+                    end
 
-                amendment.status = "APPLIED"
-                amendment.appliedAt = time()
-                self:AddLog("RULE_AMENDMENT_APPLIED", "Rule amendment applied prospectively.", {
-                    amendmentId = amendment.id,
-                })
-                if self.Sync_BroadcastStatus then
-                    self:Sync_BroadcastStatus("RULE_AMENDMENT_APPLIED", { fast = true })
+                    db.run.ruleset.version = (tonumber(db.run.ruleset.version) or 1) + 1
+
+                    amendment.status = "APPLIED"
+                    amendment.appliedAt = time()
+
+                    local parts = {}
+                    for _, c in ipairs(changed) do
+                        table.insert(
+                            parts,
+                            c.ruleName .. " → " .. tostring(c.value) .. " (was " .. tostring(c.oldValue) .. ")"
+                        )
+                    end
+                    self:AddLog("RULE_AMENDMENT_SUMMARY", "Rules amended: " .. table.concat(parts, "; ") .. ".", {
+                        amendmentId = amendment.id,
+                        ruleCount = #changed,
+                    })
+                    if self.Sync_BroadcastStatus then
+                        self:Sync_BroadcastStatus("RULE_AMENDMENT_APPLIED", { fast = true })
+                    end
                 end
             end
 
@@ -655,9 +677,6 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
                                 amendmentId = existing.id,
                             })
                         end
-                        self:AddLog("RULE_AMENDMENT_NO_CHANGES", "Rule amendment already matched local rules.", {
-                            amendmentId = existing.id,
-                        })
                         if self.Sync_SendProposal then
                             self:Sync_SendProposal("AMENDMENT_ACCEPT", existing.id)
                         end
@@ -717,9 +736,6 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
                     senderKey = senderKey,
                 })
             end
-            self:AddLog("RULE_AMENDMENT_NO_CHANGES", "Rule amendment already matched local rules.", {
-                amendmentId = amendmentId,
-            })
             if self.Sync_SendProposal then
                 self:Sync_SendProposal("AMENDMENT_ACCEPT", amendmentId)
             end
