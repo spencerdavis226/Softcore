@@ -615,7 +615,7 @@ function SC:ApplyRuleAmendment(amendmentId)
                             c.ruleName .. " → " .. tostring(c.value) .. " (was " .. tostring(c.oldValue) .. ")"
                         )
                     end
-                    self:AddLog("RULE_AMENDMENT_SUMMARY", "Rules amended: " .. table.concat(parts, "; ") .. ".", {
+                    self:AddLog("RULE_AMENDMENT_SUMMARY", table.concat(parts, "; "), {
                         amendmentId = amendment.id,
                         ruleCount = #changed,
                     })
