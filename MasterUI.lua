@@ -38,7 +38,8 @@ local RUN_LAYOUT = {
     SECTION_CONTENT_TOP = 32,
     SECTION_ROW_CONTROL_HEIGHT = 28,
     DROPDOWN_X_OFFSET = -16,
-    DROPDOWN_Y_OFFSET = 7,
+    CHECKBOX_LABEL_GAP = 8,
+    INLINE_FIELD_GAP = 10,
 }
 RUN_LAYOUT.COLUMN_WIDTH = math.floor((RUN_LAYOUT.CONTENT_WIDTH - RUN_LAYOUT.COLUMN_GAP) / 2)
 RUN_LAYOUT.RIGHT_COLUMN_X = RUN_LAYOUT.COLUMN_WIDTH + RUN_LAYOUT.COLUMN_GAP
@@ -475,14 +476,55 @@ function RUN_LAYOUT:SectionHeight(rowCount, extraHeight)
     return self.SECTION_CONTENT_TOP + ((rowCount - 1) * self.ROW_HEIGHT) + self.SECTION_ROW_CONTROL_HEIGHT + (extraHeight or 0)
 end
 
-function RUN_LAYOUT:SetTopLeft(control, parent, x, y)
-    if not control then return end
-    control:ClearAllPoints()
-    control:SetPoint("TOPLEFT", parent, "TOPLEFT", x or 0, y or 0)
+function RUN_LAYOUT:CreateRow(parent, x, y, width)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetPoint("TOPLEFT", parent, "TOPLEFT", x or 0, y or 0)
+    row:SetSize(width or self.COLUMN_WIDTH, self.ROW_HEIGHT)
+    return row
 end
 
-function RUN_LAYOUT:SetDropdownPoint(dropdown, parent, x, y)
-    self:SetTopLeft(dropdown, parent, (x or 0) + self.DROPDOWN_X_OFFSET, (y or 0) + self.DROPDOWN_Y_OFFSET)
+function RUN_LAYOUT:PlaceRowLabel(row, label, x, width)
+    if not row or not label then return end
+    label:ClearAllPoints()
+    label:SetPoint("LEFT", row, "LEFT", x or 0, 0)
+    label:SetWidth(width or 120)
+    label:SetJustifyH("LEFT")
+end
+
+function RUN_LAYOUT:PlaceRowDropdown(row, dropdown, x)
+    if not row or not dropdown then return end
+    dropdown:ClearAllPoints()
+    dropdown:SetPoint("LEFT", row, "LEFT", (x or 0) + self.DROPDOWN_X_OFFSET, 0)
+end
+
+function RUN_LAYOUT:PlaceRowCheckbox(row, checkbox, x)
+    if not row or not checkbox then return end
+    checkbox:ClearAllPoints()
+    checkbox:SetPoint("LEFT", row, "LEFT", x or 0, 0)
+end
+
+function RUN_LAYOUT:PlaceCheckboxText(checkbox, width)
+    if not checkbox or not checkbox.label then return end
+    checkbox.label:ClearAllPoints()
+    checkbox.label:SetPoint("LEFT", checkbox, "RIGHT", self.CHECKBOX_LABEL_GAP, 0)
+    checkbox.label:SetWidth(width or 0)
+    checkbox.label:SetJustifyH("LEFT")
+end
+
+-- Place a dropdown immediately after a label, accounting for the dropdown frame's internal x offset.
+function RUN_LAYOUT:PlaceDropdownAfterLabel(label, dropdown, gap)
+    if not label or not dropdown then return end
+    dropdown:ClearAllPoints()
+    dropdown:SetPoint("LEFT", label, "RIGHT", (gap or self.INLINE_FIELD_GAP) + self.DROPDOWN_X_OFFSET, 0)
+end
+
+function RUN_LAYOUT:PlaceInlineField(anchor, label, box)
+    if not anchor or not label or not box then return end
+    label:ClearAllPoints()
+    label:SetPoint("LEFT", anchor, "RIGHT", self.INLINE_FIELD_GAP, 0)
+    label:SetJustifyH("LEFT")
+    box:ClearAllPoints()
+    box:SetPoint("LEFT", label, "RIGHT", 4, 0)
 end
 
 local function CreateOverviewCard(parent, title, x, y, width, height)
@@ -848,8 +890,8 @@ local function CreateAllowCheckbox(parent, rules, spec, x, y)
     local checkbox = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     checkbox:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     checkbox.label = checkbox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    checkbox.label:SetPoint("LEFT", checkbox, "RIGHT", 2, 0)
-    checkbox.label:SetWidth(230)
+    checkbox.label:SetPoint("LEFT", checkbox, "RIGHT", RUN_LAYOUT.CHECKBOX_LABEL_GAP, 0)
+    checkbox.label:SetWidth(0)
     checkbox.label:SetJustifyH("LEFT")
     checkbox.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
     checkbox.label:SetText(spec.label)
@@ -2126,10 +2168,12 @@ function SC:OpenMasterWindow(focusTab)
     local charterRightX = runLayout.RIGHT_COLUMN_X
     local charterLabelWidth = 56
     local charterControlX = charterLeftX + 58
-    local charterRightControlX = charterRightX + 156
-    local charterDeathControlX = charterRightX + 136
+    local charterRightControlX = 156
+    local charterDeathControlX = 128
     local rowOneY = 0
     local rowTwoY = -runLayout.ROW_HEIGHT
+    local charterModeRow = runLayout:CreateRow(frame.start.charterSection.content, charterRightX, rowOneY, runLayout.COLUMN_WIDTH)
+    local charterAnnounceRow = runLayout:CreateRow(frame.start.charterSection.content, charterRightX, rowTwoY, runLayout.COLUMN_WIDTH)
 
     frame.start.presetLabel = CreateLabel(frame.start.charterSection.content, "Presets", charterLeftX, rowOneY - 4, "GameFontNormalSmall", charterLabelWidth)
     frame.start.presetLabel:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
@@ -2155,7 +2199,8 @@ function SC:OpenMasterWindow(focusTab)
     RegisterRunControl(frame.start, frame.start.casualBtn, frame.start.charterSection)
     RegisterRunControl(frame.start, frame.start.chefBtn, frame.start.charterSection)
     RegisterRunControl(frame.start, frame.start.ironmanBtn, frame.start.charterSection)
-    frame.start.groupingLabel = CreateLabel(frame.start.charterSection.content, "Mode", charterRightX, rowOneY - 4, "GameFontNormalSmall", 90)
+    frame.start.groupingLabel = CreateLabel(frame.start.charterSection.content, "Mode", 0, 0, "GameFontNormalSmall", 90)
+    runLayout:PlaceRowLabel(charterModeRow, frame.start.groupingLabel, 0, 120)
     RegisterRunControl(frame.start, frame.start.groupingLabel, frame.start.charterSection)
     frame.start.groupingDropdown = CreateDropdown(frame.start.charterSection.content, "SoftcoreMasterGroupingDropdown", GROUPING_OPTIONS, frame.start.selectedRules.groupingMode, function(value)
         frame.start.selectedRules.groupingMode = value
@@ -2164,16 +2209,23 @@ function SC:OpenMasterWindow(focusTab)
         end
         SC:MasterUI_Refresh()
     end, 140)
-    runLayout:SetDropdownPoint(frame.start.groupingDropdown, frame.start.charterSection.content, charterRightControlX, rowOneY - 8)
+    runLayout:PlaceRowDropdown(charterModeRow, frame.start.groupingDropdown, charterRightControlX)
     RegisterRunControl(frame.start, frame.start.groupingDropdown, frame.start.charterSection)
 
-    frame.start.deathAnnounceLabel = CreateLabel(frame.start.charterSection.content, "Announce Death", charterRightX, rowTwoY - 4, "GameFontNormalSmall", 96)
+    frame.start.deathAnnounceLabel = CreateLabel(frame.start.charterSection.content, "Announce Death", 0, 0, "GameFontNormalSmall", 120)
+    runLayout:PlaceRowLabel(charterAnnounceRow, frame.start.deathAnnounceLabel, 0, 120)
     RegisterRunControl(frame.start, frame.start.deathAnnounceLabel, frame.start.charterSection)
-    frame.start.deathAnnounceChatCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "CHAT", "Chat", charterDeathControlX, rowTwoY)
+    frame.start.deathAnnounceChatCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "CHAT", "Chat", 0, 0)
+    runLayout:PlaceRowCheckbox(charterAnnounceRow, frame.start.deathAnnounceChatCheck, charterDeathControlX)
+    runLayout:PlaceCheckboxText(frame.start.deathAnnounceChatCheck, 32)
     RegisterRunControl(frame.start, frame.start.deathAnnounceChatCheck, frame.start.charterSection)
-    frame.start.deathAnnouncePartyCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "PARTY", "Party", charterDeathControlX + 56, rowTwoY)
+    frame.start.deathAnnouncePartyCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "PARTY", "Party", 0, 0)
+    runLayout:PlaceRowCheckbox(charterAnnounceRow, frame.start.deathAnnouncePartyCheck, charterDeathControlX + 67)
+    runLayout:PlaceCheckboxText(frame.start.deathAnnouncePartyCheck, 32)
     RegisterRunControl(frame.start, frame.start.deathAnnouncePartyCheck, frame.start.charterSection)
-    frame.start.deathAnnounceGuildCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "GUILD", "Guild", charterDeathControlX + 112, rowTwoY)
+    frame.start.deathAnnounceGuildCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "GUILD", "Guild", 0, 0)
+    runLayout:PlaceRowCheckbox(charterAnnounceRow, frame.start.deathAnnounceGuildCheck, charterDeathControlX + 134)
+    runLayout:PlaceCheckboxText(frame.start.deathAnnounceGuildCheck, 32)
     RegisterRunControl(frame.start, frame.start.deathAnnounceGuildCheck, frame.start.charterSection)
 
     local y = 0
@@ -2197,14 +2249,13 @@ function SC:OpenMasterWindow(focusTab)
         y = y - runLayout.ROW_HEIGHT
     end
 
+    local cameraRow = runLayout:CreateRow(frame.start.travelSection.content, 0, -(#MOVEMENT_RULES * runLayout.ROW_HEIGHT), runLayout.COLUMN_WIDTH)
     frame.start.cameraRuleCheck = CreateFrame("CheckButton", nil, frame.start.travelSection.content, "UICheckButtonTemplate")
-    frame.start.cameraRuleCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 0, -(#MOVEMENT_RULES * runLayout.ROW_HEIGHT))
+    runLayout:PlaceRowCheckbox(cameraRow, frame.start.cameraRuleCheck, 0)
     frame.start.cameraRuleCheck.label = frame.start.cameraRuleCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.start.cameraRuleCheck.label:SetPoint("LEFT", frame.start.cameraRuleCheck, "RIGHT", 2, 0)
-    frame.start.cameraRuleCheck.label:SetWidth(136)
-    frame.start.cameraRuleCheck.label:SetJustifyH("LEFT")
+    runLayout:PlaceCheckboxText(frame.start.cameraRuleCheck)
     frame.start.cameraRuleCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
-    frame.start.cameraRuleCheck.label:SetText("Require Camera")
+    frame.start.cameraRuleCheck.label:SetText("Restrict Camera")
     frame.start.cameraRuleCheck.ruleKey = "firstPersonOnly"
     frame.start.cameraRuleCheck:SetScript("OnClick", function(btn)
         if IsActiveRun() and not frame.start.isModifyingRules then
@@ -2229,7 +2280,7 @@ function SC:OpenMasterWindow(focusTab)
         end
         SC:MasterUI_Refresh()
     end, 116)
-    runLayout:SetDropdownPoint(frame.start.cameraDropdown, frame.start.travelSection.content, 156, -(#MOVEMENT_RULES * runLayout.ROW_HEIGHT) - 8)
+    runLayout:PlaceDropdownAfterLabel(frame.start.cameraRuleCheck.label, frame.start.cameraDropdown)
     RegisterRunControl(frame.start, frame.start.cameraDropdown, frame.start.travelSection)
     frame.start.firstPersonCheck = CreateFrame("CheckButton", nil, frame.start.travelSection.content, "UICheckButtonTemplate")
     frame.start.firstPersonCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", -200, -200)
@@ -2291,12 +2342,11 @@ function SC:OpenMasterWindow(focusTab)
     end)
     frame.start.actionCamCheck:Hide()
 
+    local gearLimitRow = runLayout:CreateRow(frame.start.gearSection.content, 0, 0, runLayout.COLUMN_WIDTH)
     frame.start.gearLimitCheck = CreateFrame("CheckButton", nil, frame.start.gearSection.content, "UICheckButtonTemplate")
-    frame.start.gearLimitCheck:SetPoint("TOPLEFT", frame.start.gearSection.content, "TOPLEFT", 0, 0)
+    runLayout:PlaceRowCheckbox(gearLimitRow, frame.start.gearLimitCheck, 0)
     frame.start.gearLimitCheck.label = frame.start.gearLimitCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.start.gearLimitCheck.label:SetPoint("LEFT", frame.start.gearLimitCheck, "RIGHT", 2, 0)
-    frame.start.gearLimitCheck.label:SetWidth(200)
-    frame.start.gearLimitCheck.label:SetJustifyH("LEFT")
+    runLayout:PlaceCheckboxText(frame.start.gearLimitCheck)
     frame.start.gearLimitCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
     frame.start.gearLimitCheck.label:SetText("Restrict Gear")
     frame.start.gearLimitCheck.ruleKey = "gearQuality"
@@ -2315,7 +2365,7 @@ function SC:OpenMasterWindow(focusTab)
         frame.start.selectedRules.gearQuality = value
         SC:MasterUI_Refresh()
     end, 145)
-    runLayout:SetDropdownPoint(frame.start.gearDropdown, frame.start.gearSection.content, 156, -8)
+    runLayout:PlaceDropdownAfterLabel(frame.start.gearLimitCheck.label, frame.start.gearDropdown)
     RegisterRunControl(frame.start, frame.start.gearDropdown, frame.start.gearSection)
     frame.start.heirloomCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Heirlooms", key = "heirlooms" }, 0, -runLayout.ROW_HEIGHT)
     RegisterRunControl(frame.start, frame.start.heirloomCheck, frame.start.gearSection)
@@ -2324,12 +2374,11 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.consumablesCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Consumables", key = "consumables" }, 0, -runLayout.ROW_HEIGHT * 3)
     RegisterRunControl(frame.start, frame.start.consumablesCheck, frame.start.gearSection)
 
+    local maxGapRow = runLayout:CreateRow(frame.start.partyDungeonSection.content, 0, 0, runLayout.COLUMN_WIDTH)
     frame.start.maxGapCheck = CreateFrame("CheckButton", nil, frame.start.partyDungeonSection.content, "UICheckButtonTemplate")
-    frame.start.maxGapCheck:SetPoint("TOPLEFT", frame.start.partyDungeonSection.content, "TOPLEFT", 0, 0)
+    runLayout:PlaceRowCheckbox(maxGapRow, frame.start.maxGapCheck, 0)
     frame.start.maxGapCheck.label = frame.start.maxGapCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.start.maxGapCheck.label:SetPoint("LEFT", frame.start.maxGapCheck, "RIGHT", 2, 0)
-    frame.start.maxGapCheck.label:SetWidth(128)
-    frame.start.maxGapCheck.label:SetJustifyH("LEFT")
+    runLayout:PlaceCheckboxText(frame.start.maxGapCheck)
     frame.start.maxGapCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
     frame.start.maxGapCheck.label:SetText("Enforce Level Gap")
     frame.start.maxGapCheck:SetScript("OnClick", function(self)
@@ -2337,14 +2386,15 @@ function SC:OpenMasterWindow(focusTab)
         SC:MasterUI_Refresh()
     end)
     RegisterRunControl(frame.start, frame.start.maxGapCheck, frame.start.partyDungeonSection)
-    frame.start.maxGapLabel = CreateLabel(frame.start.partyDungeonSection.content, "Gap", 0, 0, "GameFontHighlightSmall", 28)
-    frame.start.maxGapLabel:ClearAllPoints()
-    frame.start.maxGapLabel:SetPoint("LEFT", frame.start.maxGapCheck.label, "RIGHT", 8, 0)
+    frame.start.maxGapLabel = CreateLabel(frame.start.partyDungeonSection.content, "Levels", 0, 0, "GameFontHighlightSmall", 44)
     frame.start.maxGapLabel:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
     RegisterRunControl(frame.start, frame.start.maxGapLabel, frame.start.partyDungeonSection)
     frame.start.maxGapBox = CreateFrame("EditBox", nil, frame.start.partyDungeonSection.content, "InputBoxTemplate")
     frame.start.maxGapBox:SetSize(42, 22)
-    frame.start.maxGapBox:SetPoint("LEFT", frame.start.maxGapLabel, "RIGHT", 4, 0)
+    frame.start.maxGapBox:ClearAllPoints()
+    frame.start.maxGapBox:SetPoint("LEFT", frame.start.maxGapCheck.label, "RIGHT", runLayout.INLINE_FIELD_GAP, 0)
+    frame.start.maxGapLabel:ClearAllPoints()
+    frame.start.maxGapLabel:SetPoint("LEFT", frame.start.maxGapBox, "RIGHT", 4, 0)
     frame.start.maxGapBox:SetAutoFocus(false)
     frame.start.maxGapBox:SetNumeric(true)
     frame.start.maxGapBox:SetScript("OnTextChanged", function(self)
