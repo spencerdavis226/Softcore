@@ -1298,7 +1298,7 @@ local function RefreshRunPanel(frame)
         for _, control in ipairs(frame.start.controls) do control:SetShown(true) end
         SetRunSetupEnabled(frame, false)
         frame.start.inactiveText:SetShown(false)
-        frame.start.activeText:SetShown(true)
+        frame.start.activeText:SetShown(false)
         if pendingAmendment.detailsPending then
             frame.start.activeText:SetText("|cffffd100Rule change from " .. proposer .. " received.|r Loading changed rules...")
         elseif isProposer then
@@ -1393,7 +1393,7 @@ local function RefreshRunPanel(frame)
         for _, control in ipairs(frame.start.controls) do control:SetShown(true) end
         SetRunSetupEnabled(frame, false)
         frame.start.inactiveText:SetShown(false)
-        frame.start.activeText:SetShown(true)
+        frame.start.activeText:SetShown(false)
         if isProposer then
             if pendingProposal.proposalType == "SYNC_RUN" then
                 frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your run sync proposal...|r")
@@ -1468,8 +1468,8 @@ local function RefreshRunPanel(frame)
         return
     end
 
-    frame.start.inactiveText:SetShown(not active)
-    frame.start.activeText:SetShown(active)
+    frame.start.inactiveText:SetShown(false)
+    frame.start.activeText:SetShown(false)
 
     if active and db and db.run and db.run.ruleset and not modifying then
         CopyRulesInto(frame.start.selectedRules, db.run.ruleset)
@@ -1971,8 +1971,10 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.selectedRules.unsyncedMembers = "ALLOWED"
     frame.start.inactiveText = CreateField(startPanel, 0, 0, 620)
     frame.start.inactiveText:SetText("Choose a ruleset, review the rules, then start your run.")
+    frame.start.inactiveText:Hide()
     frame.start.activeText = CreateField(startPanel, 0, 0, 620)
     frame.start.activeText:SetText("Active run rules are locked. Future rule changes will use a visible amendment flow.")
+    frame.start.activeText:Hide()
 
     frame.start.presetLabel = CreateLabel(startPanel, "Presets", 0, -30, "GameFontNormalSmall", 60)
     frame.start.presetLabel:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)

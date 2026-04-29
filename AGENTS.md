@@ -17,11 +17,11 @@ The master menu is the primary interface. Group run proposals, run sync proposal
 Current menu tabs:
 
 - `Overview`: local run status, party status, participant snapshot, run ID, elapsed time, deaths, and active violation count (no Overview resync control; use `/sc resync` or Run tab Party Sync)
-- `Run`: start a run, review locked active rules, review highlighted rule amendment proposals in the normal rules layout, stop/reset a run, and use one shared action slot that shows Party Sync while party sync work/blockers exist or Modify Rules when the party is synced/local-only
+- `Run`: start a run, review locked active rules, review highlighted rule amendment proposals in the normal rules layout, stop/reset a run, and use one shared action slot that shows Party Sync while party sync work/blockers exist or Modify Rules when the party is synced/local-only; do not use a top detail banner to explain run/proposal state
 - `Violations`: active clearable issues
 - `Log`: audit history, newest first
 
-The HUD is compact and glanceable. It shows local run status when solo and party status/member rows when grouped. Clicking the HUD toggles the main menu on the most relevant tab. The minimap button opens the main menu.
+The HUD is compact and glanceable. It shows local run status when solo, party status/member rows when grouped, and short governance/sync limbo labels such as Details, Review, Waiting, Settling, Syncing, Invite, or Run Sync. It may appear for pending governance even before a run is active. Clicking the HUD toggles the main menu on the most relevant tab. The minimap button opens the main menu.
 
 ## Core Safety Principle
 
@@ -133,6 +133,7 @@ Current behavior:
 - Party Sync blocks members who never respond to Softcore addon messages after the initial grace period; they must install/enable the addon or leave the party before inclusion.
 - Party Sync may also route stale/unsynced display state to a targeted full-state resync without mutating local run state; fresh responses should advance the active Party Sync plan quickly, with retry timers only as fallback.
 - Mid-run rules change through `Modify Rules` and grouped amendment acceptance; pending amendments reuse the normal Run-tab rules layout with changed rules highlighted and footer acceptance controls.
+- HUD text is the quick user-facing status detail for proposal, amendment, Party Sync, and settling limbos; the Run tab should make state obvious through highlighted rules and action buttons instead of a top explanatory text line.
 - Pending proposals expire after 30 minutes.
 - Pending/accepted amendments expire after 30 minutes.
 - Late proposal confirmations or amendment applies after expiry should be ignored.

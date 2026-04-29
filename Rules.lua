@@ -474,6 +474,8 @@ function SC:ProposeRuleAmendment(newRules, reason, options)
         self:Sync_SendProposal("AMENDMENT_PROPOSE", amendment.id)
     end
 
+    if self.HUD_Refresh then self:HUD_Refresh() end
+
     return amendment
 end
 
@@ -488,12 +490,14 @@ function SC:AcceptRuleAmendment(amendmentId)
                     amendment.detailRequestedAt = time()
                     self:Sync_SendAmendmentDetailsRequest(amendment.id, amendment.proposedBy)
                 end
+                if self.HUD_Refresh then self:HUD_Refresh() end
                 return amendment
             end
             if amendment.status == "PENDING" then
                 if IsAmendmentExpired(amendment) then
                     amendment.status = "EXPIRED"
                     amendment.expiredAt = time()
+                    if self.HUD_Refresh then self:HUD_Refresh() end
                     return amendment
                 end
                 amendment.status = "ACCEPTED"
@@ -509,6 +513,7 @@ function SC:AcceptRuleAmendment(amendmentId)
                 end
             end
 
+            if self.HUD_Refresh then self:HUD_Refresh() end
             return amendment
         end
     end
@@ -525,6 +530,7 @@ function SC:DeclineRuleAmendment(amendmentId)
                 if IsAmendmentExpired(amendment) then
                     amendment.status = "EXPIRED"
                     amendment.expiredAt = time()
+                    if self.HUD_Refresh then self:HUD_Refresh() end
                     return amendment
                 end
                 amendment.status = "DECLINED"
@@ -538,6 +544,7 @@ function SC:DeclineRuleAmendment(amendmentId)
                 end
             end
 
+            if self.HUD_Refresh then self:HUD_Refresh() end
             return amendment
         end
     end
@@ -553,6 +560,7 @@ function SC:ApplyRuleAmendment(amendmentId)
             if amendment.status ~= "APPLIED" and IsAmendmentExpired(amendment) then
                 amendment.status = "EXPIRED"
                 amendment.expiredAt = time()
+                if self.HUD_Refresh then self:HUD_Refresh() end
                 return nil
             end
             if amendment.status ~= "ACCEPTED" and amendment.status ~= "APPLIED" then
@@ -592,6 +600,7 @@ function SC:ApplyRuleAmendment(amendmentId)
                 end
             end
 
+            if self.HUD_Refresh then self:HUD_Refresh() end
             return amendment
         end
     end
@@ -670,6 +679,7 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
                     self:OpenMasterWindow("RUN")
                 end
                 if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+                if self.HUD_Refresh then self:HUD_Refresh() end
             end
             return
         end
@@ -765,6 +775,7 @@ function SC:ReceiveRuleAmendmentResponse(payload, senderKey)
                 amendment.status = "EXPIRED"
                 amendment.expiredAt = time()
                 if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+                if self.HUD_Refresh then self:HUD_Refresh() end
                 return
             end
 
@@ -808,6 +819,7 @@ function SC:ReceiveRuleAmendmentResponse(payload, senderKey)
             end
 
             if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+            if self.HUD_Refresh then self:HUD_Refresh() end
             return
         end
     end
@@ -836,6 +848,7 @@ function SC:ReceiveRuleAmendmentApplied(payload, senderKey)
     end
 
     if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+    if self.HUD_Refresh then self:HUD_Refresh() end
 end
 
 function SC:ReceiveRuleAmendmentCancelled(payload, senderKey)
@@ -858,6 +871,7 @@ function SC:ReceiveRuleAmendmentCancelled(payload, senderKey)
     if cancelled then
         DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r |cfffbbf24Rule amendment was cancelled.|r")
         if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+        if self.HUD_Refresh then self:HUD_Refresh() end
     end
 end
 

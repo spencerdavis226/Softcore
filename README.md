@@ -26,7 +26,7 @@ There are no proposal popup windows. Incoming group proposals and rule amendment
 Open with `/sc menu`, the minimap button, or the HUD.
 
 - **Overview**: local run status, party status, participants, run ID, elapsed time, deaths, and active violation count.
-- **Run**: start a run, review locked active rules, stop a run, invite party members, propose run sync, or modify rules.
+- **Run**: start a run, review locked active rules, stop a run, invite party members, propose run sync, or modify rules. Proposal/amendment state is shown through the visible rule review and footer actions rather than a top detail banner.
 - **Violations**: active clearable issues with one-click Clear where allowed.
 - **Log**: audit history, newest first.
 - **Achievements**: account-level leveling, ruleset, and max-level milestones.
@@ -42,8 +42,9 @@ The HUD is a compact glance view shown during active runs.
 
 - Toggle visibility with `/sc hud`.
 - Starting a new run always shows the HUD by default.
-- Lamp colors: green (valid), yellow (warning/conflict/blocked), orange (party member failed, local character still valid), red (local failed), gray (no run/pending).
-- The text is intentionally short and single-line.
+- The HUD also appears for pending governance states, such as run proposals before a run starts.
+- Lamp colors: green (valid/synced), blue (syncing/settling), yellow (warning/conflict/blocked/review needed), orange (party member failed, local character still valid), red (local failed), gray (no run/pending).
+- The text is intentionally short and single-line, including limbo states such as Details, Review, Waiting, Settling, Syncing, Invite, and Run Sync.
 - Clicking the HUD opens the most relevant main tab (typically Overview, Violations, or Run).
 
 ## Slash Commands

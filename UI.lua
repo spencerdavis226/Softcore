@@ -29,6 +29,7 @@ local DOT_SIZE = 10
 
 local LAMP_COLOR = {
     GREEN  = {0.22, 0.95, 0.42},
+    BLUE   = {0.26, 0.58, 1.00},
     YELLOW = {1.00, 0.78, 0.16},
     ORANGE = {1.00, 0.42, 0.12},
     RED    = {1.00, 0.18, 0.14},
@@ -37,6 +38,7 @@ local LAMP_COLOR = {
 
 local TEXT_COLOR = {
     GREEN  = {0.62, 1.00, 0.68},
+    BLUE   = {0.58, 0.78, 1.00},
     YELLOW = {1.00, 0.86, 0.32},
     ORANGE = {1.00, 0.62, 0.28},
     RED    = {1.00, 0.38, 0.32},
@@ -80,12 +82,101 @@ local function HasRemoteFailure(syncRows)
     return false
 end
 
+local function GetPendingRuleAmendment(db)
+    for _, amendment in ipairs(db and db.ruleAmendments or {}) do
+        if amendment.status == "PENDING" or amendment.status == "ACCEPTED" then
+            return amendment
+        end
+    end
+    return nil
+end
+
+local function HasRecentRuleGovernance(db)
+    local now = time()
+    for _, amendment in ipairs(db and db.ruleAmendments or {}) do
+        local settledAt = amendment.appliedAt or amendment.declinedAt or amendment.expiredAt or amendment.noChangesAt
+        if settledAt and now - tonumber(settledAt) <= 12 then
+            return true
+        end
+    end
+    return false
+end
+
+local function GetGovernanceHUDState(db)
+    local proposal = SC.GetPendingProposal and SC:GetPendingProposal() or nil
+    if proposal then
+        local localKey = SC:GetPlayerKey()
+        local isProposer = proposal.proposedBy == localKey
+
+        if proposal.detailsPending then
+            return "YELLOW", "Details", "RUN"
+        elseif proposal.status == "ACCEPTED" then
+            return "YELLOW", "Waiting", "RUN"
+        elseif isProposer then
+            return "YELLOW", "Waiting", "RUN"
+        elseif proposal.proposalType == "ADD_PARTICIPANT" then
+            return "YELLOW", "Invite", "RUN"
+        elseif proposal.proposalType == "SYNC_RUN" then
+            return "YELLOW", "Run Sync", "RUN"
+        end
+
+        return "YELLOW", "Review", "RUN"
+    end
+
+    local amendment = GetPendingRuleAmendment(db)
+    if amendment then
+        if amendment.detailsPending then
+            return "YELLOW", "Details", "RUN"
+        elseif amendment.status == "ACCEPTED" then
+            return "BLUE", "Settling", "RUN"
+        elseif amendment.proposedBy == SC:GetPlayerKey() then
+            return "YELLOW", "Waiting", "RUN"
+        end
+
+        return "YELLOW", "Rule Review", "RUN"
+    end
+
+    if HasRecentRuleGovernance(db) then
+        return "BLUE", "Settling", "RUN"
+    end
+
+    local plan = db and db.partySyncPlan
+    if plan and plan.active and plan.owner == SC:GetPlayerKey() then
+        local route = SC.GetPartySyncAction and SC:GetPartySyncAction(true) or nil
+        if route then
+            if route.action == "RESYNC" then
+                return "BLUE", "Syncing", "RUN"
+            elseif route.action == "AMEND_RULES" then
+                return "YELLOW", "Rules", "RUN"
+            elseif route.action == "SYNC_RUN" then
+                return "YELLOW", "Run Sync", "RUN"
+            elseif route.action == "INVITE" then
+                return "YELLOW", "Invite", "RUN"
+            elseif route.action == "BLOCKED" then
+                return "YELLOW", "Blocked", "RUN"
+            elseif route.action == "NONE" then
+                return "GREEN", "Synced", "OVERVIEW"
+            end
+        end
+
+        return "BLUE", "Syncing", "RUN"
+    end
+
+    return nil
+end
+
 local function GetHUDState(status, violations, syncRows)
+    local db = SC.db or SoftcoreDB
     local localStatus = status.participantStatus or "NOT_IN_RUN"
     local partyStatus = status.partyStatus or localStatus
 
     if localStatus == "FAILED" or status.failed or status.valid == false then
         return "RED", "Failed", "OVERVIEW"
+    end
+
+    local governanceState, governanceText, governanceTab = GetGovernanceHUDState(db)
+    if governanceState then
+        return governanceState, governanceText, governanceTab
     end
 
     if violations > 0 or localStatus == "WARNING" or localStatus == "VIOLATION" then
@@ -198,16 +289,17 @@ function SC:HUD_Refresh()
     local active = run.active
     local ui     = SoftcoreDB and SoftcoreDB.ui or {}
 
-    if not active or ui.hudHidden then
-        frame:Hide()
-        return
-    end
-
     local status     = self:GetPlayerStatus()
     local syncRows   = self.Sync_GetGroupRows and self:Sync_GetGroupRows() or {}
     local violations = LocalActiveViolations()
     local state, text, focusTab = GetHUDState(status, violations, syncRows)
     local textColor = TEXT_COLOR[state] or TEXT_COLOR.GRAY
+    local showForGovernance = (focusTab == "RUN" and text ~= "No Run")
+
+    if ui.hudHidden or (not active and not showForGovernance) then
+        frame:Hide()
+        return
+    end
 
     frame.focusTab = focusTab
     SetLamp(frame, state)

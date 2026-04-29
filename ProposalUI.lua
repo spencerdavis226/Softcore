@@ -471,6 +471,7 @@ function SC:CheckPendingProposalOnRosterUpdate()
         if proposal.proposalType == "SYNC_RUN" or proposal.proposalType == "ADD_PARTICIPANT" then
             self:PartySync_ScheduleContinue("PROPOSAL_CONFIRMED")
         end
+        if self.HUD_Refresh then self:HUD_Refresh() end
     end
 end
 
@@ -590,6 +591,10 @@ function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, r
         self:Sync_SendRunProposal(proposal)
     end
 
+    if self.HUD_Refresh then
+        self:HUD_Refresh()
+    end
+
     return proposal
 end
 
@@ -685,6 +690,7 @@ function SC:PartySync_StartPlan()
             owner = db.partySyncPlan.owner,
         })
     end
+    if self.HUD_Refresh then self:HUD_Refresh() end
 end
 
 function SC:PartySync_StopPlan(reason)
@@ -693,6 +699,7 @@ function SC:PartySync_StopPlan(reason)
     if reason and reason ~= "" then
         Print(reason)
     end
+    if self.HUD_Refresh then self:HUD_Refresh() end
 end
 
 function SC:PartySync_ScheduleContinue(reason, delaySeconds)
@@ -712,6 +719,7 @@ function SC:PartySync_ScheduleContinue(reason, delaySeconds)
             serial = continueSerial,
         })
     end
+    if self.HUD_Refresh then self:HUD_Refresh() end
     if C_Timer and C_Timer.After then
         C_Timer.After(delay, function()
             local currentPlan = GetDB().partySyncPlan
@@ -1192,6 +1200,7 @@ function SC:ReceiveRunProposal(payload, proposerKey)
             self:OpenMasterWindow("RUN")
         end
         if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+        if self.HUD_Refresh then self:HUD_Refresh() end
         return
     end
 
@@ -1206,6 +1215,7 @@ function SC:ReceiveRunProposal(payload, proposerKey)
     else
         Print("proposal received: " .. proposal.runName .. ". Use /sc proposal to review.")
     end
+    if self.HUD_Refresh then self:HUD_Refresh() end
 end
 
 function SC:AcceptPendingProposal()
@@ -1356,6 +1366,7 @@ function SC:RetryAcceptedProposal(proposalId)
             db.pendingProposalId = nil
         end
         if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+        if self.HUD_Refresh then self:HUD_Refresh() end
         return
     end
 
@@ -1525,6 +1536,9 @@ function SC:ReceiveProposalResponse(payload, playerKey)
 
         if self.MasterUI_Refresh then
             self:MasterUI_Refresh()
+        end
+        if self.HUD_Refresh then
+            self:HUD_Refresh()
         end
 
     elseif payload.type == "PROPOSAL_DECLINE" then
