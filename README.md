@@ -166,7 +166,7 @@ Targeted invites are also available with `/sc propose-add Player-Realm`.
 
 ## Rule Amendments
 
-Active run rules are locked by default. Use **Modify Rules** in the Run tab to create a draft, or use **Party Sync** when the party is already in a rules conflict and you want to send your current local rules for review.
+Active run rules are locked by default. Use **Modify Rules** in the Run tab to create a draft. In grouped runs, **Modify Rules** and **Party Sync** share the same action slot: Party Sync is shown while the party has sync work or blockers, and Modify Rules returns once the party is synced.
 
 - Solo: Apply Changes applies immediately and logs the old/new values.
 - Grouped: Propose to Party creates a Run-tab amendment proposal.

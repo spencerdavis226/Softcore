@@ -1351,7 +1351,7 @@ local function AnchorRunFooterButtons(frame)
         end
     end
 
-    -- Run governance: outermost control is at the panel's right edge; optional Party Sync sits inward.
+    -- Run governance: Modify Rules and Party Sync share this action slot.
     anchorRight(start.modifyBtn)
     anchorRight(start.partySyncBtn)
     anchorRight(start.cancelChangesBtn)
@@ -1532,18 +1532,20 @@ local function RefreshRunPanel(frame)
     if frame.start.cancelRunHint then
         frame.start.cancelRunHint:SetShown(confirmingStop)
     end
-    frame.start.modifyBtn:SetShown(active and not modifying and not confirmingStop)
     local partySyncRoute = nil
+    local showPartySync = false
     if frame.start.partySyncBtn then
-        local showPartySync = active and not modifying and not confirmingStop and IsInGroup() and not IsInRaid()
-        if showPartySync and SC.GetPartySyncAction then
+        local canShowPartySync = active and not modifying and not confirmingStop and IsInGroup() and not IsInRaid()
+        if canShowPartySync and SC.GetPartySyncAction then
             partySyncRoute = SC:GetPartySyncAction()
+            showPartySync = partySyncRoute and partySyncRoute.action ~= "NONE" and partySyncRoute.action ~= "HIDDEN"
             frame.start.partySyncBtn:SetEnabled(partySyncRoute and partySyncRoute.enabled == true)
         else
             frame.start.partySyncBtn:SetEnabled(false)
         end
         frame.start.partySyncBtn:SetShown(showPartySync)
     end
+    frame.start.modifyBtn:SetShown(active and not modifying and not confirmingStop and not showPartySync)
     frame.start.applyChangesBtn:SetShown(modifying)
     frame.start.cancelChangesBtn:SetShown(modifying)
     if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:Hide() end
