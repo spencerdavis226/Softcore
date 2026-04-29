@@ -477,6 +477,7 @@ function SC:AcceptRuleAmendment(amendmentId)
             if amendment.detailsPending then
                 DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r Rule amendment details are still loading. Try again in a moment.")
                 if self.Sync_SendAmendmentDetailsRequest then
+                    amendment.detailRequestedAt = time()
                     self:Sync_SendAmendmentDetailsRequest(amendment.id, amendment.proposedBy)
                 end
                 return amendment
@@ -597,7 +598,14 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
 
     local amendmentId = payload.amendmentId or payload.proposalId
     if not amendmentId then return end
+    local now = time()
     local hasDetails = payload.newRules and payload.newRules ~= ""
+    if self.TraceDebug then
+        self:TraceDebug(hasDetails and "AMENDMENT_DETAILS_RECEIVED" or "AMENDMENT_NOTICE_RECEIVED", {
+            amendmentId = amendmentId,
+            senderKey = senderKey,
+        })
+    end
 
     for _, existing in ipairs(db.ruleAmendments) do
         if existing.id == amendmentId then
@@ -629,6 +637,13 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
                 existing.reason = payload.reason or existing.reason
                 existing.fullRulesProposal = payload.fullRulesProposal == "1"
                 existing.detailsPending = false
+                existing.detailsReceivedAt = now
+                if existing.detailRequestedAt and self.TraceDebug then
+                    self:TraceDebug("AMENDMENT_DETAILS_READY", {
+                        amendmentId = existing.id,
+                        latencySeconds = now - existing.detailRequestedAt,
+                    })
+                end
                 if self.MasterUI_Refresh then self:MasterUI_Refresh() end
             end
             return
@@ -669,11 +684,13 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
         previousRules = previousRules,
         reason = payload.reason or "Rule amendment proposed.",
         status = "PENDING",
-        proposedAt = tonumber(payload.proposedAt) or time(),
+        proposedAt = tonumber(payload.proposedAt) or now,
         proposedBy = senderKey,
         fullRulesProposal = payload.fullRulesProposal == "1",
         remote = true,
         detailsPending = not hasDetails,
+        noticeReceivedAt = now,
+        detailsReceivedAt = hasDetails and now or nil,
     }
 
     table.insert(db.ruleAmendments, amendment)
@@ -681,6 +698,7 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
         amendmentId = amendmentId,
     })
     if not hasDetails and self.Sync_SendAmendmentDetailsRequest then
+        amendment.detailRequestedAt = time()
         self:Sync_SendAmendmentDetailsRequest(amendmentId, senderKey)
     end
 

@@ -1059,6 +1059,7 @@ end
 
 function SC:ReceiveRunProposal(payload, proposerKey)
     local db = GetDB()
+    local now = time()
     local hasDetails = payload.ruleset and payload.ruleset ~= ""
     local ruleset = hasDetails and self:DeserializeRuleset(payload.ruleset) or self:GetDefaultRuleset()
     local computedHash = hasDetails and self:ComputeRulesetHash(ruleset) or (payload.proposalRulesetHash or payload.rulesetHash or "")
@@ -1077,7 +1078,7 @@ function SC:ReceiveRunProposal(payload, proposerKey)
         runId = payload.proposalRunId,
         runName = payload.runName or "Softcore Run",
         proposedBy = proposerKey,
-        proposedAt = tonumber(payload.proposedAt) or time(),
+        proposedAt = tonumber(payload.proposedAt) or now,
         ruleset = ruleset,
         rulesetHash = payload.proposalRulesetHash or computedHash,
         preset = payload.preset or "CUSTOM",
@@ -1088,8 +1089,17 @@ function SC:ReceiveRunProposal(payload, proposerKey)
         targetPlayerKey = payload.proposalTargetPlayerKey or payload.targetPlayerKey,
         partyAtProposalTime = voterKeys,
         detailsPending = not hasDetails,
+        noticeReceivedAt = now,
+        detailsReceivedAt = hasDetails and now or nil,
     }
     proposal.acceptedBy[proposerKey] = true
+    if self.TraceDebug then
+        self:TraceDebug(hasDetails and "PROPOSAL_DETAILS_RECEIVED" or "PROPOSAL_NOTICE_RECEIVED", {
+            proposalId = proposal.proposalId,
+            proposerKey = proposerKey,
+            proposalType = proposal.proposalType,
+        })
+    end
 
     local localKey = self:GetPlayerKey()
     if proposal.targetPlayerKey and proposal.targetPlayerKey ~= localKey then
@@ -1129,6 +1139,13 @@ function SC:ReceiveRunProposal(payload, proposerKey)
         if hasDetails then
             sameExisting.ruleset = proposal.ruleset
             sameExisting.detailsPending = false
+            sameExisting.detailsReceivedAt = now
+            if sameExisting.detailRequestedAt and self.TraceDebug then
+                self:TraceDebug("PROPOSAL_DETAILS_READY", {
+                    proposalId = sameExisting.proposalId,
+                    latencySeconds = now - sameExisting.detailRequestedAt,
+                })
+            end
         end
         sameExisting.rulesetHash = proposal.rulesetHash
         sameExisting.preset = proposal.preset
@@ -1140,6 +1157,7 @@ function SC:ReceiveRunProposal(payload, proposerKey)
             db.pendingProposalId = sameExisting.proposalId
         end
         if (not hasDetails) and sameExisting.detailsPending and self.Sync_SendProposalDetailsRequest then
+            sameExisting.detailRequestedAt = time()
             self:Sync_SendProposalDetailsRequest(sameExisting.proposalId, proposerKey)
         end
         if self.MasterUI_Refresh then self:MasterUI_Refresh() end
@@ -1148,6 +1166,7 @@ function SC:ReceiveRunProposal(payload, proposerKey)
 
     self:StoreProposal(proposal)
     if not hasDetails and self.Sync_SendProposalDetailsRequest then
+        proposal.detailRequestedAt = time()
         self:Sync_SendProposalDetailsRequest(proposal.proposalId, proposerKey)
     end
     if self.PlayUISound then self:PlayUISound("PROPOSAL_RECEIVED") end
@@ -1175,6 +1194,7 @@ function SC:AcceptPendingProposal()
     if proposal.detailsPending then
         Print("proposal details are still loading. Try again in a moment.")
         if self.Sync_SendProposalDetailsRequest then
+            proposal.detailRequestedAt = time()
             self:Sync_SendProposalDetailsRequest(proposal.proposalId, proposal.proposedBy)
         end
         return

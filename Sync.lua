@@ -18,6 +18,7 @@ local SEND_QUEUE_TICK_SECONDS = 0.25
 local SEND_TOKEN_REFILL_SECONDS = 1.05
 local SEND_TOKEN_MAX = 10
 local STATUS_NUDGE_SECONDS = 0.5
+local PARTY_LOG_BULK_DELAY_SECONDS = 2
 
 SC.syncEnabled = true
 SC.groupStatuses = SC.groupStatuses or {}
@@ -25,6 +26,8 @@ SC.groupStatuses = SC.groupStatuses or {}
 local syncFrame
 local pendingChunks = {}
 local sendQueue = {}
+local pendingPartyLogs = {}
+local partyLogFlushPending = false
 local sendQueueActive = false
 local sendTokens = SEND_TOKEN_MAX
 local sendLastRefillAt
@@ -48,6 +51,108 @@ local SEND_RESULT_NAMES = {
     [11] = "AddOnMessageLockdown",
     [12] = "TargetOffline",
 }
+
+local WIRE_KEYS = {
+    type = "t",
+    runId = "r",
+    rulesetVersion = "rv",
+    rulesetHash = "rh",
+    addonVersion = "av",
+    playerKey = "p",
+    sequence = "s",
+    syncSessionId = "ss",
+    sentAt = "sa",
+    partyStatus = "ps",
+    proposalId = "pi",
+    proposalRunId = "pr",
+    runName = "rn",
+    proposedAt = "pa",
+    proposalKind = "pk",
+    targetPlayerKey = "tk",
+    proposalTargetPlayerKey = "pt",
+    preset = "pe",
+    proposalRulesetHash = "ph",
+    voterKeys = "vk",
+    toPlayerKey = "to",
+    amendmentId = "ai",
+    newRules = "nr",
+    previousRules = "or",
+    reason = "re",
+    fullRulesProposal = "fr",
+    proposedBy = "pb",
+    requestId = "qi",
+    includeRules = "ir",
+    requestReason = "qr",
+    requestedBy = "qb",
+    name = "n",
+    realm = "rm",
+    class = "c",
+    level = "l",
+    zone = "z",
+    active = "a",
+    valid = "v",
+    failed = "f",
+    deaths = "de",
+    warnings = "w",
+    participantStatus = "st",
+    participantCount = "pc",
+    ruleset = "ru",
+    activeViolations = "va",
+    latestViolationId = "vi",
+    latestViolationType = "vt",
+    latestViolationDetail = "vd",
+    latestViolationAt = "vz",
+    auditId = "li",
+    auditKind = "lk",
+    auditMessage = "lm",
+    auditTime = "lt",
+    actorKey = "ak",
+    auditPlayerKey = "lp",
+    violationId = "xi",
+    violationType = "xt",
+    violationDetail = "xd",
+    violationPlayerKey = "xp",
+    violationSeverity = "xs",
+    violationStatus = "xo",
+    violationCreatedAt = "xc",
+    clearedBy = "cb",
+    clearedAt = "ca",
+    clearReason = "cr",
+}
+
+local CANONICAL_KEYS = {}
+for key, wireKey in pairs(WIRE_KEYS) do
+    CANONICAL_KEYS[wireKey] = key
+end
+
+local WIRE_TYPES = {
+    STATUS = "S",
+    HELLO = "H",
+    FULL_STATE_REQUEST = "FSQ",
+    FULL_STATE_RESPONSE = "FSR",
+    PROPOSAL = "P",
+    PROPOSAL_DETAILS_REQUEST = "PDQ",
+    PROPOSAL_DETAILS = "PDD",
+    PROPOSAL_ACCEPT = "PA",
+    PROPOSAL_DECLINE = "PN",
+    PROPOSAL_CONFIRMED = "PC",
+    PROPOSAL_CANCELLED = "PX",
+    AMENDMENT_PROPOSE = "AP",
+    AMENDMENT_DETAILS_REQUEST = "ADQ",
+    AMENDMENT_DETAILS = "ADD",
+    AMENDMENT_ACCEPT = "AA",
+    AMENDMENT_DECLINE = "AN",
+    AMENDMENT_APPLIED = "AC",
+    AMENDMENT_CANCELLED = "AX",
+    PARTY_LOG = "L",
+    PARTY_VIOLATION = "V",
+    PARTY_VIOLATION_CLEAR = "VC",
+}
+
+local CANONICAL_TYPES = {}
+for messageType, wireType in pairs(WIRE_TYPES) do
+    CANONICAL_TYPES[wireType] = messageType
+end
 
 local function CleanupPendingChunks(now)
     now = now or time()
@@ -132,7 +237,11 @@ local function Encode(payload)
     local parts = {}
 
     for key, value in pairs(payload) do
-        table.insert(parts, Escape(key) .. "=" .. Escape(value))
+        local wireKey = WIRE_KEYS[key] or key
+        if key == "type" then
+            value = WIRE_TYPES[value] or value
+        end
+        table.insert(parts, Escape(wireKey) .. "=" .. Escape(value))
     end
 
     return table.concat(parts, ";")
@@ -144,7 +253,12 @@ local function Decode(message)
     for pair in string.gmatch(message or "", "([^;]+)") do
         local key, value = string.match(pair, "^([^=]+)=(.*)$")
         if key then
-            payload[Unescape(key)] = Unescape(value)
+            key = CANONICAL_KEYS[Unescape(key)] or Unescape(key)
+            value = Unescape(value)
+            if key == "type" then
+                value = CANONICAL_TYPES[value] or value
+            end
+            payload[key] = value
         end
     end
 
@@ -270,7 +384,7 @@ local function GetMessagePriority(messageType)
     if messageType == "AMENDMENT_PROPOSE" or messageType == "AMENDMENT_DETAILS_REQUEST" or messageType == "AMENDMENT_DETAILS" then return 3 end
     if messageType == "AMENDMENT_ACCEPT" or messageType == "AMENDMENT_DECLINE" then return 3 end
     if messageType == "PROPOSAL" then return 3 end
-    if messageType == "PARTY_LOG" then return 4 end
+    if messageType == "PARTY_LOG" then return 7 end
     if messageType == "STATUS" then return 6 end
     return 4
 end
@@ -537,8 +651,9 @@ local function SendPayload(payload, options)
         local first = ((index - 1) * MAX_CHUNK_DATA_BYTES) + 1
         local chunkData = string.sub(message, first, first + MAX_CHUNK_DATA_BYTES - 1)
         local chunkText = tostring(index) .. "/" .. tostring(total)
+        local chunkWireType = WIRE_TYPES[messageType] or tostring(messageType)
         DispatchAddonMessage(
-            "CHUNK|2|" .. syncSessionId .. "|" .. chunkId .. "|" .. tostring(messageType) .. "|" .. tostring(index) .. "|" .. tostring(total) .. "|" .. chunkData,
+            "CHUNK|2|" .. syncSessionId .. "|" .. chunkId .. "|" .. chunkWireType .. "|" .. tostring(index) .. "|" .. tostring(total) .. "|" .. chunkData,
             channel,
             messageType,
             chunkText,
@@ -993,10 +1108,11 @@ function SC:Sync_SendProposal(proposalType, proposalId)
         type = proposalType,
         amendmentId = proposalId,
         proposalId = proposalId,
-    }, 2)
+    }, CONTROL_REPEAT_ATTEMPTS)
 end
 
 function SC:Sync_SendAmendmentProposal(amendment)
+    amendment.noticeSentAt = amendment.noticeSentAt or time()
     local payload = {
         type = "AMENDMENT_PROPOSE",
         amendmentId = amendment.id,
@@ -1010,6 +1126,12 @@ function SC:Sync_SendAmendmentProposal(amendment)
     SendPayload(payload, {
         priority = 3,
     })
+    if self.TraceDebug then
+        self:TraceDebug("AMENDMENT_NOTICE_SENT", {
+            amendmentId = amendment.id,
+            runId = amendment.runId,
+        })
+    end
 
     if C_Timer and C_Timer.After then
         C_Timer.After(PROPOSAL_RESEND_SECONDS, function()
@@ -1027,7 +1149,7 @@ function SC:Sync_SendAmendmentApplied(amendment)
         type = "AMENDMENT_APPLIED",
         amendmentId = amendment.id,
         runId = amendment.runId,
-    }, 2)
+    }, CONTROL_REPEAT_ATTEMPTS)
 end
 
 function SC:Sync_SendAmendmentCancelled(amendment)
@@ -1035,11 +1157,17 @@ function SC:Sync_SendAmendmentCancelled(amendment)
         type = "AMENDMENT_CANCELLED",
         amendmentId = amendment.id,
         runId = amendment.runId,
-    }, 2)
+    }, CONTROL_REPEAT_ATTEMPTS)
 end
 
 function SC:Sync_SendProposalDetailsRequest(proposalId, proposerKey)
     if not proposalId then return false end
+    if self.TraceDebug then
+        self:TraceDebug("PROPOSAL_DETAILS_REQUEST_SENT", {
+            proposalId = proposalId,
+            toPlayerKey = proposerKey,
+        })
+    end
     return SendPayload({
         type = "PROPOSAL_DETAILS_REQUEST",
         proposalId = proposalId,
@@ -1051,6 +1179,12 @@ end
 
 function SC:Sync_SendRunProposalDetails(proposal, requesterKey)
     if not proposal then return false end
+    if self.TraceDebug then
+        self:TraceDebug("PROPOSAL_DETAILS_SENT", {
+            proposalId = proposal.proposalId,
+            toPlayerKey = requesterKey,
+        })
+    end
     return SendPayload({
         type = "PROPOSAL_DETAILS",
         proposalId = proposal.proposalId,
@@ -1073,6 +1207,12 @@ end
 
 function SC:Sync_SendAmendmentDetailsRequest(amendmentId, proposerKey)
     if not amendmentId then return false end
+    if self.TraceDebug then
+        self:TraceDebug("AMENDMENT_DETAILS_REQUEST_SENT", {
+            amendmentId = amendmentId,
+            toPlayerKey = proposerKey,
+        })
+    end
     return SendPayload({
         type = "AMENDMENT_DETAILS_REQUEST",
         amendmentId = amendmentId,
@@ -1085,6 +1225,12 @@ end
 
 function SC:Sync_SendAmendmentDetails(amendment, requesterKey)
     if not amendment then return false end
+    if self.TraceDebug then
+        self:TraceDebug("AMENDMENT_DETAILS_SENT", {
+            amendmentId = amendment.id,
+            toPlayerKey = requesterKey,
+        })
+    end
     return SendPayload({
         type = "AMENDMENT_DETAILS",
         amendmentId = amendment.id,
@@ -1102,11 +1248,7 @@ function SC:Sync_SendAmendmentDetails(amendment, requesterKey)
     })
 end
 
-function SC:Sync_BroadcastLog(entry)
-    if not CanShareAudit() or not entry or not entry.id then
-        return
-    end
-
+local function SendPartyLogPayload(entry)
     SendPayload({
         type = "PARTY_LOG",
         auditId = entry.id,
@@ -1120,7 +1262,41 @@ function SC:Sync_BroadcastLog(entry)
         violationDetail = Trunc(entry.violationDetail, MAX_AUDIT_TEXT),
         violationPlayerKey = entry.violationPlayerKey,
         clearedBy = entry.clearedBy,
+    }, {
+        priority = 7,
     })
+end
+
+local function FlushPartyLogs()
+    partyLogFlushPending = false
+    if #pendingPartyLogs == 0 then
+        return
+    end
+
+    local logs = pendingPartyLogs
+    pendingPartyLogs = {}
+    for _, entry in ipairs(logs) do
+        SendPartyLogPayload(entry)
+    end
+end
+
+function SC:Sync_BroadcastLog(entry)
+    if not CanShareAudit() or not entry or not entry.id then
+        return
+    end
+
+    if not C_Timer or not C_Timer.After then
+        SendPartyLogPayload(entry)
+        return
+    end
+
+    table.insert(pendingPartyLogs, entry)
+    if partyLogFlushPending then
+        return
+    end
+
+    partyLogFlushPending = true
+    C_Timer.After(PARTY_LOG_BULK_DELAY_SECONDS, FlushPartyLogs)
 end
 
 function SC:Sync_BroadcastViolation(violation)
@@ -1155,6 +1331,7 @@ function SC:Sync_BroadcastViolationClear(violation)
 end
 
 function SC:Sync_SendRunProposal(proposal)
+    proposal.noticeSentAt = proposal.noticeSentAt or time()
     local payload = {
         type = "PROPOSAL",
         proposalId = proposal.proposalId,
@@ -1172,6 +1349,13 @@ function SC:Sync_SendRunProposal(proposal)
     local sent = SendPayload(payload, {
         priority = 3,
     })
+    if self.TraceDebug then
+        self:TraceDebug("PROPOSAL_NOTICE_SENT", {
+            proposalId = proposal.proposalId,
+            runId = proposal.runId,
+            proposalType = proposal.proposalType,
+        })
+    end
     if C_Timer and C_Timer.After then
         for attempt = 1, PROPOSAL_RESEND_ATTEMPTS do
             C_Timer.After(PROPOSAL_RESEND_SECONDS * attempt, function()
@@ -1242,7 +1426,7 @@ function SC:Sync_SendProposalCancelled(proposal)
     SendPayloadWithRepeats({
         type = "PROPOSAL_CANCELLED",
         proposalId = proposal.proposalId,
-    }, 2)
+    }, CONTROL_REPEAT_ATTEMPTS)
 end
 
 function SC:Sync_HandleMessage(message, sender, isReassembled)
@@ -1252,6 +1436,7 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
         local chunkSessionId, chunkId, chunkMessageType, chunkIndexText, chunkTotalText, chunkData
         if string.sub(message or "", 1, 8) == "CHUNK|2|" then
             chunkSessionId, chunkId, chunkMessageType, chunkIndexText, chunkTotalText, chunkData = string.match(message, "^CHUNK|2|([^|]+)|([^|]+)|([^|]+)|([^|]+)|([^|]+)|(.*)$")
+            chunkMessageType = CANONICAL_TYPES[chunkMessageType] or chunkMessageType
         else
             chunkId, chunkIndexText, chunkTotalText, chunkData = string.match(message, "^CHUNK|([^|]+)|([^|]+)|([^|]+)|(.*)$")
             chunkSessionId = ""
