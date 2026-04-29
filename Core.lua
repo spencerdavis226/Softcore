@@ -566,6 +566,24 @@ local function IsRuleTrackedInRunRuleset(ruleset, ruleKey)
     return v ~= nil and v ~= "ALLOWED" and v ~= false
 end
 
+local function GetForcedMovementLogReason(entry)
+    local r = entry and entry.reason
+    if r == "taxi" or r == "vehicle" or r == "override" then
+        return r
+    end
+    local msg = tostring(entry and entry.message or "")
+    if string.find(msg, "taxi or forced", 1, true) then
+        return "taxi"
+    end
+    if string.find(msg, "override action bar", 1, true) then
+        return "override"
+    end
+    if string.find(msg, "Vehicle or forced movement active:", 1, true) then
+        return "vehicle"
+    end
+    return nil
+end
+
 --- Whether a stored log entry should appear in the master menu Log tab and /sc log chat output.
 --- Full history remains in SavedVariables and CSV/debug exports.
 function SC:ShouldDisplayLogEntryInUI(entry)
@@ -578,6 +596,14 @@ function SC:ShouldDisplayLogEntryInUI(entry)
     end
 
     if kind == "FORCED_MOVEMENT" or kind == "FORCED_MOVEMENT_ENDED" then
+        local reason = GetForcedMovementLogReason(entry)
+        if reason == "taxi" then
+            return IsRuleTrackedInRunRuleset(ruleset, "flightPaths")
+        end
+        if reason == "vehicle" or reason == "override" then
+            return IsRuleTrackedInRunRuleset(ruleset, "mounts")
+                or IsRuleTrackedInRunRuleset(ruleset, "flying")
+        end
         return IsRuleTrackedInRunRuleset(ruleset, "flightPaths")
             or IsRuleTrackedInRunRuleset(ruleset, "mounts")
             or IsRuleTrackedInRunRuleset(ruleset, "flying")
