@@ -139,6 +139,154 @@ local GROUPING_MODE_VALUES = {
     SOLO_SELF_FOUND = true,
 }
 
+local RULE_LOG_LABELS = {
+    death = "Death",
+    groupingMode = "Grouping",
+    failedMemberBlocksParty = "Failed member blocks party",
+    allowLateJoin = "Late join",
+    allowReplacementCharacters = "Replacement characters",
+    requireLeaderApprovalForJoin = "Leader approval to join",
+    auctionHouse = "Auction house",
+    mailbox = "Mailbox",
+    trade = "Trade",
+    mounts = "Mounts",
+    flying = "Flying mounts",
+    flightPaths = "Flight paths",
+    outsiderGrouping = "PUG / outsider grouping",
+    unsyncedMembers = "Unsynced members",
+    maxLevelGap = "Level gap rule",
+    maxLevelGapValue = "Max level gap",
+    dungeonRepeat = "Repeated dungeons",
+    gearQuality = "Gear quality",
+    selfCraftedGearAllowed = "Self-crafted gear exemption",
+    heirlooms = "Heirlooms",
+    enchants = "Enchants",
+    instanceWithUnsyncedPlayers = "Dungeons while party unsynced",
+    bank = "Bank",
+    warbandBank = "Warband bank",
+    guildBank = "Guild bank",
+    voidStorage = "Void storage",
+    craftingOrders = "Crafting orders",
+    vendor = "Vendors",
+    consumables = "Consumables",
+    instancedPvP = "Instanced PvP",
+    actionCam = "Cinematic camera",
+    maxDeaths = "Max deaths rule",
+    maxDeathsValue = "Max deaths",
+}
+
+local GEAR_QUALITY_LOG_LABELS = {
+    ALLOWED = "any quality",
+    WHITE_GRAY_ONLY = "white/gray only",
+    COMMON_OR_UNCOMMON = "common or uncommon",
+    NO_EPICS = "no epics",
+    GREEN_OR_LOWER = "green or lower",
+    BLUE_OR_LOWER = "blue or lower",
+    EPIC_OR_LOWER = "epic or lower",
+}
+
+local SEVERITY_LOG_LABELS = {
+    ALLOWED = "allowed",
+    LOG_ONLY = "log only",
+    WARNING = "restricted",
+    FATAL = "fatal",
+    CHARACTER_FAIL = "character fail",
+}
+
+local function RuleLogLabel(ruleName)
+    local label = RULE_LOG_LABELS[ruleName]
+    if label then
+        return label
+    end
+    local key = tostring(ruleName or "?")
+    key = string.gsub(key, "(%l)(%u)", "%1 %2")
+    key = string.gsub(key, "_", " ")
+    return key
+end
+
+local function CoerceBooleanLike(value)
+    if value == true or value == "true" or value == "TRUE" then
+        return true
+    end
+    if value == false or value == "false" or value == "FALSE" or value == "" then
+        return false
+    end
+    return nil
+end
+
+local function FormatRuleLogValue(ruleName, value)
+    if value == nil then
+        return "?"
+    end
+    if BOOLEAN_RULES[ruleName] then
+        local b = CoerceBooleanLike(value)
+        if b == nil then
+            return string.lower(tostring(value))
+        end
+        return b and "on" or "off"
+    end
+    if ruleName == "maxLevelGapValue" or ruleName == "maxDeathsValue" then
+        return tostring(value)
+    end
+    if ruleName == "groupingMode" then
+        if value == "SYNCED_GROUP_ALLOWED" then
+            return "group"
+        end
+        if value == "SOLO_SELF_FOUND" then
+            return "solo only"
+        end
+    end
+    if ruleName == "gearQuality" then
+        local g = GEAR_QUALITY_LOG_LABELS[value]
+        if g then
+            return g
+        end
+    end
+    if ruleName == "death" then
+        local d = SEVERITY_LOG_LABELS[tostring(value)]
+        if d then
+            return d
+        end
+    end
+    local sev = SEVERITY_LOG_LABELS[tostring(value)]
+    if sev then
+        return sev
+    end
+    return string.lower(tostring(value))
+end
+
+local function FormatRuleAmendmentChangeLine(ruleName, oldValue, newValue)
+    return string.format(
+        "%s: %s (was %s)",
+        RuleLogLabel(ruleName),
+        FormatRuleLogValue(ruleName, newValue),
+        FormatRuleLogValue(ruleName, oldValue)
+    )
+end
+
+local function OrderAmendmentChangesForLog(changed)
+    local byName = {}
+    for _, c in ipairs(changed) do
+        byName[c.ruleName] = c
+    end
+    local out = {}
+    local seen = {}
+    for _, ruleName in ipairs(HASH_RULE_ORDER) do
+        local c = byName[ruleName]
+        if c then
+            table.insert(out, c)
+            seen[c.ruleName] = true
+        end
+    end
+    for _, c in ipairs(changed) do
+        if not seen[c.ruleName] then
+            table.insert(out, c)
+            seen[c.ruleName] = true
+        end
+    end
+    return out
+end
+
 local function GetDB()
     SoftcoreDB = SoftcoreDB or {}
     SoftcoreDB.run = SoftcoreDB.run or {}
@@ -609,13 +757,10 @@ function SC:ApplyRuleAmendment(amendmentId)
                     amendment.appliedAt = time()
 
                     local parts = {}
-                    for _, c in ipairs(changed) do
-                        table.insert(
-                            parts,
-                            c.ruleName .. " → " .. tostring(c.value) .. " (was " .. tostring(c.oldValue) .. ")"
-                        )
+                    for _, c in ipairs(OrderAmendmentChangesForLog(changed)) do
+                        table.insert(parts, FormatRuleAmendmentChangeLine(c.ruleName, c.oldValue, c.value))
                     end
-                    self:AddLog("RULE_AMENDMENT_SUMMARY", table.concat(parts, "; "), {
+                    self:AddLog("RULE_AMENDMENT_SUMMARY", table.concat(parts, " · "), {
                         amendmentId = amendment.id,
                         ruleCount = #changed,
                     })
