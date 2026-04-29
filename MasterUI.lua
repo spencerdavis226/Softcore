@@ -2130,7 +2130,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.charterSection = CreateRunSection(startPanel, "Run Charter", 0, 0, runLayout.CONTENT_WIDTH, runLayout:SectionHeight(2, 4))
     frame.start.accessSection = CreateRunSection(startPanel, "Access and Economy", 0, 0, runLayout.COLUMN_WIDTH, runLayout:SectionHeight(#ECONOMY_RULES))
     frame.start.travelSection = CreateRunSection(startPanel, "Travel and Camera", 0, 0, runLayout.COLUMN_WIDTH, runLayout:SectionHeight(#MOVEMENT_RULES + 1))
-    frame.start.gearSection = CreateRunSection(startPanel, "Gear and Items", runLayout.RIGHT_COLUMN_X, 0, runLayout.COLUMN_WIDTH, runLayout:SectionHeight(4))
+    frame.start.gearSection = CreateRunSection(startPanel, "Gear and Items", runLayout.RIGHT_COLUMN_X, 0, runLayout.COLUMN_WIDTH, runLayout:SectionHeight(5))
     frame.start.partyDungeonSection = CreateRunSection(startPanel, "Party and Dungeons", runLayout.RIGHT_COLUMN_X, 0, runLayout.COLUMN_WIDTH, runLayout:SectionHeight(3, 8))
     table.insert(frame.start.sections, frame.start.charterSection)
     table.insert(frame.start.sections, frame.start.accessSection)
@@ -2276,11 +2276,24 @@ function SC:OpenMasterWindow(focusTab)
     end, 145)
     runLayout:PlaceDropdownAfterLabel(frame.start.gearLimitCheck.label, frame.start.gearDropdown)
     RegisterRunControl(frame.start, frame.start.gearDropdown, frame.start.gearSection)
-    frame.start.heirloomCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Heirlooms", key = "heirlooms" }, 0, -runLayout.ROW_HEIGHT)
+    frame.start.selfCraftedCheck = CreateFrame("CheckButton", nil, frame.start.gearSection.content, "UICheckButtonTemplate")
+    frame.start.selfCraftedCheck:SetPoint("TOPLEFT", frame.start.gearSection.content, "TOPLEFT", 16, -runLayout.ROW_HEIGHT)
+    frame.start.selfCraftedCheck.label = frame.start.selfCraftedCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.start.selfCraftedCheck.label:SetPoint("LEFT", frame.start.selfCraftedCheck, "RIGHT", RUN_LAYOUT.CHECKBOX_LABEL_GAP, 0)
+    frame.start.selfCraftedCheck.label:SetWidth(0)
+    frame.start.selfCraftedCheck.label:SetJustifyH("LEFT")
+    frame.start.selfCraftedCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+    frame.start.selfCraftedCheck.label:SetText("Allow self-crafted gear")
+    frame.start.selfCraftedCheck:SetScript("OnClick", function(btn)
+        frame.start.selectedRules.selfCraftedGearAllowed = btn:GetChecked() and "ALLOWED" or nil
+        SC:MasterUI_Refresh()
+    end)
+    RegisterRunControl(frame.start, frame.start.selfCraftedCheck, frame.start.gearSection)
+    frame.start.heirloomCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Heirlooms", key = "heirlooms" }, 0, -runLayout.ROW_HEIGHT * 2)
     RegisterRunControl(frame.start, frame.start.heirloomCheck, frame.start.gearSection)
-    frame.start.enchantsCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Enchants", key = "enchants" }, 0, -runLayout.ROW_HEIGHT * 2)
+    frame.start.enchantsCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Enchants", key = "enchants" }, 0, -runLayout.ROW_HEIGHT * 3)
     RegisterRunControl(frame.start, frame.start.enchantsCheck, frame.start.gearSection)
-    frame.start.consumablesCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Consumables", key = "consumables" }, 0, -runLayout.ROW_HEIGHT * 3)
+    frame.start.consumablesCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Consumables", key = "consumables" }, 0, -runLayout.ROW_HEIGHT * 4)
     RegisterRunControl(frame.start, frame.start.consumablesCheck, frame.start.gearSection)
 
     local maxGapRow = runLayout:CreateRow(frame.start.partyDungeonSection.content, 0, 0, runLayout.COLUMN_WIDTH)
@@ -2421,7 +2434,8 @@ function SC:OpenMasterWindow(focusTab)
             if checkbox.label and checkbox.GetChecked
                 and checkbox ~= self.maxGapCheck
                 and checkbox ~= self.gearLimitCheck
-                and checkbox ~= self.cameraRuleCheck then
+                and checkbox ~= self.cameraRuleCheck
+                and checkbox ~= self.selfCraftedCheck then
                 local text = checkbox.label:GetText()
                 for _, spec in ipairs(ECONOMY_RULES) do
                     if text == spec.label then checkbox:SetChecked(not IsDisallowed(self.selectedRules[spec.key])) end
@@ -2448,6 +2462,18 @@ function SC:OpenMasterWindow(focusTab)
         self.dungeonRepeatCheck:SetChecked(not IsDisallowed(self.selectedRules.dungeonRepeat))
         self.consumablesCheck:SetChecked(not IsDisallowed(self.selectedRules.consumables))
         self.instancedPvPCheck:SetChecked(not IsDisallowed(self.selectedRules.instancedPvP))
+        local selfCraftedActive = self.selectedRules.selfCraftedGearAllowed == "ALLOWED"
+        self.selfCraftedCheck:SetChecked(selfCraftedActive)
+        self.selfCraftedCheck:SetEnabled(canEdit and gearRestricted)
+        if self.selfCraftedCheck.label then
+            if highlightingRuleChanges and tostring(self.draftBaseRules.selfCraftedGearAllowed) ~= tostring(self.selectedRules.selfCraftedGearAllowed) then
+                SetFontStringRGB(self.selfCraftedCheck.label, selfCraftedActive and GREEN_TEXT or RED_TEXT)
+            elseif canEdit and gearRestricted then
+                SetFontStringRGB(self.selfCraftedCheck.label, BODY_TEXT)
+            else
+                SetFontStringRGB(self.selfCraftedCheck.label, MUTED_TEXT)
+            end
+        end
         local active = IsActiveRun()
         local editingCamera = (not active) or self.isModifyingRules or self.isReviewingRuleAmendment
         local cameraRequired = active and (not self.isModifyingRules) and SC.IsCameraModeRequired and SC:IsCameraModeRequired()

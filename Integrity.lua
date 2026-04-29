@@ -19,6 +19,42 @@ local EQUIPMENT_SLOTS = {
     1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
 }
 
+local tooltipScanner = nil
+local function GetTooltipScanner()
+    if not tooltipScanner then
+        tooltipScanner = CreateFrame("GameTooltip", "SoftcoreGearScanner", nil, "GameTooltipTemplate")
+        tooltipScanner:SetOwner(WorldFrame, "ANCHOR_NONE")
+    end
+    return tooltipScanner
+end
+
+local function IsItemSelfCrafted(slotId)
+    local playerName = UnitName("player")
+    if not playerName then return false end
+    local madeByPrefix = "Made by " .. playerName
+    if C_TooltipInfo and C_TooltipInfo.GetInventoryItem then
+        local data = C_TooltipInfo.GetInventoryItem("player", slotId)
+        if data and data.lines then
+            for _, line in ipairs(data.lines) do
+                if line.leftText and string.find(line.leftText, madeByPrefix, 1, true) then
+                    return true
+                end
+            end
+            return false
+        end
+    end
+    local scanner = GetTooltipScanner()
+    scanner:ClearLines()
+    scanner:SetInventoryItem("player", slotId)
+    for i = 1, scanner:NumLines() do
+        local line = _G["SoftcoreGearScannerTextLeft" .. i]
+        if line and string.find(line:GetText() or "", madeByPrefix, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
 local QUALITY_NAMES = {
     [0] = "Poor",
     [1] = "Common",
@@ -151,11 +187,14 @@ function SC:GetInvalidEquippedItems()
                 })
             end
         elseif IsGearQualityInvalid(gearRule, item.quality) then
-            table.insert(invalid, {
-                rule = "gearQuality",
-                item = item,
-                reason = "Disallowed quality for " .. tostring(gearRule),
-            })
+            local selfCraftedAllowed = self:GetRule("selfCraftedGearAllowed") == "ALLOWED"
+            if not (selfCraftedAllowed and IsItemSelfCrafted(item.slotId)) then
+                table.insert(invalid, {
+                    rule = "gearQuality",
+                    item = item,
+                    reason = "Disallowed quality for " .. tostring(gearRule),
+                })
+            end
         end
 
         if item.enchantId and self:GetRule("enchants") ~= "ALLOWED" then
