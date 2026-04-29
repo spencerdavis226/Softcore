@@ -54,7 +54,6 @@ local GROUPING_OPTIONS = {
 }
 
 local GEAR_OPTIONS = {
-    { text = "Any gear", value = "ALLOWED" },
     { text = "White/gray only", value = "WHITE_GRAY_ONLY" },
     { text = "Green or lower", value = "GREEN_OR_LOWER" },
     { text = "Blue or lower", value = "BLUE_OR_LOWER" },
@@ -496,40 +495,28 @@ local function CreateOverviewCard(parent, title, x, y, width, height)
 end
 
 local function CreateRunSection(parent, title, x, y, width, height)
-    local section = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    local section = CreateFrame("Frame", nil, parent)
     section:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     section:SetSize(width, height)
     section.fixedHeight = height
     section.children = {}
-    if section.SetBackdrop then
-        section:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            tile = true,
-            tileSize = 16,
-            edgeSize = 12,
-            insets = { left = 3, right = 3, top = 3, bottom = 3 },
-        })
-        section:SetBackdropColor(0.07, 0.04, 0.018, 0.86)
-        section:SetBackdropBorderColor(0.68, 0.48, 0.18, 0.88)
-    end
 
     section.title = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    section.title:SetPoint("TOPLEFT", section, "TOPLEFT", 12, -8)
-    section.title:SetWidth(width - 24)
+    section.title:SetPoint("TOPLEFT", section, "TOPLEFT", 0, -4)
+    section.title:SetWidth(width)
     section.title:SetJustifyH("LEFT")
     section.title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
     section.title:SetText(title)
 
     section.divider = section:CreateTexture(nil, "ARTWORK")
     section.divider:SetHeight(1)
-    section.divider:SetPoint("TOPLEFT", section, "TOPLEFT", 10, -29)
-    section.divider:SetPoint("TOPRIGHT", section, "TOPRIGHT", -10, -29)
+    section.divider:SetPoint("TOPLEFT", section, "TOPLEFT", 0, -24)
+    section.divider:SetPoint("TOPRIGHT", section, "TOPRIGHT", 0, -24)
     section.divider:SetColorTexture(0.72, 0.49, 0.18, 0.38)
 
     section.content = CreateFrame("Frame", nil, section)
-    section.content:SetPoint("TOPLEFT", section, "TOPLEFT", 10, -36)
-    section.content:SetPoint("BOTTOMRIGHT", section, "BOTTOMRIGHT", -10, 8)
+    section.content:SetPoint("TOPLEFT", section, "TOPLEFT", 0, -34)
+    section.content:SetPoint("BOTTOMRIGHT", section, "BOTTOMRIGHT", 0, 0)
 
     function section:Refresh()
         self:SetHeight(self.fixedHeight)
@@ -620,13 +607,18 @@ end
 
 local function CreateDropdown(parent, name, options, selectedValue, onSelect, width)
     local dropdown = CreateFrame("Frame", name, parent, "UIDropDownMenuTemplate")
+    dropdown.softcoreSelectedValue = selectedValue
     UIDropDownMenu_SetWidth(dropdown, width or 145)
     UIDropDownMenu_SetText(dropdown, GetOptionText(options, selectedValue))
     UIDropDownMenu_Initialize(dropdown, function(_, level)
         for _, option in ipairs(options) do
             local info = UIDropDownMenu_CreateInfo()
             info.text = option.text
+            info.checked = dropdown.softcoreSelectedValue == option.value
+            info.isNotRadio = false
+            info.keepShownOnClick = false
             info.func = function()
+                dropdown.softcoreSelectedValue = option.value
                 UIDropDownMenu_SetText(dropdown, option.text)
                 onSelect(option.value)
             end
@@ -634,6 +626,12 @@ local function CreateDropdown(parent, name, options, selectedValue, onSelect, wi
         end
     end)
     return dropdown
+end
+
+local function SetDropdownSelected(dropdown, options, value)
+    if not dropdown then return end
+    dropdown.softcoreSelectedValue = value
+    UIDropDownMenu_SetText(dropdown, GetOptionText(options, value))
 end
 
 local STATUS_COLORS = {
@@ -1697,12 +1695,6 @@ local function RefreshRunPanel(frame)
     if frame.start.RefreshControls then
         frame.start:RefreshControls()
     end
-    if active then
-        if frame.start.presetLabel then SetRunControlShown(frame.start.presetLabel, false) end
-        SetRunControlShown(frame.start.casualBtn, false)
-        SetRunControlShown(frame.start.ironmanBtn, false)
-        if frame.start.chefBtn then SetRunControlShown(frame.start.chefBtn, false) end
-    end
     RefreshRunSections(frame.start)
     AnchorRunFooterButtons(frame)
 end
@@ -2093,11 +2085,11 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.activeText:Hide()
 
     frame.start.sections = {}
-    frame.start.charterSection = CreateRunSection(startPanel, "Run Charter", 0, -18, 690, 96)
-    frame.start.accessSection = CreateRunSection(startPanel, "Access and Economy", 0, -126, 330, 228)
-    frame.start.travelSection = CreateRunSection(startPanel, "Travel and Camera", 0, -366, 330, 164)
-    frame.start.gearSection = CreateRunSection(startPanel, "Gear and Items", 360, -126, 330, 188)
-    frame.start.partyDungeonSection = CreateRunSection(startPanel, "Party and Dungeons", 360, -326, 330, 176)
+    frame.start.charterSection = CreateRunSection(startPanel, "Run Charter", 0, -18, 690, 112)
+    frame.start.accessSection = CreateRunSection(startPanel, "Access and Economy", 0, -142, 330, 214)
+    frame.start.travelSection = CreateRunSection(startPanel, "Travel and Camera", 0, -368, 330, 170)
+    frame.start.gearSection = CreateRunSection(startPanel, "Gear and Items", 360, -142, 330, 202)
+    frame.start.partyDungeonSection = CreateRunSection(startPanel, "Party and Dungeons", 360, -356, 330, 160)
     table.insert(frame.start.sections, frame.start.charterSection)
     table.insert(frame.start.sections, frame.start.accessSection)
     table.insert(frame.start.sections, frame.start.travelSection)
@@ -2129,7 +2121,7 @@ function SC:OpenMasterWindow(focusTab)
     RegisterRunControl(frame.start, frame.start.chefBtn, frame.start.charterSection)
     RegisterRunControl(frame.start, frame.start.ironmanBtn, frame.start.charterSection)
     RegisterRunControl(frame.start, CreateLabel(frame.start.charterSection.content, "Death is permanent. A death fails this character only.", 0, -38, "GameFontHighlightSmall", 320), frame.start.charterSection)
-    frame.start.groupingLabel = CreateLabel(frame.start.charterSection.content, "Mode", 348, -7, "GameFontNormalSmall", 70)
+    frame.start.groupingLabel = CreateLabel(frame.start.charterSection.content, "Mode", 348, -6, "GameFontNormalSmall", 70)
     RegisterRunControl(frame.start, frame.start.groupingLabel, frame.start.charterSection)
     frame.start.groupingDropdown = CreateDropdown(frame.start.charterSection.content, "SoftcoreMasterGroupingDropdown", GROUPING_OPTIONS, frame.start.selectedRules.groupingMode, function(value)
         frame.start.selectedRules.groupingMode = value
@@ -2138,16 +2130,16 @@ function SC:OpenMasterWindow(focusTab)
         end
         SC:MasterUI_Refresh()
     end, 140)
-    frame.start.groupingDropdown:SetPoint("TOPLEFT", frame.start.charterSection.content, "TOPLEFT", 420, -1)
+    frame.start.groupingDropdown:SetPoint("TOPLEFT", frame.start.charterSection.content, "TOPLEFT", 336, -22)
     RegisterRunControl(frame.start, frame.start.groupingDropdown, frame.start.charterSection)
 
-    frame.start.deathAnnounceLabel = CreateLabel(frame.start.charterSection.content, "Announce Death", 348, -34, "GameFontNormalSmall", 100)
+    frame.start.deathAnnounceLabel = CreateLabel(frame.start.charterSection.content, "Announce Death", 348, -58, "GameFontNormalSmall", 100)
     RegisterRunControl(frame.start, frame.start.deathAnnounceLabel, frame.start.charterSection)
-    frame.start.deathAnnounceChatCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "CHAT", "Chat", 454, -26)
+    frame.start.deathAnnounceChatCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "CHAT", "Chat", 454, -50)
     RegisterRunControl(frame.start, frame.start.deathAnnounceChatCheck, frame.start.charterSection)
-    frame.start.deathAnnouncePartyCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "PARTY", "Party", 520, -26)
+    frame.start.deathAnnouncePartyCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "PARTY", "Party", 520, -50)
     RegisterRunControl(frame.start, frame.start.deathAnnouncePartyCheck, frame.start.charterSection)
-    frame.start.deathAnnounceGuildCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "GUILD", "Guild", 594, -26)
+    frame.start.deathAnnounceGuildCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "GUILD", "Guild", 594, -50)
     RegisterRunControl(frame.start, frame.start.deathAnnounceGuildCheck, frame.start.charterSection)
 
     local y = 0
@@ -2203,7 +2195,7 @@ function SC:OpenMasterWindow(focusTab)
         end
         SC:MasterUI_Refresh()
     end, 116)
-    frame.start.cameraDropdown:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 164, -88)
+    frame.start.cameraDropdown:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", 28, -120)
     RegisterRunControl(frame.start, frame.start.cameraDropdown, frame.start.travelSection)
     frame.start.firstPersonCheck = CreateFrame("CheckButton", nil, frame.start.travelSection.content, "UICheckButtonTemplate")
     frame.start.firstPersonCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", -200, -200)
@@ -2265,19 +2257,37 @@ function SC:OpenMasterWindow(focusTab)
     end)
     frame.start.actionCamCheck:Hide()
 
-    frame.start.gearLabel = CreateLabel(frame.start.gearSection.content, "Gear limit", 0, -6, "GameFontNormalSmall", 82)
-    RegisterRunControl(frame.start, frame.start.gearLabel, frame.start.gearSection)
-    frame.start.gearDropdown = CreateDropdown(frame.start.gearSection.content, "SoftcoreMasterGearDropdown", GEAR_OPTIONS, frame.start.selectedRules.gearQuality, function(value)
+    frame.start.gearLimitCheck = CreateFrame("CheckButton", nil, frame.start.gearSection.content, "UICheckButtonTemplate")
+    frame.start.gearLimitCheck:SetPoint("TOPLEFT", frame.start.gearSection.content, "TOPLEFT", 0, -2)
+    frame.start.gearLimitCheck.label = frame.start.gearLimitCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.start.gearLimitCheck.label:SetPoint("LEFT", frame.start.gearLimitCheck, "RIGHT", 2, 0)
+    frame.start.gearLimitCheck.label:SetWidth(200)
+    frame.start.gearLimitCheck.label:SetJustifyH("LEFT")
+    frame.start.gearLimitCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+    frame.start.gearLimitCheck.label:SetText("Restrict Gear")
+    frame.start.gearLimitCheck.ruleKey = "gearQuality"
+    frame.start.gearLimitCheck:SetScript("OnClick", function(self)
+        if self:GetChecked() then
+            if frame.start.selectedRules.gearQuality == "ALLOWED" then
+                frame.start.selectedRules.gearQuality = "GREEN_OR_LOWER"
+            end
+        else
+            frame.start.selectedRules.gearQuality = "ALLOWED"
+        end
+        SC:MasterUI_Refresh()
+    end)
+    RegisterRunControl(frame.start, frame.start.gearLimitCheck, frame.start.gearSection)
+    frame.start.gearDropdown = CreateDropdown(frame.start.gearSection.content, "SoftcoreMasterGearDropdown", GEAR_OPTIONS, frame.start.selectedRules.gearQuality ~= "ALLOWED" and frame.start.selectedRules.gearQuality or "GREEN_OR_LOWER", function(value)
         frame.start.selectedRules.gearQuality = value
         SC:MasterUI_Refresh()
     end, 145)
-    frame.start.gearDropdown:SetPoint("TOPLEFT", frame.start.gearSection.content, "TOPLEFT", 92, -8)
+    frame.start.gearDropdown:SetPoint("TOPLEFT", frame.start.gearSection.content, "TOPLEFT", 28, -30)
     RegisterRunControl(frame.start, frame.start.gearDropdown, frame.start.gearSection)
-    frame.start.heirloomCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Heirlooms", key = "heirlooms" }, 0, -52)
+    frame.start.heirloomCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Heirlooms", key = "heirlooms" }, 0, -84)
     RegisterRunControl(frame.start, frame.start.heirloomCheck, frame.start.gearSection)
-    frame.start.enchantsCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Enchants", key = "enchants" }, 0, -82)
+    frame.start.enchantsCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Enchants", key = "enchants" }, 0, -114)
     RegisterRunControl(frame.start, frame.start.enchantsCheck, frame.start.gearSection)
-    frame.start.consumablesCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Consumables", key = "consumables" }, 0, -112)
+    frame.start.consumablesCheck = CreateAllowCheckbox(frame.start.gearSection.content, frame.start.selectedRules, { label = "Allow Consumables", key = "consumables" }, 0, -144)
     RegisterRunControl(frame.start, frame.start.consumablesCheck, frame.start.gearSection)
 
     frame.start.maxGapCheck = CreateFrame("CheckButton", nil, frame.start.partyDungeonSection.content, "UICheckButtonTemplate")
@@ -2320,7 +2330,7 @@ function SC:OpenMasterWindow(focusTab)
         self.selectedRules.instanceWithUnsyncedPlayers = "ALLOWED"
         self.selectedRules.unsyncedMembers = "ALLOWED"
 
-        UIDropDownMenu_SetText(self.groupingDropdown, GetOptionText(GROUPING_OPTIONS, self.selectedRules.groupingMode))
+        SetDropdownSelected(self.groupingDropdown, GROUPING_OPTIONS, self.selectedRules.groupingMode)
         if SC.IsDeathAnnouncementChannelEnabled then
             self.deathAnnounceChatCheck:SetChecked(SC:IsDeathAnnouncementChannelEnabled("CHAT"))
             self.deathAnnouncePartyCheck:SetChecked(SC:IsDeathAnnouncementChannelEnabled("PARTY"))
@@ -2332,7 +2342,9 @@ function SC:OpenMasterWindow(focusTab)
             SetFontStringRGB(self.deathAnnouncePartyCheck.label, BODY_TEXT)
             SetFontStringRGB(self.deathAnnounceGuildCheck.label, BODY_TEXT)
         end
-        UIDropDownMenu_SetText(self.gearDropdown, GetOptionText(GEAR_OPTIONS, self.selectedRules.gearQuality))
+        local gearRestricted = self.selectedRules.gearQuality ~= "ALLOWED"
+        local gearDropdownValue = gearRestricted and self.selectedRules.gearQuality or "GREEN_OR_LOWER"
+        SetDropdownSelected(self.gearDropdown, GEAR_OPTIONS, gearDropdownValue)
         local isSolo = self.selectedRules.groupingMode == "SOLO_SELF_FOUND"
         if isSolo then
             self.selectedRules.maxLevelGap = "ALLOWED"
@@ -2390,16 +2402,28 @@ function SC:OpenMasterWindow(focusTab)
                 SetFontStringRGB(self.groupingLabel, BODY_TEXT)
             end
         end
-        if self.gearLabel then
-            if highlightingRuleChanges and tostring(self.draftBaseRules.gearQuality) ~= tostring(self.selectedRules.gearQuality) then
-                SetFontStringRGB(self.gearLabel, GREEN_TEXT)
+        self.gearLimitCheck:SetChecked(gearRestricted)
+        self.gearLimitCheck:SetEnabled(canEdit)
+        if UIDropDownMenu_EnableDropDown and UIDropDownMenu_DisableDropDown then
+            if canEdit and gearRestricted then
+                UIDropDownMenu_EnableDropDown(self.gearDropdown)
             else
-                SetFontStringRGB(self.gearLabel, BODY_TEXT)
+                UIDropDownMenu_DisableDropDown(self.gearDropdown)
+            end
+        end
+        if self.gearLimitCheck and self.gearLimitCheck.label then
+            if highlightingRuleChanges and tostring(self.draftBaseRules.gearQuality) ~= tostring(self.selectedRules.gearQuality) then
+                SetFontStringRGB(self.gearLimitCheck.label, gearRestricted and GREEN_TEXT or RED_TEXT)
+            else
+                SetFontStringRGB(self.gearLimitCheck.label, BODY_TEXT)
             end
         end
 
         for _, checkbox in ipairs(self.controls) do
-            if checkbox.label and checkbox.GetChecked and checkbox ~= self.maxGapCheck then
+            if checkbox.label and checkbox.GetChecked
+                and checkbox ~= self.maxGapCheck
+                and checkbox ~= self.gearLimitCheck
+                and checkbox ~= self.cameraRuleCheck then
                 local text = checkbox.label:GetText()
                 for _, spec in ipairs(ECONOMY_RULES) do
                     if text == spec.label then checkbox:SetChecked(not IsDisallowed(self.selectedRules[spec.key])) end
@@ -2433,7 +2457,7 @@ function SC:OpenMasterWindow(focusTab)
         local cameraAvailable = (((self.setupEnabled ~= false) and editingCamera) or cameraRequired) and not self.isReviewingRuleAmendment
         local cameraRuleOn = IsCameraRuleEnforced(self.selectedRules) or cameraRequired
         self.cameraRuleCheck:SetChecked(cameraRuleOn)
-        UIDropDownMenu_SetText(self.cameraDropdown, GetOptionText(CAMERA_MODE_OPTIONS, cameraMode or GetSelectedCameraMode(self) or "CINEMATIC"))
+        SetDropdownSelected(self.cameraDropdown, CAMERA_MODE_OPTIONS, cameraMode or GetSelectedCameraMode(self) or "CINEMATIC")
         if UIDropDownMenu_EnableDropDown and UIDropDownMenu_DisableDropDown then
             if cameraAvailable and cameraRuleOn then
                 UIDropDownMenu_EnableDropDown(self.cameraDropdown)
