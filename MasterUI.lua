@@ -38,7 +38,7 @@ local RUN_LAYOUT = {
     SECTION_CONTENT_TOP = 32,
     SECTION_ROW_CONTROL_HEIGHT = 28,
     DROPDOWN_X_OFFSET = -16,
-    CHECKBOX_LABEL_GAP = 8,
+    CHECKBOX_LABEL_GAP = 4,
     INLINE_FIELD_GAP = 10,
 }
 RUN_LAYOUT.COLUMN_WIDTH = math.floor((RUN_LAYOUT.CONTENT_WIDTH - RUN_LAYOUT.COLUMN_GAP) / 2)
@@ -2179,15 +2179,15 @@ function SC:OpenMasterWindow(focusTab)
     local charterLabelWidth = 56
     local charterControlX = charterLeftX + 58
     local charterRightControlX = 156
-    -- Each announce group is: label(32) + gap(8) + checkbox(26) + spacing(14) = 80px.
-    -- charterDeathControlX is the x of the first checkbox within the announce row.
-    local charterDeathLabelWidth = 32
-    local charterDeathGroupWidth = charterDeathLabelWidth + runLayout.CHECKBOX_LABEL_GAP + 26 + 14
-    local charterDeathControlX = charterDeathLabelWidth + runLayout.CHECKBOX_LABEL_GAP
+    -- Announce row spans full content width so "Announce Death" occupies the left column
+    -- and the channel checkboxes sit in the right column with clear separation.
+    -- Group step: checkbox(26) + label_gap + auto_label(~30 max) + inter_group(12) ≈ 72px.
+    local charterDeathControlX = charterRightX   -- first checkbox at the right-column start
+    local charterDeathGroupWidth = 72
     local rowOneY = 0
     local rowTwoY = -runLayout.ROW_HEIGHT
     local charterModeRow = runLayout:CreateRow(frame.start.charterSection.content, charterRightX, rowOneY, runLayout.COLUMN_WIDTH)
-    local charterAnnounceRow = runLayout:CreateRow(frame.start.charterSection.content, charterRightX, rowTwoY, runLayout.COLUMN_WIDTH)
+    local charterAnnounceRow = runLayout:CreateRow(frame.start.charterSection.content, 0, rowTwoY, runLayout.CONTENT_WIDTH)
 
     frame.start.presetLabel = CreateLabel(frame.start.charterSection.content, "Presets", charterLeftX, rowOneY - 4, "GameFontNormalSmall", charterLabelWidth)
     frame.start.presetLabel:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
@@ -2231,15 +2231,15 @@ function SC:OpenMasterWindow(focusTab)
     RegisterRunControl(frame.start, frame.start.deathAnnounceLabel, frame.start.charterSection)
     frame.start.deathAnnounceChatCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "CHAT", "Chat", 0, 0)
     runLayout:PlaceRowCheckbox(charterAnnounceRow, frame.start.deathAnnounceChatCheck, charterDeathControlX)
-    runLayout:PlaceCheckboxTextLeft(frame.start.deathAnnounceChatCheck, charterDeathLabelWidth)
+    runLayout:PlaceCheckboxText(frame.start.deathAnnounceChatCheck)
     RegisterRunControl(frame.start, frame.start.deathAnnounceChatCheck, frame.start.charterSection)
     frame.start.deathAnnouncePartyCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "PARTY", "Party", 0, 0)
     runLayout:PlaceRowCheckbox(charterAnnounceRow, frame.start.deathAnnouncePartyCheck, charterDeathControlX + charterDeathGroupWidth)
-    runLayout:PlaceCheckboxTextLeft(frame.start.deathAnnouncePartyCheck, charterDeathLabelWidth)
+    runLayout:PlaceCheckboxText(frame.start.deathAnnouncePartyCheck)
     RegisterRunControl(frame.start, frame.start.deathAnnouncePartyCheck, frame.start.charterSection)
     frame.start.deathAnnounceGuildCheck = CreateDeathAnnounceCheckbox(frame.start.charterSection.content, "GUILD", "Guild", 0, 0)
     runLayout:PlaceRowCheckbox(charterAnnounceRow, frame.start.deathAnnounceGuildCheck, charterDeathControlX + charterDeathGroupWidth * 2)
-    runLayout:PlaceCheckboxTextLeft(frame.start.deathAnnounceGuildCheck, charterDeathLabelWidth)
+    runLayout:PlaceCheckboxText(frame.start.deathAnnounceGuildCheck)
     RegisterRunControl(frame.start, frame.start.deathAnnounceGuildCheck, frame.start.charterSection)
 
     local y = 0
