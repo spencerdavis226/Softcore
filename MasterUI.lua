@@ -107,7 +107,6 @@ local EDITABLE_RULE_ORDER = {
     "dungeonRepeat",
     "consumables",
     "instancedPvP",
-    "firstPersonOnly",
     "actionCam",
 }
 
@@ -834,18 +833,13 @@ local function SetDisallowedRule(rules, key, checked)
 end
 
 local function IsCameraRuleEnforced(rules)
-    return IsDisallowed(rules and rules.firstPersonOnly) or IsDisallowed(rules and rules.actionCam)
+    return IsDisallowed(rules and rules.actionCam)
 end
 
 local function SetCameraRules(rules, mode)
-    if mode == "FIRST_PERSON" then
-        rules.firstPersonOnly = DISALLOWED_OUTCOME
-        rules.actionCam = "ALLOWED"
-    elseif mode == "CINEMATIC" then
-        rules.firstPersonOnly = "ALLOWED"
+    if mode == "CINEMATIC" then
         rules.actionCam = DISALLOWED_OUTCOME
     else
-        rules.firstPersonOnly = "ALLOWED"
         rules.actionCam = "ALLOWED"
     end
 end
@@ -853,44 +847,18 @@ end
 local function GetSelectedCameraMode(start)
     if start.selectedCameraMode then return start.selectedCameraMode end
     if IsDisallowed(start.selectedRules.actionCam) then return "CINEMATIC" end
-    if IsDisallowed(start.selectedRules.firstPersonOnly) then return "FIRST_PERSON" end
     return nil
 end
 
-local CAMERA_MODE_OPTIONS = {
-    { text = "ActionCam", value = "CINEMATIC" },
-    { text = "First Person", value = "FIRST_PERSON" },
-}
-
 local function SetFontStringRGB(fontString, color)
     fontString:SetTextColor(color.r, color.g, color.b)
-end
-
-local function ClearCheckboxPressVisual(checkbox)
-    if not checkbox then return end
-    if checkbox.SetButtonState then
-        checkbox:SetButtonState("NORMAL", false)
-    end
-    if checkbox.UnlockHighlight then
-        checkbox:UnlockHighlight()
-    end
-    if checkbox.GetHighlightTexture then
-        local texture = checkbox:GetHighlightTexture()
-        if texture then texture:Hide() end
-    end
-end
-
-local function ClearCameraCheckboxVisuals(start)
-    if not start then return end
-    ClearCheckboxPressVisual(start.firstPersonCheck)
-    ClearCheckboxPressVisual(start.actionCamCheck)
 end
 
 local function IsCheckedRuleValue(ruleName, value)
     if ruleName == "groupingMode" or ruleName == "gearQuality" or ruleName == "maxLevelGapValue" then
         return nil
     end
-    if ruleName == "maxLevelGap" or ruleName == "firstPersonOnly" or ruleName == "actionCam" then
+    if ruleName == "maxLevelGap" or ruleName == "actionCam" then
         return value ~= "ALLOWED"
     end
     return not IsDisallowed(value)
@@ -965,7 +933,6 @@ local function ApplyStartPreset(frame, preset)
 
     SetDisallowedRule(rules, "consumables", not ironman)
     SetDisallowedRule(rules, "instancedPvP", false)
-    rules.firstPersonOnly = "ALLOWED"
     rules.actionCam = "ALLOWED"
     frame.start.selectedCameraMode = nil
 
@@ -1063,7 +1030,6 @@ local RULE_DISPLAY_NAMES = {
     dungeonRepeat  = "Repeated Dungeons",
     consumables    = "Consumables",
     instancedPvP   = "Instanced PvP",
-    firstPersonOnly = "First Person Camera",
     actionCam      = "Cinematic Camera",
 }
 
@@ -1376,11 +1342,9 @@ local function SetRunSetupEnabled(frame, enabled)
         if enabled then
             UIDropDownMenu_EnableDropDown(start.groupingDropdown)
             UIDropDownMenu_EnableDropDown(start.gearDropdown)
-            if start.cameraDropdown then UIDropDownMenu_EnableDropDown(start.cameraDropdown) end
         else
             UIDropDownMenu_DisableDropDown(start.groupingDropdown)
             UIDropDownMenu_DisableDropDown(start.gearDropdown)
-            if start.cameraDropdown then UIDropDownMenu_DisableDropDown(start.cameraDropdown) end
         end
     end
 
@@ -2270,8 +2234,8 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.cameraRuleCheck.label = frame.start.cameraRuleCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     runLayout:PlaceCheckboxText(frame.start.cameraRuleCheck)
     frame.start.cameraRuleCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
-    frame.start.cameraRuleCheck.label:SetText("Restrict Camera")
-    frame.start.cameraRuleCheck.ruleKey = "firstPersonOnly"
+    frame.start.cameraRuleCheck.label:SetText("Cinematic Camera")
+    frame.start.cameraRuleCheck.ruleKey = "actionCam"
     frame.start.cameraRuleCheck:SetScript("OnClick", function(btn)
         if IsActiveRun() and not frame.start.isModifyingRules then
             local mode = btn:GetChecked() and (GetSelectedCameraMode(frame.start) or "CINEMATIC") or nil
@@ -2286,76 +2250,6 @@ function SC:OpenMasterWindow(focusTab)
         SC:MasterUI_Refresh()
     end)
     RegisterRunControl(frame.start, frame.start.cameraRuleCheck, frame.start.travelSection)
-    frame.start.cameraDropdown = CreateDropdown(frame.start.travelSection.content, "SoftcoreMasterCameraDropdown", CAMERA_MODE_OPTIONS, GetSelectedCameraMode(frame.start) or "CINEMATIC", function(value)
-        frame.start.selectedCameraMode = value
-        if IsActiveRun() and not frame.start.isModifyingRules then
-            if SC.SetCameraMode then SC:SetCameraMode(value) end
-        else
-            SetCameraRules(frame.start.selectedRules, value)
-        end
-        SC:MasterUI_Refresh()
-    end, 116)
-    runLayout:PlaceDropdownAfterLabel(frame.start.cameraRuleCheck.label, frame.start.cameraDropdown)
-    RegisterRunControl(frame.start, frame.start.cameraDropdown, frame.start.travelSection)
-    frame.start.firstPersonCheck = CreateFrame("CheckButton", nil, frame.start.travelSection.content, "UICheckButtonTemplate")
-    frame.start.firstPersonCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", -200, -200)
-    frame.start.firstPersonCheck.label = frame.start.firstPersonCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.start.firstPersonCheck.label:SetPoint("LEFT", frame.start.firstPersonCheck, "RIGHT", 2, 0)
-    frame.start.firstPersonCheck.label:SetWidth(118)
-    frame.start.firstPersonCheck.label:SetJustifyH("LEFT")
-    frame.start.firstPersonCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
-    frame.start.firstPersonCheck.label:SetText("First Person")
-    frame.start.firstPersonCheck.ruleKey = "firstPersonOnly"
-    frame.start.firstPersonCheck:SetScript("OnClick", function(btn)
-        if IsActiveRun() and not frame.start.isModifyingRules then
-            if btn:GetChecked() and SC.SetCameraMode then
-                SC:SetCameraMode("FIRST_PERSON")
-            end
-            if C_Timer and C_Timer.After then
-                C_Timer.After(0, function()
-                    ClearCameraCheckboxVisuals(frame.start)
-                end)
-            else
-                ClearCameraCheckboxVisuals(frame.start)
-            end
-            SC:MasterUI_Refresh()
-            return
-        end
-        frame.start.selectedCameraMode = btn:GetChecked() and "FIRST_PERSON" or nil
-        SetCameraRules(frame.start.selectedRules, frame.start.selectedCameraMode)
-        SC:MasterUI_Refresh()
-    end)
-    frame.start.firstPersonCheck:Hide()
-
-    frame.start.actionCamCheck = CreateFrame("CheckButton", nil, frame.start.travelSection.content, "UICheckButtonTemplate")
-    frame.start.actionCamCheck:SetPoint("TOPLEFT", frame.start.travelSection.content, "TOPLEFT", -200, -200)
-    frame.start.actionCamCheck.label = frame.start.actionCamCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.start.actionCamCheck.label:SetPoint("LEFT", frame.start.actionCamCheck, "RIGHT", 2, 0)
-    frame.start.actionCamCheck.label:SetWidth(118)
-    frame.start.actionCamCheck.label:SetJustifyH("LEFT")
-    frame.start.actionCamCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
-    frame.start.actionCamCheck.label:SetText("ActionCam")
-    frame.start.actionCamCheck.ruleKey = "actionCam"
-    frame.start.actionCamCheck:SetScript("OnClick", function(btn)
-        if IsActiveRun() and not frame.start.isModifyingRules then
-            if btn:GetChecked() and SC.SetCameraMode then
-                SC:SetCameraMode("CINEMATIC")
-            end
-            if C_Timer and C_Timer.After then
-                C_Timer.After(0, function()
-                    ClearCameraCheckboxVisuals(frame.start)
-                end)
-            else
-                ClearCameraCheckboxVisuals(frame.start)
-            end
-            SC:MasterUI_Refresh()
-            return
-        end
-        frame.start.selectedCameraMode = btn:GetChecked() and "CINEMATIC" or nil
-        SetCameraRules(frame.start.selectedRules, frame.start.selectedCameraMode)
-        SC:MasterUI_Refresh()
-    end)
-    frame.start.actionCamCheck:Hide()
 
     local gearLimitRow = runLayout:CreateRow(frame.start.gearSection.content, 0, 0, runLayout.COLUMN_WIDTH)
     frame.start.gearLimitCheck = CreateFrame("CheckButton", nil, frame.start.gearSection.content, "UICheckButtonTemplate")
@@ -2557,42 +2451,13 @@ function SC:OpenMasterWindow(focusTab)
         local active = IsActiveRun()
         local editingCamera = (not active) or self.isModifyingRules or self.isReviewingRuleAmendment
         local cameraRequired = active and (not self.isModifyingRules) and SC.IsCameraModeRequired and SC:IsCameraModeRequired()
-        local cameraMode = editingCamera and GetSelectedCameraMode(self) or (SC.GetCameraMode and SC:GetCameraMode())
-        local cameraAvailable = (((self.setupEnabled ~= false) and editingCamera) or cameraRequired) and not self.isReviewingRuleAmendment
         local cameraRuleOn = IsCameraRuleEnforced(self.selectedRules) or cameraRequired
         self.cameraRuleCheck:SetChecked(cameraRuleOn)
-        SetDropdownSelected(self.cameraDropdown, CAMERA_MODE_OPTIONS, cameraMode or GetSelectedCameraMode(self) or "CINEMATIC")
-        if UIDropDownMenu_EnableDropDown and UIDropDownMenu_DisableDropDown then
-            if cameraAvailable and cameraRuleOn then
-                UIDropDownMenu_EnableDropDown(self.cameraDropdown)
-            else
-                UIDropDownMenu_DisableDropDown(self.cameraDropdown)
-            end
-        end
         self.cameraRuleCheck:SetEnabled(((self.setupEnabled ~= false) and editingCamera) and not self.isReviewingRuleAmendment)
-        if highlightingRuleChanges
-            and (tostring(self.draftBaseRules.firstPersonOnly) ~= tostring(self.selectedRules.firstPersonOnly)
-                or tostring(self.draftBaseRules.actionCam) ~= tostring(self.selectedRules.actionCam)) then
+        if highlightingRuleChanges and tostring(self.draftBaseRules.actionCam) ~= tostring(self.selectedRules.actionCam) then
             SetFontStringRGB(self.cameraRuleCheck.label, cameraRuleOn and GREEN_TEXT or RED_TEXT)
         else
             SetFontStringRGB(self.cameraRuleCheck.label, BODY_TEXT)
-        end
-        self.firstPersonCheck:SetChecked((cameraRequired or IsCameraRuleEnforced(self.selectedRules)) and cameraMode == "FIRST_PERSON")
-        self.actionCamCheck:SetChecked((cameraRequired or IsCameraRuleEnforced(self.selectedRules)) and cameraMode == "CINEMATIC")
-        ClearCameraCheckboxVisuals(self)
-        self.firstPersonCheck:SetEnabled(cameraAvailable)
-        self.actionCamCheck:SetEnabled(cameraAvailable)
-        if highlightingRuleChanges and tostring(self.draftBaseRules.firstPersonOnly) ~= tostring(self.selectedRules.firstPersonOnly) then
-            local checked = IsCheckedRuleValue("firstPersonOnly", self.selectedRules.firstPersonOnly)
-            SetFontStringRGB(self.firstPersonCheck.label, checked == false and RED_TEXT or GREEN_TEXT)
-        else
-            SetFontStringRGB(self.firstPersonCheck.label, BODY_TEXT)
-        end
-        if highlightingRuleChanges and tostring(self.draftBaseRules.actionCam) ~= tostring(self.selectedRules.actionCam) then
-            local checked = IsCheckedRuleValue("actionCam", self.selectedRules.actionCam)
-            SetFontStringRGB(self.actionCamCheck.label, checked == false and RED_TEXT or GREEN_TEXT)
-        else
-            SetFontStringRGB(self.actionCamCheck.label, BODY_TEXT)
         end
         self.selectedRules.maxDeaths = false
         self.selectedRules.maxDeathsValue = self.selectedRules.maxDeathsValue or 3

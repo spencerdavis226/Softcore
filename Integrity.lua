@@ -565,13 +565,11 @@ local function IsCameraRuleEnforcedValue(value)
 end
 
 local function IsCameraModeRequired(ruleset)
-    return IsCameraRuleEnforcedValue(ruleset and ruleset.firstPersonOnly)
-        or IsCameraRuleEnforcedValue(ruleset and ruleset.actionCam)
+    return IsCameraRuleEnforcedValue(ruleset and ruleset.actionCam)
 end
 
 local function DefaultCameraModeForRules(ruleset)
     if IsCameraRuleEnforcedValue(ruleset and ruleset.actionCam) then return "CINEMATIC" end
-    if IsCameraRuleEnforcedValue(ruleset and ruleset.firstPersonOnly) then return "FIRST_PERSON" end
     return nil
 end
 
@@ -607,17 +605,9 @@ local function CaptureActionCamOriginals()
     end
 end
 
-local function IsFirstPersonEnforced()
-    return GetRunCameraMode() == "FIRST_PERSON"
-end
-
 local function GetActionCamZoomTarget()
     if GetRunCameraMode() ~= "CINEMATIC" then return nil end
     return (IsMounted and IsMounted()) and 7 or 5
-end
-
-function SC:IsFirstPersonEnforced()
-    return IsFirstPersonEnforced()
 end
 
 function SC:IsActionCamEnforced()
@@ -634,30 +624,20 @@ function SC:GetCameraMode()
 end
 
 function SC:SetCameraMode(mode)
-    if mode ~= "FIRST_PERSON" and mode ~= "CINEMATIC" then return false end
+    if mode ~= "CINEMATIC" then return false end
     local db = GetDB()
     if not db or not db.run or not db.run.active or not IsCameraModeRequired(db.run.ruleset) then
         return false
     end
 
     db.run.cameraMode = mode
-    if mode == "FIRST_PERSON" then
-        if self.RestoreActionCamSettings then self:RestoreActionCamSettings() end
-        if self.SnapCameraToFirstPerson then self:SnapCameraToFirstPerson() end
-    elseif self.EnforceActionCamSettings then
+    if self.EnforceActionCamSettings then
         self:EnforceActionCamSettings()
     end
 
     if self.MasterUI_Refresh then self:MasterUI_Refresh() end
     if self.HUD_Refresh then self:HUD_Refresh() end
     return true
-end
-
-function SC:SnapCameraToFirstPerson()
-    local zoom = GetCameraZoom and GetCameraZoom() or 0
-    if zoom > 0 then
-        CameraZoomIn(zoom + 1)
-    end
 end
 
 function SC:RestoreActionCamSettings()
@@ -691,8 +671,7 @@ end
 function SC:CleanupActionCamIfNeeded()
     local db = GetDB()
     local enforcingZoom = GetActionCamZoomTarget()
-    local enforcingFp = IsFirstPersonEnforced()
-    if enforcingZoom or enforcingFp then
+    if enforcingZoom then
         return
     end
     if db and db.actionCamCvarBackup then
@@ -726,13 +705,10 @@ function SC:EnforceActionCamSettings()
     SetCVarIfChanged("test_cameraTargetFocusInteractStrengthPitch", ACTION_CAM_INTERACT_FOCUS_PITCH)
     SetCVarIfChanged("test_cameraHeadMovementStrength", ACTION_CAM_HEAD_MOVEMENT_STRENGTH)
 
-    if not IsFirstPersonEnforced() and not IsNpcInteractionActive() and not HasHostileCameraTarget() then
+    if not IsNpcInteractionActive() and not HasHostileCameraTarget() then
         local current = GetCameraZoom and GetCameraZoom() or target
-        local delta = current - target
-        if delta > 0.5 then
-            CameraZoomIn(delta)
-        elseif delta < -0.5 then
-            CameraZoomOut(-delta)
+        if current - target > 0.5 then
+            CameraZoomIn(current - target)
         end
     end
 end
@@ -750,13 +726,6 @@ do
         elapsed = elapsed + dt
         if elapsed < 0.2 then return end
         elapsed = 0
-
-        if IsFirstPersonEnforced() then
-            local zoom = GetCameraZoom and GetCameraZoom() or 0
-            if zoom > 0 then
-                CameraZoomIn(zoom + 1)
-            end
-        end
 
         if GetActionCamZoomTarget() then
             SC:EnforceActionCamSettings()

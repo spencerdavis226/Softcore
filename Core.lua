@@ -222,7 +222,6 @@ local function CreateDefaultRuleset()
         vendor = "ALLOWED",
         consumables = "ALLOWED",
         instancedPvP = "ALLOWED",
-        firstPersonOnly = "ALLOWED",
         actionCam = "ALLOWED",
         maxDeaths = false,
         maxDeathsValue = 3,
@@ -278,7 +277,6 @@ end
 local function DefaultCameraModeForRules(ruleset)
     if not ruleset then return nil end
     if IsCameraRuleEnforcedValue(ruleset.actionCam) then return "CINEMATIC" end
-    if IsCameraRuleEnforcedValue(ruleset.firstPersonOnly) then return "FIRST_PERSON" end
     return nil
 end
 
@@ -1533,11 +1531,6 @@ function SC:StartRun(runOptions)
     if self.CheckMovementRules then
         self:CheckMovementRules()
     end
-    if db.run.ruleset and db.run.ruleset.firstPersonOnly ~= "ALLOWED" and db.run.ruleset.firstPersonOnly ~= nil and db.run.ruleset.firstPersonOnly ~= false then
-        if self.SnapCameraToFirstPerson then
-            self:SnapCameraToFirstPerson()
-        end
-    end
     if self.EnforceActionCamSettings then
         self:EnforceActionCamSettings()
     end
@@ -1877,7 +1870,6 @@ function SC:PrintRules()
         "vendor",
         "consumables",
         "instancedPvP",
-        "firstPersonOnly",
         "actionCam",
     }
 
@@ -2050,7 +2042,6 @@ local function BuildDebugExportText()
     AddCsvLine(lines, "Run", "Party Status", SC:GetPartyStatus())
     AddCsvLine(lines, "Run", "Ruleset Hash", SC.GetRulesetHash and SC:GetRulesetHash() or "unknown")
     AddCsvLine(lines, "Rule", "enchants", run.ruleset and run.ruleset.enchants or "")
-    AddCsvLine(lines, "Rule", "firstPersonOnly", run.ruleset and run.ruleset.firstPersonOnly or "")
     AddCsvLine(lines, "Rule", "actionCam", run.ruleset and run.ruleset.actionCam or "")
     AddCsvLine(lines, "Rule", "cameraMode", run.cameraMode or "")
     AddCsvLine(lines, "Sync", "Last Sent", db.sync and db.sync.lastSentAt and FormatTime(db.sync.lastSentAt) or "never")
