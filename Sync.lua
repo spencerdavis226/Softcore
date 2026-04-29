@@ -17,6 +17,7 @@ local CONTROL_REPEAT_ATTEMPTS = 1
 local SEND_QUEUE_TICK_SECONDS = 0.25
 local SEND_TOKEN_REFILL_SECONDS = 1.05
 local SEND_TOKEN_MAX = 8
+local STATUS_NUDGE_SECONDS = 0.5
 
 SC.syncEnabled = true
 SC.groupStatuses = SC.groupStatuses or {}
@@ -27,6 +28,8 @@ local sendQueue = {}
 local sendQueueActive = false
 local sendTokens = SEND_TOKEN_MAX
 local sendLastRefillAt
+local statusNudgePending = false
+local statusNudgeReason
 local syncSessionId = tostring(time()) .. "-" .. tostring(math.random(100000, 999999))
 local GetDB
 
@@ -259,7 +262,11 @@ local function GetMessagePriority(messageType)
     if messageType == "PARTY_VIOLATION_CLEAR" then return 1 end
     if messageType == "PARTY_VIOLATION" then return 2 end
     if messageType == "PROPOSAL_CONFIRMED" or messageType == "PROPOSAL_CANCELLED" then return 2 end
+    if messageType == "AMENDMENT_APPLIED" or messageType == "AMENDMENT_CANCELLED" then return 2 end
+    if messageType == "FULL_STATE_REQUEST" or messageType == "FULL_STATE_RESPONSE" then return 3 end
+    if messageType == "HELLO" then return 3 end
     if messageType == "PROPOSAL_ACCEPT" or messageType == "PROPOSAL_DECLINE" then return 3 end
+    if messageType == "AMENDMENT_ACCEPT" or messageType == "AMENDMENT_DECLINE" then return 3 end
     if messageType == "PARTY_LOG" then return 4 end
     if messageType == "PROPOSAL" then return 5 end
     if messageType == "STATUS" then return 6 end
@@ -379,6 +386,7 @@ local function DispatchAddonMessage(message, channel, messageType, chunkText, me
         proposalId = meta.proposalId,
         runId = meta.runId,
         violationId = meta.violationId,
+        priority = meta.priority,
         retryAttempt = 0,
     })
 
@@ -421,6 +429,10 @@ local function NextSequence()
     return db.sync.localSequence
 end
 
+local function NewRequestId()
+    return tostring(time()) .. "-" .. tostring(math.random(100000, 999999))
+end
+
 local function AddMetadata(payload)
     local db = GetDB()
     local status = SC:GetPlayerStatus()
@@ -438,7 +450,7 @@ local function AddMetadata(payload)
     return payload
 end
 
-local function SendPayload(payload)
+local function SendPayload(payload, options)
     local channel = GetSyncChannel()
     if not channel then
         -- Not in a group; message silently dropped. Callers that need delivery
@@ -446,6 +458,7 @@ local function SendPayload(payload)
         return false
     end
 
+    options = options or {}
     local db = GetDB()
     local messageType = payload.type or "UNKNOWN"
     db.sync.lastSentAt = time()
@@ -465,6 +478,7 @@ local function SendPayload(payload)
         proposalId = payload.proposalId,
         runId = payload.runId,
         violationId = payload.violationId,
+        priority = options.priority,
     }
     if #message <= MAX_MESSAGE_BYTES then
         DispatchAddonMessage(message, channel, messageType, nil, meta)
@@ -496,8 +510,8 @@ local function SendPayload(payload)
     return true
 end
 
-local function SendPayloadWithRepeats(payload, repeats)
-    SendPayload(payload)
+local function SendPayloadWithRepeats(payload, repeats, options)
+    SendPayload(payload, options)
 
     if not C_Timer or not C_Timer.After then
         return
@@ -505,7 +519,7 @@ local function SendPayloadWithRepeats(payload, repeats)
 
     for attempt = 1, (repeats or 0) do
         C_Timer.After(CONTROL_RETRY_SECONDS * attempt, function()
-            SendPayload(payload)
+            SendPayload(payload, options)
         end)
     end
 end
@@ -785,11 +799,12 @@ function SC:Sync_GetGroupRows()
     return rows
 end
 
-function SC:Sync_BuildPayload(reason)
+function SC:Sync_BuildPayload(reason, options)
     if not (self.db or SoftcoreDB) then
         return nil
     end
 
+    options = options or {}
     local status = self:GetPlayerStatus()
 
     local payload = AddViolationSnapshot({
@@ -814,7 +829,7 @@ function SC:Sync_BuildPayload(reason)
         timestamp = status.timestamp,
     })
 
-    if reason == "RESYNC" and self.SerializeRuleset then
+    if options.includeRules and self.SerializeRuleset then
         local db = self.db or SoftcoreDB
         if db and db.run and db.run.ruleset then
             payload.ruleset = self:SerializeRuleset(db.run.ruleset)
@@ -824,13 +839,49 @@ function SC:Sync_BuildPayload(reason)
     return payload
 end
 
-function SC:Sync_BroadcastStatus(reason)
-    local payload = self:Sync_BuildPayload(reason)
+function SC:Sync_BroadcastStatus(reason, options)
+    options = options or {}
+    local payload = self:Sync_BuildPayload(reason, options)
     if not payload then
         return false
     end
 
-    return SendPayload(payload)
+    return SendPayload(payload, {
+        priority = options.fast and 3 or nil,
+    })
+end
+
+function SC:Sync_NudgeStatus(reason, options)
+    if not IsInGroup() or IsInRaid() then
+        return false
+    end
+
+    options = options or {}
+    if options.now or not C_Timer or not C_Timer.After then
+        return self:Sync_BroadcastStatus(reason or "NUDGE", {
+            fast = true,
+            includeRules = false,
+        })
+    end
+
+    statusNudgeReason = statusNudgeReason or reason or "NUDGE"
+    if statusNudgePending then
+        return true
+    end
+
+    statusNudgePending = true
+    C_Timer.After(options.delaySeconds or STATUS_NUDGE_SECONDS, function()
+        statusNudgePending = false
+        local nudgeReason = statusNudgeReason or "NUDGE"
+        statusNudgeReason = nil
+        if SC.Sync_BroadcastStatus then
+            SC:Sync_BroadcastStatus(nudgeReason, {
+                fast = true,
+                includeRules = false,
+            })
+        end
+    end)
+    return true
 end
 
 function SC:Sync_SendHello()
@@ -839,19 +890,43 @@ function SC:Sync_SendHello()
     })
 end
 
-function SC:Sync_RequestFullState()
+function SC:Sync_RequestFullState(options)
+    options = options or {}
+    local db = GetDB()
+    local requestId = options.requestId or NewRequestId()
+    db.sync.lastFullStateRequest = {
+        requestId = requestId,
+        targetPlayerKey = options.targetPlayerKey,
+        includeRules = options.includeRules == true,
+        reason = options.reason,
+        time = time(),
+    }
+
     SendPayload({
         type = "FULL_STATE_REQUEST",
+        requestId = requestId,
+        targetPlayerKey = options.targetPlayerKey,
+        includeRules = options.includeRules and "1" or "0",
+        requestReason = options.reason or "",
+    }, {
+        priority = 3,
     })
-    self:Sync_BroadcastStatus("RESYNC")
+    self:Sync_BroadcastStatus("RESYNC", {
+        fast = true,
+        includeRules = false,
+    })
+    return requestId
 end
 
-function SC:Sync_SendFullState()
+function SC:Sync_SendFullState(options)
+    options = options or {}
     local db = GetDB()
     local status = self:GetPlayerStatus()
 
     local payload = AddViolationSnapshot({
         type = "FULL_STATE_RESPONSE",
+        requestId = options.requestId,
+        requestedBy = options.requestedBy,
         name = status.name,
         realm = status.realm,
         class = status.class,
@@ -867,10 +942,18 @@ function SC:Sync_SendFullState()
         rulesetVersion = status.rulesetVersion,
         rulesetHash = status.rulesetHash,
     })
-    if self.SerializeRuleset and db.run and db.run.ruleset then
+    if options.includeRules and self.SerializeRuleset and db.run and db.run.ruleset then
         payload.ruleset = self:SerializeRuleset(db.run.ruleset)
     end
-    SendPayload(payload)
+    db.sync.lastFullStateResponse = {
+        requestId = options.requestId,
+        requestedBy = options.requestedBy,
+        includeRules = options.includeRules == true,
+        time = time(),
+    }
+    SendPayload(payload, {
+        priority = 3,
+    })
 end
 
 function SC:Sync_SendProposal(proposalType, proposalId)
@@ -1153,16 +1236,28 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
             latestViolationId = payload.latestViolationId,
             proposalId = payload.proposalId,
             violationId = payload.violationId,
+            requestId = payload.requestId,
         })
     end
 
     if payload.type == "FULL_STATE_REQUEST" then
-        self:Sync_SendFullState()
+        local targetPlayerKey = payload.targetPlayerKey
+        if targetPlayerKey and targetPlayerKey ~= "" and targetPlayerKey ~= LocalPlayerKey() then
+            return
+        end
+        self:Sync_SendFullState({
+            requestId = payload.requestId,
+            requestedBy = key,
+            includeRules = payload.includeRules == "1",
+        })
         return
     end
 
     if payload.type == "HELLO" then
-        self:Sync_BroadcastStatus("HELLO")
+        self:Sync_BroadcastStatus("HELLO", {
+            fast = true,
+            includeRules = false,
+        })
         return
     end
 
@@ -1317,7 +1412,11 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
             if time() - lastRequest > 20 then
                 db.sync.rulesetRequests[key] = time()
                 if self.Sync_RequestFullState then
-                    self:Sync_RequestFullState()
+                    self:Sync_RequestFullState({
+                        targetPlayerKey = key,
+                        includeRules = true,
+                        reason = "RULESET_MISMATCH",
+                    })
                 end
             end
         end
@@ -1362,6 +1461,8 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
         rulesetVersion = tonumber(payload.rulesetVersion) or 0,
         rulesetHash = payload.rulesetHash,
         remoteRuleset = remoteRuleset,
+        requestId = payload.requestId,
+        requestedBy = payload.requestedBy,
         sequence = tonumber(payload.sequence) or 0,
         timestamp = tonumber(payload.timestamp) or 0,
         lastSeen = time(),
@@ -1389,6 +1490,10 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
 
     if self.RefreshParticipantsFromRoster then
         self:RefreshParticipantsFromRoster()
+    end
+
+    if self.PartySync_OnFreshState then
+        self:PartySync_OnFreshState(key, payload.type == "FULL_STATE_RESPONSE" and "FULL_STATE_RESPONSE" or payload.reason, payload.requestId)
     end
 
     -- Remote sync is advisory/display-only. A peer payload may update that peer's
@@ -1465,6 +1570,12 @@ function SC:PrintSyncDebug()
     Print("  last received: " .. (db.sync.lastReceivedAt and (tostring(time() - db.sync.lastReceivedAt) .. "s ago") or "never"))
     if db.sync.lastSendResult then
         Print("  last send result: " .. tostring(db.sync.lastSendResult.type) .. " " .. tostring(db.sync.lastSendResult.resultName) .. " " .. tostring(db.sync.lastSendResult.bytes) .. "b")
+    end
+    if db.sync.lastFullStateRequest then
+        Print("  last full-state request: " .. tostring(db.sync.lastFullStateRequest.requestId or "?") .. " target " .. tostring(db.sync.lastFullStateRequest.targetPlayerKey or "all") .. " rules " .. tostring(db.sync.lastFullStateRequest.includeRules == true))
+    end
+    if db.sync.lastFullStateResponse then
+        Print("  last full-state response: " .. tostring(db.sync.lastFullStateResponse.requestId or "?") .. " to " .. tostring(db.sync.lastFullStateResponse.requestedBy or "all") .. " rules " .. tostring(db.sync.lastFullStateResponse.includeRules == true))
     end
     Print("  send queue: " .. tostring(db.sync.sendQueueDepth or #sendQueue))
     Print("  stale send drops: " .. tostring(db.sync.staleSendDrops or 0))

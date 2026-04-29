@@ -1543,7 +1543,7 @@ function SC:StartRun(runOptions)
     Print("run started.")
 
     if self.Sync_BroadcastStatus then
-        self:Sync_BroadcastStatus("RUN_START")
+        self:Sync_BroadcastStatus("RUN_START", { fast = true })
     end
 
     SoftcoreDB = SoftcoreDB or {}
@@ -1603,7 +1603,7 @@ function SC:ResetRun()
     Print("local run reset.")
 
     if self.Sync_BroadcastStatus then
-        self:Sync_BroadcastStatus("RUN_RESET")
+        self:Sync_BroadcastStatus("RUN_RESET", { fast = true })
     end
 
     if self.HUD_Refresh then
@@ -2450,7 +2450,7 @@ function SC:HandleSlash(input)
                 Print(participant.playerKey .. " is already a participant (" .. participant.status .. ").")
             end
             if added and self.Sync_BroadcastStatus then
-                self:Sync_BroadcastStatus("PARTICIPANT_ADDED")
+                self:Sync_BroadcastStatus("PARTICIPANT_ADDED", { fast = true })
             end
         else
             Print("usage: /sc add Player-Realm")
@@ -2475,7 +2475,7 @@ function SC:HandleSlash(input)
             })
             Print("retired " .. participant.playerKey .. ".")
             if self.Sync_BroadcastStatus then
-                self:Sync_BroadcastStatus("PARTICIPANT_RETIRED")
+                self:Sync_BroadcastStatus("PARTICIPANT_RETIRED", { fast = true })
             end
         end
     else

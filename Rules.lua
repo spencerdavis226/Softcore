@@ -572,7 +572,7 @@ function SC:ApplyRuleAmendment(amendmentId)
                     amendmentId = amendment.id,
                 })
                 if self.Sync_BroadcastStatus then
-                    self:Sync_BroadcastStatus("RULE_AMENDMENT_APPLIED")
+                    self:Sync_BroadcastStatus("RULE_AMENDMENT_APPLIED", { fast = true })
                 end
             end
 

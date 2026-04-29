@@ -531,6 +531,12 @@ function SC:Events_Register()
             if SC.CheckPendingProposalOnRosterUpdate then
                 SC:CheckPendingProposalOnRosterUpdate()
             end
+            if SC.Sync_SendHello then
+                SC:Sync_SendHello()
+            end
+            if SC.Sync_NudgeStatus then
+                SC:Sync_NudgeStatus("GROUP_ROSTER_UPDATE", { now = true })
+            end
             if C_Timer and C_Timer.After then
                 C_Timer.After(2, function()
                     Broadcast("GROUP_ROSTER_UPDATE")

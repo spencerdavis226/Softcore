@@ -8,8 +8,9 @@ local PROPOSAL_TIMEOUT_SECONDS = 30 * 60
 local ACCEPT_RETRY_SECONDS = 5
 local ACCEPT_RETRY_LIMIT = 6
 local PARTY_SYNC_NO_ADDON_GRACE_SECONDS = 30
-local PARTY_SYNC_CONTINUE_SECONDS = 2
-local PARTY_SYNC_RESYNC_WAIT_SECONDS = 12
+local PARTY_SYNC_CONTINUE_SECONDS = 0.75
+local PARTY_SYNC_ACK_CONTINUE_SECONDS = 0.35
+local PARTY_SYNC_RESYNC_WAIT_SECONDS = 4
 local PARTY_SYNC_RESYNC_ATTEMPTS = 3
 
 local function FriendlyGroupingMode(value)
@@ -618,7 +619,13 @@ function SC:PartySync_StartPlan()
         owner = self:GetPlayerKey(),
         startedAt = time(),
         resyncAttempts = 0,
+        continueSerial = 0,
     }
+    if self.TraceDebug then
+        self:TraceDebug("PARTY_SYNC_PLAN_START", {
+            owner = db.partySyncPlan.owner,
+        })
+    end
 end
 
 function SC:PartySync_StopPlan(reason)
@@ -637,15 +644,44 @@ function SC:PartySync_ScheduleContinue(reason, delaySeconds)
     end
 
     local delay = delaySeconds or PARTY_SYNC_CONTINUE_SECONDS
+    plan.continueSerial = (tonumber(plan.continueSerial) or 0) + 1
+    local continueSerial = plan.continueSerial
+    if self.TraceDebug then
+        self:TraceDebug("PARTY_SYNC_CONTINUE_SCHEDULED", {
+            reason = reason,
+            delay = delay,
+            serial = continueSerial,
+        })
+    end
     if C_Timer and C_Timer.After then
         C_Timer.After(delay, function()
-            if SC.PartySync_ContinuePlan then
+            local currentPlan = GetDB().partySyncPlan
+            if currentPlan and currentPlan.continueSerial == continueSerial and SC.PartySync_ContinuePlan then
                 SC:PartySync_ContinuePlan(reason)
             end
         end)
     else
         self:PartySync_ContinuePlan(reason)
     end
+end
+
+function SC:PartySync_OnFreshState(playerKey, reason, requestId)
+    local db = GetDB()
+    local plan = db.partySyncPlan
+    if not plan or not plan.active or plan.owner ~= self:GetPlayerKey() then
+        return
+    end
+    if self:GetPendingProposal() or HasPendingRuleAmendment(db) then
+        return
+    end
+    if self.TraceDebug then
+        self:TraceDebug("PARTY_SYNC_FRESH_STATE", {
+            playerKey = playerKey,
+            reason = reason,
+            requestId = requestId,
+        })
+    end
+    self:PartySync_ScheduleContinue(reason or "FRESH_STATE", PARTY_SYNC_ACK_CONTINUE_SECONDS)
 end
 
 function SC:PartySync_ContinuePlan(reason)
@@ -656,6 +692,12 @@ function SC:PartySync_ContinuePlan(reason)
     end
 
     local route = self:GetPartySyncAction()
+    if self.TraceDebug then
+        self:TraceDebug("PARTY_SYNC_CONTINUE", {
+            reason = reason,
+            action = route and route.action,
+        })
+    end
     if not route or route.action == "HIDDEN" then
         self:PartySync_StopPlan()
         return nil
@@ -729,6 +771,7 @@ function SC:GetPartySyncAction()
     local rows = self.Sync_GetGroupRows and self:Sync_GetGroupRows() or {}
     local wantsInvite, wantsSync, wantsResync
     local wantsInviteKey
+    local wantsResyncKey
     local wantsAmendRules
     local ruleVoters = {}
     local syncVoters = {}
@@ -748,9 +791,11 @@ function SC:GetPartySyncAction()
                 unsupportedMember = unsupportedMember or label
             else
                 wantsResync = wantsResync or label
+                wantsResyncKey = wantsResyncKey or peer.playerKey
             end
         elseif peer.unsynced or status == "UNSYNCED" or status == "PENDING" then
             wantsResync = wantsResync or label
+            wantsResyncKey = wantsResyncKey or peer.playerKey
         elseif status == "ADDON_VERSION_MISMATCH" or (peer.addonVersion and peer.addonVersion ~= self.version) then
             blocked = blocked or ("Version mismatch with " .. label .. ". Update/reload both addons, then try Party Sync again.")
         elseif status == "RULESET_MISMATCH" then
@@ -835,6 +880,7 @@ function SC:GetPartySyncAction()
             action = "RESYNC",
             enabled = true,
             message = "Party state looks stale for " .. wantsResync .. ". Party Sync will request fresh state.",
+            targetPlayerKey = wantsResyncKey,
         }
     end
 
@@ -862,10 +908,14 @@ function SC:RunPartySyncAction(continueExisting)
             self:PartySync_StartPlan()
         end
         if self.Sync_RequestFullState then
-            self:Sync_RequestFullState()
+            self:Sync_RequestFullState({
+                targetPlayerKey = route.targetPlayerKey,
+                includeRules = false,
+                reason = "PARTY_SYNC",
+            })
             Print("requested fresh party state.")
         elseif self.Sync_BroadcastStatus then
-            self:Sync_BroadcastStatus("RESYNC")
+            self:Sync_BroadcastStatus("RESYNC", { fast = true })
             Print("broadcast fresh party status.")
         else
             Print("sync is not ready yet.")
@@ -952,7 +1002,7 @@ function SC:ApplyRunSyncProposal(proposal, sourceKey)
     })
 
     if self.Sync_BroadcastStatus then
-        self:Sync_BroadcastStatus("RUN_SYNCED")
+        self:Sync_BroadcastStatus("RUN_SYNCED", { fast = true })
     end
     if self.HUD_Refresh then self:HUD_Refresh() end
     if self.MasterUI_Refresh then self:MasterUI_Refresh() end
@@ -1069,7 +1119,7 @@ function SC:AcceptPendingProposal()
             self:Sync_SendProposalResponse("PROPOSAL_ACCEPT", proposal)
         end
         if self.Sync_BroadcastStatus then
-            self:Sync_BroadcastStatus("PROPOSAL_ACCEPT_RETRY")
+            self:Sync_BroadcastStatus("PROPOSAL_ACCEPT_RETRY", { fast = true })
         end
         Print("already accepted. Waiting for confirmation.")
         return
@@ -1161,7 +1211,7 @@ function SC:AcceptPendingProposal()
     end
 
     if self.Sync_BroadcastStatus then
-        self:Sync_BroadcastStatus("PROPOSAL_ACCEPTED")
+        self:Sync_BroadcastStatus("PROPOSAL_ACCEPTED", { fast = true })
     end
 
     if C_Timer and C_Timer.After then
@@ -1201,7 +1251,7 @@ function SC:RetryAcceptedProposal(proposalId)
         self:Sync_SendProposalResponse("PROPOSAL_ACCEPT", proposal)
     end
     if self.Sync_BroadcastStatus then
-        self:Sync_BroadcastStatus("PROPOSAL_ACCEPT_RETRY")
+        self:Sync_BroadcastStatus("PROPOSAL_ACCEPT_RETRY", { fast = true })
     end
 
     if C_Timer and C_Timer.After then
