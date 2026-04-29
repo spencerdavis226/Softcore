@@ -44,7 +44,7 @@ The HUD is a compact glance view shown during active runs.
 - Starting a new run always shows the HUD by default.
 - The HUD also appears for pending governance states, such as run proposals before a run starts.
 - Lamp colors: green (valid/synced), blue (syncing/settling), yellow (warning/conflict/blocked/review needed), orange (party member failed, local character still valid), red (local failed), gray (no run/pending).
-- The text is intentionally short and single-line, including limbo states such as Details, Review, Waiting, Settling, Syncing, Invite, and Run Sync.
+- The text is intentionally short and single-line, including limbo and blocker states such as Details, Review, Waiting, Settling, Syncing, Invite, Run Sync, No Addon, Offline, Raid Local, Version, Rules, Run ID, Not In Run, and Level Gap.
 - Clicking the HUD opens the most relevant main tab (typically Overview, Violations, or Run).
 
 ## Slash Commands

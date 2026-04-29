@@ -21,7 +21,7 @@ Current menu tabs:
 - `Violations`: active clearable issues
 - `Log`: audit history, newest first
 
-The HUD is compact and glanceable. It shows local run status when solo, party status/member rows when grouped, and short governance/sync limbo labels such as Details, Review, Waiting, Settling, Syncing, Invite, or Run Sync. It may appear for pending governance even before a run is active. Clicking the HUD toggles the main menu on the most relevant tab. The minimap button opens the main menu.
+The HUD is compact and glanceable. It shows local run status when solo, party status/member rows when grouped, and short governance/sync limbo or blocker labels such as Details, Review, Waiting, Settling, Syncing, Invite, Run Sync, No Addon, Offline, Raid Local, Version, Rules, Run ID, Not In Run, or Level Gap. It may appear for pending governance even before a run is active. Clicking the HUD toggles the main menu on the most relevant tab. The minimap button opens the main menu.
 
 ## Core Safety Principle
 
@@ -133,7 +133,7 @@ Current behavior:
 - Party Sync blocks members who never respond to Softcore addon messages after the initial grace period; they must install/enable the addon or leave the party before inclusion.
 - Party Sync may also route stale/unsynced display state to a targeted full-state resync without mutating local run state; fresh responses should advance the active Party Sync plan quickly, with retry timers only as fallback.
 - Mid-run rules change through `Modify Rules` and grouped amendment acceptance; pending amendments reuse the normal Run-tab rules layout with changed rules highlighted and footer acceptance controls.
-- HUD text is the quick user-facing status detail for proposal, amendment, Party Sync, and settling limbos; the Run tab should make state obvious through highlighted rules and action buttons instead of a top explanatory text line.
+- HUD text is the quick user-facing status detail for proposal, amendment, Party Sync, settling limbos, and party blockers such as non-addon members, stale/offline peers, raid-local mode, version mismatch, rules mismatch, run mismatch, not-in-run members, and level-gap blocks; the Run tab should make state obvious through highlighted rules and action buttons instead of a top explanatory text line.
 - Pending proposals expire after 30 minutes.
 - Pending/accepted amendments expire after 30 minutes.
 - Late proposal confirmations or amendment applies after expiry should be ignored.

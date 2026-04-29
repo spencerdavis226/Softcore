@@ -26,6 +26,7 @@ local HUD_W    = 118
 local HUD_H    = 26
 local HUD_PAD  = 8
 local DOT_SIZE = 10
+local NO_ADDON_GRACE_SECONDS = 30
 
 local LAMP_COLOR = {
     GREEN  = {0.22, 0.95, 0.42},
@@ -82,6 +83,107 @@ local function HasRemoteFailure(syncRows)
     return false
 end
 
+local function IsCurrentPartyMember(playerKey)
+    if not playerKey or playerKey == "" then
+        return false
+    end
+    return not SC.IsParticipantInCurrentParty or SC:IsParticipantInCurrentParty(playerKey)
+end
+
+local function ConflictHUDLabel(conflictType)
+    if conflictType == "ADDON_VERSION_MISMATCH" then
+        return "Version"
+    elseif conflictType == "RULESET_MISMATCH" then
+        return "Rules"
+    elseif conflictType == "RUN_MISMATCH" then
+        return "Run ID"
+    end
+    return "Conflict"
+end
+
+local function ParticipantHUDLabel(status)
+    if status == "ADDON_VERSION_MISMATCH" or status == "VERSION_MISMATCH" then
+        return "Version"
+    elseif status == "RULESET_MISMATCH" then
+        return "Rules"
+    elseif status == "RUN_MISMATCH" then
+        return "Run ID"
+    elseif status == "NOT_IN_RUN" then
+        return "Not In Run"
+    elseif status == "PENDING" or status == "UNSYNCED" then
+        return "Unsynced"
+    elseif status == "FAILED" then
+        return "Party Fail"
+    end
+    return nil
+end
+
+local function GetPartyEdgeHUDState(db, syncRows, partyStatus)
+    local run = db and db.run or {}
+    if not run.active then
+        return nil
+    end
+
+    if partyStatus == "RAID_UNSUPPORTED" or IsInRaid() then
+        return "YELLOW", "Raid Local", "RUN"
+    end
+
+    if run.levelGapBlocked then
+        return "YELLOW", "Level Gap", "OVERVIEW"
+    end
+
+    for _, conflict in pairs(run.conflicts or {}) do
+        if conflict.active and not conflict.dismissed and IsCurrentPartyMember(conflict.playerKey) then
+            return "YELLOW", ConflictHUDLabel(conflict.type), "RUN"
+        end
+    end
+
+    for playerKey, participant in pairs(run.participants or {}) do
+        if playerKey ~= SC:GetPlayerKey() and IsCurrentPartyMember(playerKey) then
+            local label = ParticipantHUDLabel(participant.status)
+            if label then
+                local color = participant.status == "FAILED" and "ORANGE" or "YELLOW"
+                return color, label, label == "Party Fail" and "OVERVIEW" or "RUN"
+            end
+        end
+    end
+
+    local now = time()
+    for _, peer in ipairs(syncRows or {}) do
+        local status = tostring(peer.participantStatus or "")
+        local hasNeverSeenAddon = not peer.lastSeen or peer.lastSeen <= 0
+        if hasNeverSeenAddon then
+            local rosterAge = now - (tonumber(peer.rosterSeen) or now)
+            if rosterAge >= NO_ADDON_GRACE_SECONDS then
+                return "YELLOW", "No Addon", "RUN"
+            end
+            return "BLUE", "Syncing", "RUN"
+        elseif peer.unsynced then
+            return "YELLOW", "Offline", "RUN"
+        elseif peer.addonVersion and peer.addonVersion ~= SC.version then
+            return "YELLOW", "Version", "RUN"
+        elseif peer.active == false then
+            return "YELLOW", "Not In Run", "RUN"
+        end
+
+        local label = ParticipantHUDLabel(status)
+        if label then
+            local color = status == "FAILED" and "ORANGE" or "YELLOW"
+            return color, label, label == "Party Fail" and "OVERVIEW" or "RUN"
+        end
+    end
+
+    if partyStatus == "BLOCKED" then
+        return "YELLOW", "Blocked", "OVERVIEW"
+    elseif partyStatus == "CONFLICT" then
+        return "YELLOW", "Conflict", "RUN"
+    elseif partyStatus == "UNSYNCED" then
+        return "YELLOW", "Unsynced", "RUN"
+    end
+
+    return nil
+end
+
 local function GetPendingRuleAmendment(db)
     for _, amendment in ipairs(db and db.ruleAmendments or {}) do
         if amendment.status == "PENDING" or amendment.status == "ACCEPTED" then
@@ -102,7 +204,7 @@ local function HasRecentRuleGovernance(db)
     return false
 end
 
-local function GetGovernanceHUDState(db)
+local function GetGovernanceHUDState(db, syncRows, partyStatus)
     local proposal = SC.GetPendingProposal and SC:GetPendingProposal() or nil
     if proposal then
         local localKey = SC:GetPlayerKey()
@@ -153,6 +255,10 @@ local function GetGovernanceHUDState(db)
             elseif route.action == "INVITE" then
                 return "YELLOW", "Invite", "RUN"
             elseif route.action == "BLOCKED" then
+                local edgeState, edgeText, edgeTab = GetPartyEdgeHUDState(db, syncRows, partyStatus)
+                if edgeState then
+                    return edgeState, edgeText, edgeTab
+                end
                 return "YELLOW", "Blocked", "RUN"
             elseif route.action == "NONE" then
                 return "GREEN", "Synced", "OVERVIEW"
@@ -174,28 +280,27 @@ local function GetHUDState(status, violations, syncRows)
         return "RED", "Failed", "OVERVIEW"
     end
 
-    local governanceState, governanceText, governanceTab = GetGovernanceHUDState(db)
-    if governanceState then
-        return governanceState, governanceText, governanceTab
-    end
-
     if violations > 0 or localStatus == "WARNING" or localStatus == "VIOLATION" then
         local text = violations == 1 and "1 Violation" or tostring(violations) .. " Violations"
         if violations <= 0 then text = "Violation" end
         return "YELLOW", text, "VIOLATIONS"
     end
 
+    local governanceState, governanceText, governanceTab = GetGovernanceHUDState(db, syncRows, partyStatus)
+    if governanceState then
+        return governanceState, governanceText, governanceTab
+    end
+
+    local edgeState, edgeText, edgeTab = GetPartyEdgeHUDState(db, syncRows, partyStatus)
+    if edgeState then
+        return edgeState, edgeText, edgeTab
+    end
+
     if HasRemoteFailure(syncRows) then
         return "ORANGE", "Party Fail", "OVERVIEW"
     end
 
-    if partyStatus == "BLOCKED" then
-        return "YELLOW", "Blocked", "OVERVIEW"
-    elseif partyStatus == "CONFLICT" then
-        return "YELLOW", "Conflict", "OVERVIEW"
-    elseif partyStatus == "UNSYNCED" then
-        return "YELLOW", "Unsynced", "OVERVIEW"
-    elseif partyStatus == "VIOLATION" or partyStatus == "WARNING" then
+    if partyStatus == "VIOLATION" or partyStatus == "WARNING" then
         return "YELLOW", "Warning", "OVERVIEW"
     elseif localStatus == "PENDING" then
         return "YELLOW", "Pending", "RUN"
