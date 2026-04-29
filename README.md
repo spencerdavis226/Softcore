@@ -16,10 +16,10 @@ It tracks a per-character run, local deaths, rule violations, party compatibilit
 Softcore has three frontend surfaces:
 
 - **Main menu**: the primary interface for setup, status, proposals, violations, and logs.
-- **HUD**: compact active-run status display.
+- **HUD**: compact active-run status display; click it to open or close the main menu on the relevant tab.
 - **Minimap button**: opens the main menu.
 
-There are no proposal popup windows. Group proposals and rule amendments are reviewed in the Run tab.
+There are no proposal popup windows. Incoming group proposals and rule amendments open the Run tab for review.
 
 ## Main Menu
 

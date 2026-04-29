@@ -1188,6 +1188,9 @@ function SC:ReceiveRunProposal(payload, proposerKey)
             sameExisting.detailRequestedAt = time()
             self:Sync_SendProposalDetailsRequest(sameExisting.proposalId, proposerKey)
         end
+        if hasDetails and self.OpenMasterWindow and (sameExisting.status == "PENDING" or sameExisting.status == "ACCEPTED") then
+            self:OpenMasterWindow("RUN")
+        end
         if self.MasterUI_Refresh then self:MasterUI_Refresh() end
         return
     end

@@ -1880,11 +1880,11 @@ function SC:MasterUI_Refresh()
     end
 end
 
-function SC:ToggleMasterWindow()
+function SC:ToggleMasterWindow(focusTab)
     if self.masterFrame and self.masterFrame:IsShown() then
         self.masterFrame:Hide()
     else
-        self:OpenMasterWindow()
+        self:OpenMasterWindow(focusTab)
     end
 end
 

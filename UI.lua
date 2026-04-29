@@ -134,10 +134,10 @@ function SC:HUD_Create()
     end)
     frame:RegisterForClicks("LeftButtonUp")
     frame:SetScript("OnClick", function()
-        if SC.OpenMasterWindow then
+        if SC.ToggleMasterWindow then
+            SC:ToggleMasterWindow(frame.focusTab or "OVERVIEW")
+        elseif SC.OpenMasterWindow then
             SC:OpenMasterWindow(frame.focusTab or "OVERVIEW")
-        elseif SC.ToggleMasterWindow then
-            SC:ToggleMasterWindow()
         end
     end)
     frame:SetBackdrop({
@@ -180,7 +180,7 @@ function SC:HUD_Create()
     frame:SetScript("OnEnter", function()
         GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
         GameTooltip:SetText("Softcore HUD", 1, 1, 1)
-        GameTooltip:AddLine("Click for details. Drag to move.", 0.74, 0.66, 0.50)
+        GameTooltip:AddLine("Click to open or close details. Drag to move.", 0.74, 0.66, 0.50)
         GameTooltip:Show()
     end)
     frame:SetScript("OnLeave", function() GameTooltip:Hide() end)

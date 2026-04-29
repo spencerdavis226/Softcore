@@ -666,6 +666,9 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
                         latencySeconds = now - existing.detailRequestedAt,
                     })
                 end
+                if self.OpenMasterWindow then
+                    self:OpenMasterWindow("RUN")
+                end
                 if self.MasterUI_Refresh then self:MasterUI_Refresh() end
             end
             return
@@ -737,7 +740,11 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
     end
 
     if self.PlayUISound then self:PlayUISound("PROPOSAL_RECEIVED") end
-    if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+    if self.OpenMasterWindow then
+        self:OpenMasterWindow("RUN")
+    elseif self.MasterUI_Refresh then
+        self:MasterUI_Refresh()
+    end
     if self.HUD_Refresh then self:HUD_Refresh() end
 end
 

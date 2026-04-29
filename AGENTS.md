@@ -12,7 +12,7 @@ Softcore has three frontend surfaces:
 - HUD
 - minimap button
 
-The master menu is the primary interface. Group run proposals, run sync proposals, party invites, and rule amendments are reviewed in the Run tab. Do not add separate proposal popup windows.
+The master menu is the primary interface. Group run proposals, run sync proposals, party invites, and rule amendments are reviewed in the Run tab. Actionable incoming governance requests should open the Run tab automatically. Do not add separate proposal popup windows.
 
 Current menu tabs:
 
@@ -21,7 +21,7 @@ Current menu tabs:
 - `Violations`: active clearable issues
 - `Log`: audit history, newest first
 
-The HUD is compact and glanceable. It shows local run status when solo and party status/member rows when grouped. The minimap button opens the main menu.
+The HUD is compact and glanceable. It shows local run status when solo and party status/member rows when grouped. Clicking the HUD toggles the main menu on the most relevant tab. The minimap button opens the main menu.
 
 ## Core Safety Principle
 
