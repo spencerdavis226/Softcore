@@ -171,7 +171,7 @@ Active run rules are locked by default. Use **Modify Rules** in the Run tab to c
 
 - Solo: Apply Changes applies immediately and logs the old/new values.
 - Grouped: Propose to Party creates a Run-tab amendment proposal.
-- Members review changed rules and accept or decline.
+- Members review the normal Run-tab rules layout with changed rules highlighted, then accept or decline from the bottom controls.
 - All accept: proposer applies and broadcasts the amendment.
 - Any decline: amendment is cancelled.
 

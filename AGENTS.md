@@ -17,7 +17,7 @@ The master menu is the primary interface. Group run proposals, run sync proposal
 Current menu tabs:
 
 - `Overview`: local run status, party status, participant snapshot, run ID, elapsed time, deaths, and active violation count (no Overview resync control; use `/sc resync` or Run tab Party Sync)
-- `Run`: start a run, review locked active rules, stop/reset a run, and use one shared action slot that shows Party Sync while party sync work/blockers exist or Modify Rules when the party is synced/local-only
+- `Run`: start a run, review locked active rules, review highlighted rule amendment proposals in the normal rules layout, stop/reset a run, and use one shared action slot that shows Party Sync while party sync work/blockers exist or Modify Rules when the party is synced/local-only
 - `Violations`: active clearable issues
 - `Log`: audit history, newest first
 
@@ -132,7 +132,7 @@ Current behavior:
 - While a proposal/amendment is pending or a rule change just settled, Party Sync should not start a second governance action; it should wait, request fresh state, or expose cancel/decline/retry controls.
 - Party Sync blocks members who never respond to Softcore addon messages after the initial grace period; they must install/enable the addon or leave the party before inclusion.
 - Party Sync may also route stale/unsynced display state to a targeted full-state resync without mutating local run state; fresh responses should advance the active Party Sync plan quickly, with retry timers only as fallback.
-- Mid-run rules change through `Modify Rules` and grouped amendment acceptance.
+- Mid-run rules change through `Modify Rules` and grouped amendment acceptance; pending amendments reuse the normal Run-tab rules layout with changed rules highlighted and footer acceptance controls.
 - Pending proposals expire after 30 minutes.
 - Pending/accepted amendments expire after 30 minutes.
 - Late proposal confirmations or amendment applies after expiry should be ignored.

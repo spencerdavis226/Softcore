@@ -847,6 +847,14 @@ local function BuildRuleChanges(previousRules, nextRules)
     return changes
 end
 
+local function BuildAmendmentReviewRules(baseRules, amendment)
+    local rules = SC:CopyTable(baseRules or {})
+    for ruleName, value in pairs(amendment and amendment.newRules or {}) do
+        rules[ruleName] = value
+    end
+    return rules
+end
+
 local function CountRuleChanges(changes)
     local count = 0
 
@@ -1201,114 +1209,6 @@ local function SetRunSetupEnabled(frame, enabled)
     end
 end
 
-local function RefreshAmendmentPanel(frame, amendment, isProposer)
-    local panel = frame.start.amendmentPanel
-    local localShortName = string.match(tostring(amendment.proposedBy or "?"), "^([^-]+)")
-
-    if isProposer then
-        panel.title:SetText("|cfffbbf24Pending Rule Amendment|r - waiting for party")
-        panel.proposer:SetText("You proposed this amendment.")
-    else
-        panel.title:SetText("|cfffbbf24Pending Rule Amendment|r")
-        panel.proposer:SetText("Proposed by: " .. (localShortName or "?"))
-    end
-    panel.reason:SetText("Reason: " .. Trunc(amendment.reason or "", 90))
-
-    local changeCount = 0
-    if amendment.detailsPending then
-        changeCount = 1
-        panel.changeLines[1]:SetText("Loading rule details...")
-    else
-        for _, ruleName in ipairs(EDITABLE_RULE_ORDER) do
-            local oldVal = amendment.previousRules[ruleName]
-            local newVal = amendment.newRules[ruleName]
-            if newVal ~= nil and tostring(oldVal) ~= tostring(newVal) then
-                changeCount = changeCount + 1
-                if changeCount <= 8 then
-                    local label = RULE_DISPLAY_NAMES[ruleName] or ruleName
-                    panel.changeLines[changeCount]:SetText(
-                        "- " .. label .. ": " .. FriendlyRuleValue(ruleName, oldVal) .. " -> " .. FriendlyRuleValue(ruleName, newVal)
-                    )
-                end
-            end
-        end
-    end
-    for i = changeCount + 1, 8 do
-        panel.changeLines[i]:SetText("")
-    end
-
-    local contentH = 72 + (math.max(1, changeCount) * 16) + 42
-    panel:SetHeight(contentH)
-
-    panel.acceptBtn:SetShown(not isProposer)
-    panel.declineBtn:SetShown(not isProposer)
-    panel.cancelBtn:SetShown(isProposer)
-    panel.waitText:SetShown(isProposer)
-
-    if not isProposer then
-        panel.acceptBtn:SetText(amendment.detailsPending and "Retry Details" or "Accept")
-        panel.acceptBtn:SetEnabled(true)
-        panel.acceptBtn:SetScript("OnClick", function()
-            if SC.AcceptRuleAmendment then SC:AcceptRuleAmendment(amendment.id) end
-            SC:MasterUI_Refresh()
-        end)
-        panel.declineBtn:SetScript("OnClick", function()
-            if SC.DeclineRuleAmendment then SC:DeclineRuleAmendment(amendment.id) end
-            SC:MasterUI_Refresh()
-        end)
-    else
-        panel.acceptBtn:SetText("Accept")
-        panel.cancelBtn:SetScript("OnClick", function()
-            local db = SC.db or SoftcoreDB
-            for _, a in ipairs(db and db.ruleAmendments or {}) do
-                if a.id == amendment.id and a.status == "PENDING" then
-                    a.status = "DECLINED"
-                    a.declinedAt = time()
-                    a.declinedBy = SC:GetPlayerKey()
-                    if SC.Sync_SendAmendmentCancelled then SC:Sync_SendAmendmentCancelled(a) end
-                    break
-                end
-            end
-            frame.start.isModifyingRules = false
-            frame.start.draftBaseRules = nil
-            SC:MasterUI_Refresh()
-        end)
-    end
-end
-
-
-local function HideAllRunControls(frame)
-    frame.start.inactiveText:Hide()
-    frame.start.activeText:Hide()
-    if frame.start.presetLabel then frame.start.presetLabel:Hide() end
-    if frame.start.cancelRunHint then frame.start.cancelRunHint:Hide() end
-    frame.start.casualBtn:Hide()
-    frame.start.ironmanBtn:Hide()
-    if frame.start.chefBtn then frame.start.chefBtn:Hide() end
-    for _, control in ipairs(frame.start.controls) do control:Hide() end
-    frame.start.groupingDropdown:Hide()
-    frame.start.gearDropdown:Hide()
-    frame.start.maxGapBox:Hide()
-    frame.start.primaryBtn:Hide()
-    frame.start.stopBtn:Hide()
-    if frame.start.confirmStopBtn then frame.start.confirmStopBtn:Hide() end
-    if frame.start.cancelStopBtn then frame.start.cancelStopBtn:Hide() end
-    if frame.start.cancelRunBox then frame.start.cancelRunBox:Hide() end
-    frame.start.modifyBtn:Hide()
-    if frame.start.partySyncBtn then frame.start.partySyncBtn:Hide() end
-    frame.start.applyChangesBtn:Hide()
-    frame.start.cancelChangesBtn:Hide()
-    if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:Hide() end
-    if frame.start.proposalDeclineBtn then frame.start.proposalDeclineBtn:Hide() end
-    if frame.start.proposalCancelBtn then frame.start.proposalCancelBtn:Hide() end
-    if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:SetScript("OnClick", nil) end
-    if frame.start.proposalDeclineBtn then frame.start.proposalDeclineBtn:SetScript("OnClick", nil) end
-    if frame.start.proposalCancelBtn then frame.start.proposalCancelBtn:SetScript("OnClick", nil) end
-    if frame.start.proposalAcceptBtn then frame.start.proposalAcceptBtn:SetEnabled(true) end
-    if frame.start.proposalDeclineBtn then frame.start.proposalDeclineBtn:SetEnabled(true) end
-    if frame.start.proposalCancelBtn then frame.start.proposalCancelBtn:SetEnabled(true) end
-end
-
 local function AnchorRunFooterButtons(frame)
     local start = frame.start
     local leftPrev
@@ -1375,18 +1275,87 @@ local function RefreshRunPanel(frame)
     local modifying = active and frame.start.isModifyingRules
     local rulesConflict = GetPendingRulesConflict()
 
-    -- Amendment panel takes over the whole tab when one is pending
     local pendingAmendment = GetPendingAmendment()
-    if pendingAmendment and frame.start.amendmentPanel then
-        HideAllRunControls(frame)
+    if pendingAmendment then
         local localKey = SC:GetPlayerKey()
-        frame.start.amendmentPanel:Show()
-        RefreshAmendmentPanel(frame, pendingAmendment, pendingAmendment.proposedBy == localKey)
+        local isProposer = pendingAmendment.proposedBy == localKey
+        local proposer = FormatPlayerLabel(pendingAmendment.proposedBy)
+        local baseRules = db and db.run and db.run.ruleset
+        local proposedRules = BuildAmendmentReviewRules(baseRules, pendingAmendment)
+
+        CopyRulesInto(frame.start.selectedRules, proposedRules)
+        frame.start.draftBaseRules = SC:CopyTable(baseRules or {})
+        frame.start.selectedCameraMode = nil
+        frame.start.isModifyingRules = false
+        frame.start.isReviewingRuleAmendment = true
+        frame.start.groupingDropdown:SetShown(true)
+        frame.start.gearDropdown:SetShown(true)
+        frame.start.maxGapBox:SetShown(true)
+        if frame.start.presetLabel then frame.start.presetLabel:SetShown(false) end
+        frame.start.casualBtn:SetShown(false)
+        frame.start.ironmanBtn:SetShown(false)
+        if frame.start.chefBtn then frame.start.chefBtn:SetShown(false) end
+        for _, control in ipairs(frame.start.controls) do control:SetShown(true) end
+        SetRunSetupEnabled(frame, false)
+        frame.start.inactiveText:SetShown(false)
+        frame.start.activeText:SetShown(true)
+        if pendingAmendment.detailsPending then
+            frame.start.activeText:SetText("|cffffd100Rule change from " .. proposer .. " received.|r Loading changed rules...")
+        elseif isProposer then
+            frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your rule change.|r Changed rules are highlighted below.")
+        else
+            frame.start.activeText:SetText("|cffffd100Rule change from " .. proposer .. ".|r Review the highlighted rules below, then Accept or Decline.")
+        end
+        frame.start.primaryBtn:Hide()
+        frame.start.stopBtn:Hide()
+        if frame.start.confirmStopBtn then frame.start.confirmStopBtn:Hide() end
+        if frame.start.cancelStopBtn then frame.start.cancelStopBtn:Hide() end
+        if frame.start.cancelRunBox then
+            frame.start.cancelRunBox:SetText("")
+            frame.start.cancelRunBox:Hide()
+        end
+        if frame.start.cancelRunHint then frame.start.cancelRunHint:Hide() end
+        frame.start.stopConfirmPending = false
+        frame.start.modifyBtn:Hide()
+        if frame.start.partySyncBtn then frame.start.partySyncBtn:Hide() end
+        frame.start.applyChangesBtn:Hide()
+        frame.start.cancelChangesBtn:Hide()
+        frame.start.proposalAcceptBtn:SetShown(not isProposer)
+        frame.start.proposalAcceptBtn:SetText(pendingAmendment.detailsPending and "Retry Details" or "Accept")
+        frame.start.proposalAcceptBtn:SetEnabled(true)
+        frame.start.proposalDeclineBtn:SetShown(not isProposer)
+        frame.start.proposalDeclineBtn:SetEnabled(true)
+        frame.start.proposalCancelBtn:SetShown(isProposer)
+        frame.start.proposalCancelBtn:SetEnabled(true)
+        frame.start.proposalCancelBtn:SetText("Cancel Proposal")
+        frame.start.proposalAcceptBtn:SetScript("OnClick", function()
+            if SC.AcceptRuleAmendment then SC:AcceptRuleAmendment(pendingAmendment.id) end
+            SC:MasterUI_Refresh()
+        end)
+        frame.start.proposalDeclineBtn:SetScript("OnClick", function()
+            if SC.DeclineRuleAmendment then SC:DeclineRuleAmendment(pendingAmendment.id) end
+            SC:MasterUI_Refresh()
+        end)
+        frame.start.proposalCancelBtn:SetScript("OnClick", function()
+            local ruleDb = SC.db or SoftcoreDB
+            for _, amendment in ipairs(ruleDb and ruleDb.ruleAmendments or {}) do
+                if amendment.id == pendingAmendment.id and amendment.status == "PENDING" then
+                    amendment.status = "DECLINED"
+                    amendment.declinedAt = time()
+                    amendment.declinedBy = SC:GetPlayerKey()
+                    if SC.Sync_SendAmendmentCancelled then SC:Sync_SendAmendmentCancelled(amendment) end
+                    break
+                end
+            end
+            frame.start.draftBaseRules = nil
+            frame.start.isReviewingRuleAmendment = false
+            SC:MasterUI_Refresh()
+        end)
+        if frame.start.RefreshControls then frame.start:RefreshControls() end
+        AnchorRunFooterButtons(frame)
         return
     end
-    if frame.start.amendmentPanel then
-        frame.start.amendmentPanel:Hide()
-    end
+    frame.start.isReviewingRuleAmendment = false
 
     -- Pending run proposal: show normal controls (read-only) with Accept/Decline/Cancel buttons
     local pendingProposal = GetPendingRunProposal()
@@ -2027,7 +1996,8 @@ function SC:OpenMasterWindow(focusTab)
 
     table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Core Rules", 0, -62, 300))
     table.insert(frame.start.controls, CreateLabel(startPanel, "Death is permanent. A death fails this character only.", 0, -92, "GameFontHighlightSmall", 320))
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Mode", 0, -128, "GameFontNormalSmall", 70))
+    frame.start.groupingLabel = CreateLabel(startPanel, "Mode", 0, -128, "GameFontNormalSmall", 70)
+    table.insert(frame.start.controls, frame.start.groupingLabel)
     frame.start.groupingDropdown = CreateDropdown(startPanel, "SoftcoreMasterGroupingDropdown", GROUPING_OPTIONS, frame.start.selectedRules.groupingMode, function(value)
         frame.start.selectedRules.groupingMode = value
         if SC.ApplyGroupingMode then
@@ -2070,7 +2040,8 @@ function SC:OpenMasterWindow(focusTab)
     end
 
     table.insert(frame.start.controls, CreateSectionHeader(startPanel, "Gear and Items", 360, -188, 300))
-    table.insert(frame.start.controls, CreateLabel(startPanel, "Gear limit", 360, -218, "GameFontNormalSmall", 82))
+    frame.start.gearLabel = CreateLabel(startPanel, "Gear limit", 360, -218, "GameFontNormalSmall", 82)
+    table.insert(frame.start.controls, frame.start.gearLabel)
     frame.start.gearDropdown = CreateDropdown(startPanel, "SoftcoreMasterGearDropdown", GEAR_OPTIONS, frame.start.selectedRules.gearQuality, function(value)
         frame.start.selectedRules.gearQuality = value
         SC:MasterUI_Refresh()
@@ -2206,13 +2177,19 @@ function SC:OpenMasterWindow(focusTab)
             self.selectedRules.maxLevelGap = "ALLOWED"
         end
         local canEdit = not IsActiveRun() or self.isModifyingRules
+        local highlightingRuleChanges = (self.isModifyingRules or self.isReviewingRuleAmendment) and self.draftBaseRules
         self.maxGapCheck:SetChecked(not isSolo and self.selectedRules.maxLevelGap ~= "ALLOWED")
         self.maxGapCheck:SetEnabled(canEdit and not isSolo)
         local locked = not canEdit or isSolo
         self.maxGapCheck.label:SetFontObject(GameFontNormalSmall)
         if locked then
-            SetFontStringRGB(self.maxGapCheck.label, BODY_TEXT)
-        elseif self.isModifyingRules and self.draftBaseRules then
+            if highlightingRuleChanges and tostring(self.draftBaseRules.maxLevelGap) ~= tostring(self.selectedRules.maxLevelGap) then
+                local checked = IsCheckedRuleValue("maxLevelGap", self.selectedRules.maxLevelGap)
+                SetFontStringRGB(self.maxGapCheck.label, checked == false and RED_TEXT or GREEN_TEXT)
+            else
+                SetFontStringRGB(self.maxGapCheck.label, BODY_TEXT)
+            end
+        elseif highlightingRuleChanges then
             local baseVal = self.draftBaseRules.maxLevelGap
             local curVal = self.selectedRules.maxLevelGap
             if tostring(baseVal) ~= tostring(curVal) then
@@ -2228,8 +2205,12 @@ function SC:OpenMasterWindow(focusTab)
         self.maxGapBox:SetText(tostring(self.selectedRules.maxLevelGapValue or 3))
         if self.maxGapLabel then
             if locked then
-                SetFontStringRGB(self.maxGapLabel, BODY_TEXT)
-            elseif self.isModifyingRules and self.draftBaseRules then
+                if highlightingRuleChanges and tostring(self.draftBaseRules.maxLevelGapValue) ~= tostring(self.selectedRules.maxLevelGapValue) then
+                    SetFontStringRGB(self.maxGapLabel, GREEN_TEXT)
+                else
+                    SetFontStringRGB(self.maxGapLabel, BODY_TEXT)
+                end
+            elseif highlightingRuleChanges then
                 local baseVal = self.draftBaseRules.maxLevelGapValue
                 local curVal  = self.selectedRules.maxLevelGapValue
                 if tostring(baseVal) ~= tostring(curVal) then
@@ -2239,6 +2220,20 @@ function SC:OpenMasterWindow(focusTab)
                 end
             else
                 SetFontStringRGB(self.maxGapLabel, BODY_TEXT)
+            end
+        end
+        if self.groupingLabel then
+            if highlightingRuleChanges and tostring(self.draftBaseRules.groupingMode) ~= tostring(self.selectedRules.groupingMode) then
+                SetFontStringRGB(self.groupingLabel, GREEN_TEXT)
+            else
+                SetFontStringRGB(self.groupingLabel, BODY_TEXT)
+            end
+        end
+        if self.gearLabel then
+            if highlightingRuleChanges and tostring(self.draftBaseRules.gearQuality) ~= tostring(self.selectedRules.gearQuality) then
+                SetFontStringRGB(self.gearLabel, GREEN_TEXT)
+            else
+                SetFontStringRGB(self.gearLabel, BODY_TEXT)
             end
         end
 
@@ -2251,7 +2246,7 @@ function SC:OpenMasterWindow(focusTab)
                 for _, spec in ipairs(MOVEMENT_RULES) do
                     if text == spec.label then checkbox:SetChecked(not IsDisallowed(self.selectedRules[spec.key])) end
                 end
-                if self.isModifyingRules and self.draftBaseRules and checkbox.ruleKey then
+                if highlightingRuleChanges and checkbox.ruleKey then
                     local baseVal = self.draftBaseRules[checkbox.ruleKey]
                     local curVal = self.selectedRules[checkbox.ruleKey]
                     if tostring(baseVal) ~= tostring(curVal) then
@@ -2270,17 +2265,27 @@ function SC:OpenMasterWindow(focusTab)
         self.consumablesCheck:SetChecked(not IsDisallowed(self.selectedRules.consumables))
         self.instancedPvPCheck:SetChecked(not IsDisallowed(self.selectedRules.instancedPvP))
         local active = IsActiveRun()
-        local editingCamera = (not active) or self.isModifyingRules
+        local editingCamera = (not active) or self.isModifyingRules or self.isReviewingRuleAmendment
         local cameraRequired = active and (not self.isModifyingRules) and SC.IsCameraModeRequired and SC:IsCameraModeRequired()
         local cameraMode = editingCamera and GetSelectedCameraMode(self) or (SC.GetCameraMode and SC:GetCameraMode())
-        local cameraAvailable = editingCamera or cameraRequired
+        local cameraAvailable = (editingCamera or cameraRequired) and not self.isReviewingRuleAmendment
         self.firstPersonCheck:SetChecked((cameraRequired or IsCameraRuleEnforced(self.selectedRules)) and cameraMode == "FIRST_PERSON")
         self.actionCamCheck:SetChecked((cameraRequired or IsCameraRuleEnforced(self.selectedRules)) and cameraMode == "CINEMATIC")
         ClearCameraCheckboxVisuals(self)
         self.firstPersonCheck:SetEnabled(cameraAvailable)
         self.actionCamCheck:SetEnabled(cameraAvailable)
-        SetFontStringRGB(self.firstPersonCheck.label, BODY_TEXT)
-        SetFontStringRGB(self.actionCamCheck.label, BODY_TEXT)
+        if highlightingRuleChanges and tostring(self.draftBaseRules.firstPersonOnly) ~= tostring(self.selectedRules.firstPersonOnly) then
+            local checked = IsCheckedRuleValue("firstPersonOnly", self.selectedRules.firstPersonOnly)
+            SetFontStringRGB(self.firstPersonCheck.label, checked == false and RED_TEXT or GREEN_TEXT)
+        else
+            SetFontStringRGB(self.firstPersonCheck.label, BODY_TEXT)
+        end
+        if highlightingRuleChanges and tostring(self.draftBaseRules.actionCam) ~= tostring(self.selectedRules.actionCam) then
+            local checked = IsCheckedRuleValue("actionCam", self.selectedRules.actionCam)
+            SetFontStringRGB(self.actionCamCheck.label, checked == false and RED_TEXT or GREEN_TEXT)
+        else
+            SetFontStringRGB(self.actionCamCheck.label, BODY_TEXT)
+        end
         self.selectedRules.maxDeaths = false
         self.selectedRules.maxDeathsValue = self.selectedRules.maxDeathsValue or 3
     end
@@ -2427,42 +2432,6 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.proposalAcceptBtn:Hide()
     frame.start.proposalDeclineBtn:Hide()
     frame.start.proposalCancelBtn:Hide()
-
-    -- Amendment proposal overlay (replaces rule controls when a pending amendment exists)
-    local amendPanel = CreateFrame("Frame", nil, startPanel, "BackdropTemplate")
-    amendPanel:SetSize(640, 200)
-    amendPanel:SetPoint("TOPLEFT", startPanel, "TOPLEFT", 0, 0)
-    amendPanel:EnableMouse(true)
-    amendPanel:SetBackdrop({
-        bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 8,
-        insets = { left = 3, right = 3, top = 3, bottom = 3 },
-    })
-    amendPanel:SetBackdropColor(0.05, 0.05, 0, 0.95)
-    amendPanel:Hide()
-
-    amendPanel.title   = CreateField(amendPanel, 10, -10, 620)
-    amendPanel.title:SetFontObject(GameFontNormal)
-    amendPanel.proposer = CreateField(amendPanel, 10, -30, 620)
-    amendPanel.reason   = CreateField(amendPanel, 10, -48, 620)
-    amendPanel.changeLines = {}
-    for i = 1, 8 do
-        amendPanel.changeLines[i] = CreateField(amendPanel, 10, -64 - (i - 1) * 16, 620)
-    end
-    amendPanel.acceptBtn  = CreateButton(amendPanel, "Accept",          90, 24)
-    amendPanel.declineBtn = CreateButton(amendPanel, "Decline",         90, 24)
-    amendPanel.cancelBtn  = CreateButton(amendPanel, "Cancel Proposal", 120, 24)
-    amendPanel.acceptBtn:SetPoint("BOTTOMLEFT",  amendPanel, "BOTTOMLEFT", 10, 10)
-    amendPanel.declineBtn:SetPoint("LEFT", amendPanel.acceptBtn, "RIGHT", 8, 0)
-    amendPanel.cancelBtn:SetPoint("BOTTOMLEFT",  amendPanel, "BOTTOMLEFT", 10, 10)
-    amendPanel.waitText = CreateField(amendPanel, 10, -999, 620)
-    amendPanel.waitText:SetPoint("BOTTOMLEFT", amendPanel, "BOTTOMLEFT", 10, 42)
-    amendPanel.waitText:SetText("|cfffbbf24Waiting for party members to accept...|r")
-
-    frame.start.amendmentPanel = amendPanel
-
-
 
     local overviewPanel = CreatePanel(frame)
     frame.panels[TAB_OVERVIEW] = overviewPanel
