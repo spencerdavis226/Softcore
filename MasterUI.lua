@@ -1680,36 +1680,59 @@ local function CreateOverviewActivityPanel(parent, x, y, width, height)
 
     panel.title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     panel.title:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -8)
-    panel.title:SetWidth(132)
+    panel.title:SetWidth(160)
     panel.title:SetJustifyH("LEFT")
     panel.title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
     panel.title:SetText("Recent Activity")
 
+    panel.divider = panel:CreateTexture(nil, "ARTWORK")
+    panel.divider:SetHeight(1)
+    panel.divider:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -22)
+    panel.divider:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -12, -22)
+    panel.divider:SetColorTexture(0.72, 0.49, 0.18, 0.30)
+
     panel.rows = {}
-    local rowTop = -9
-    local rowLeft = 150
-    local rowWidth = width - rowLeft - 12
-    local showActorColumn = rowWidth >= 500
-    local actorLeft = 50
-    local actorWidth = 86
-    local kindLeft = showActorColumn and 144 or 50
-    local messageLeft = showActorColumn and 252 or 166
-    local rowHeight = math.floor((height - 16) / OVERVIEW_LAYOUT.ACTIVITY_ROWS)
+    local rowTop = -24
+    local rowLeft = 12
+    local rowWidth = width - 24
+    local showActorColumn = rowWidth >= 620
+    local timeLeft = 12
+    local timeWidth = 38
+    local kindLeft = 60
+    local kindWidth = 96
+    local actorLeft = 168
+    local actorWidth = 84
+    local messageLeft = showActorColumn and 266 or 168
+    local messageWidth = rowWidth - messageLeft - 8
+    local rowHeight = math.floor((height - 26) / OVERVIEW_LAYOUT.ACTIVITY_ROWS)
     for index = 1, OVERVIEW_LAYOUT.ACTIVITY_ROWS do
         local row = CreateFrame("Frame", nil, panel)
         row:SetSize(rowWidth, rowHeight)
         row:SetPoint("TOPLEFT", panel, "TOPLEFT", rowLeft, rowTop - ((index - 1) * rowHeight))
+        row:EnableMouse(true)
         row.showActorColumn = showActorColumn
+        row.tooltipTitle = ""
+        row.tooltipBody = ""
+
+        row.bg = row:CreateTexture(nil, "BACKGROUND")
+        row.bg:SetAllPoints(row)
+        row.bg:SetColorTexture(0.82, 0.58, 0.22, index % 2 == 0 and 0.06 or 0.025)
+
+        row.accent = row:CreateTexture(nil, "ARTWORK")
+        row.accent:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -2)
+        row.accent:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 2)
+        row.accent:SetWidth(3)
+        row.accent:SetColorTexture(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b, 0.9)
 
         row.time = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        row.time:SetPoint("LEFT", row, "LEFT", 0, 0)
-        row.time:SetWidth(44)
+        row.time:SetPoint("LEFT", row, "LEFT", timeLeft, 0)
+        row.time:SetWidth(timeWidth)
         row.time:SetJustifyH("LEFT")
         row.time:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
 
         row.kind = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         row.kind:SetPoint("LEFT", row, "LEFT", kindLeft, 0)
-        row.kind:SetWidth(110)
+        row.kind:SetWidth(kindWidth)
         row.kind:SetJustifyH("LEFT")
         row.kind:SetWordWrap(false)
 
@@ -1723,7 +1746,7 @@ local function CreateOverviewActivityPanel(parent, x, y, width, height)
 
         row.message = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         row.message:SetPoint("LEFT", row, "LEFT", messageLeft, 0)
-        row.message:SetWidth(rowWidth - messageLeft)
+        row.message:SetWidth(messageWidth)
         row.message:SetJustifyH("LEFT")
         row.message:SetWordWrap(false)
         row.message:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
@@ -1732,8 +1755,8 @@ local function CreateOverviewActivityPanel(parent, x, y, width, height)
     end
 
     panel.empty = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    panel.empty:SetPoint("LEFT", panel, "LEFT", rowLeft, -1)
-    panel.empty:SetWidth(rowWidth)
+    panel.empty:SetPoint("TOPLEFT", panel, "TOPLEFT", 20, -35)
+    panel.empty:SetWidth(width - 40)
     panel.empty:SetJustifyH("LEFT")
     panel.empty:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
     panel.empty:SetText("No recent activity.")
@@ -1760,6 +1783,7 @@ local function RefreshOverviewActivity(panel)
             shown = shown + 1
             local row = panel.rows[shown]
             row:Show()
+            SetAuditRowAccent(row, color)
             row.time:SetText(FormatClock(entry.time))
             row.kind:SetText(Trunc(label, 16))
             row.kind:SetTextColor(color.r, color.g, color.b)
@@ -1767,12 +1791,15 @@ local function RefreshOverviewActivity(panel)
                 row.actor:SetText(Trunc(FormatPlayerLabel(entry.actorKey or entry.playerKey), 14))
                 SetRegionShown(row.actor, row.showActorColumn)
             end
-            SetCompactText(row.message, message, row.showActorColumn and 38 or 48)
+            SetCompactText(row.message, message, row.showActorColumn and 62 or 78)
+            SetAuditRowTooltip(row, label, message)
         end
     end
 
     for index = shown + 1, #panel.rows do
-        panel.rows[index]:Hide()
+        local row = panel.rows[index]
+        row:Hide()
+        SetAuditRowTooltip(row, nil, nil)
     end
     SetRegionShown(panel.empty, shown == 0)
 end

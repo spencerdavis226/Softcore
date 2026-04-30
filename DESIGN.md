@@ -114,6 +114,7 @@ Rules:
 - reuse the Log tab filtering so low-value rows stay hidden
 - preserve item links with `SetCompactText` rather than raw truncation
 - show time, event kind, character when space allows, and a compact message
+- use a condensed version of the Log tab row language: subtle alternating rows, a left color accent, compact columns, and hover tooltips for full text
 - do not add actions here
 
 ## Violations And Log Tabs
