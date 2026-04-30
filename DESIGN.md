@@ -113,7 +113,7 @@ Rules:
 - show only a small number of meaningful events
 - reuse the Log tab filtering so low-value rows stay hidden
 - preserve item links with `SetCompactText` rather than raw truncation
-- show time, event kind, and a compact message
+- show time, event kind, character when space allows, and a compact message
 - do not add actions here
 
 ### Party Ledger

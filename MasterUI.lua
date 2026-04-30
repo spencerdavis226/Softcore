@@ -1591,11 +1591,16 @@ local function CreateOverviewActivityPanel(parent, x, y, width, height)
     local rowTop = -9
     local rowLeft = 150
     local rowWidth = width - rowLeft - 12
+    local showActorColumn = rowWidth >= 500
+    local actorLeft = 158
+    local actorWidth = 86
+    local messageLeft = showActorColumn and 252 or 166
     local rowHeight = math.floor((height - 16) / OVERVIEW_LAYOUT.ACTIVITY_ROWS)
     for index = 1, OVERVIEW_LAYOUT.ACTIVITY_ROWS do
         local row = CreateFrame("Frame", nil, panel)
         row:SetSize(rowWidth, rowHeight)
         row:SetPoint("TOPLEFT", panel, "TOPLEFT", rowLeft, rowTop - ((index - 1) * rowHeight))
+        row.showActorColumn = showActorColumn
 
         row.time = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         row.time:SetPoint("LEFT", row, "LEFT", 0, 0)
@@ -1609,9 +1614,17 @@ local function CreateOverviewActivityPanel(parent, x, y, width, height)
         row.kind:SetJustifyH("LEFT")
         row.kind:SetWordWrap(false)
 
+        row.actor = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        row.actor:SetPoint("LEFT", row, "LEFT", actorLeft, 0)
+        row.actor:SetWidth(actorWidth)
+        row.actor:SetJustifyH("LEFT")
+        row.actor:SetWordWrap(false)
+        row.actor:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+        SetRegionShown(row.actor, showActorColumn)
+
         row.message = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        row.message:SetPoint("LEFT", row, "LEFT", 166, 0)
-        row.message:SetWidth(rowWidth - 166)
+        row.message:SetPoint("LEFT", row, "LEFT", messageLeft, 0)
+        row.message:SetWidth(rowWidth - messageLeft)
         row.message:SetJustifyH("LEFT")
         row.message:SetWordWrap(false)
         row.message:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
@@ -1651,7 +1664,11 @@ local function RefreshOverviewActivity(panel)
             row.time:SetText(FormatClock(entry.time))
             row.kind:SetText(Trunc(label, 16))
             row.kind:SetTextColor(color.r, color.g, color.b)
-            SetCompactText(row.message, message, 48)
+            if row.actor then
+                row.actor:SetText(Trunc(FormatPlayerLabel(entry.actorKey or entry.playerKey), 14))
+                SetRegionShown(row.actor, row.showActorColumn)
+            end
+            SetCompactText(row.message, message, row.showActorColumn and 38 or 48)
         end
     end
 
