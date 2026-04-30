@@ -38,7 +38,7 @@ local CLEAN_LEVEL_NAMES = {
 }
 
 local ACHIEVEMENT_NAME_MAX_LEN = 34
-local ACHIEVEMENT_DESC_MAX_LEN = 108
+local ACHIEVEMENT_DESC_MAX_LEN = 160
 
 local function ClampAchievementText(value, maxLen)
     local text = tostring(value or "")
