@@ -3214,7 +3214,7 @@ function SC:OpenMasterWindow(focusTab)
     local subtitle = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -2)
     subtitle:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
-    subtitle:SetText("Hardcore-style run ledger for group accountability")
+    subtitle:SetText("Group hardcore, synced and accountable.")
 
     local closeBtn = CreateFrame("Button", "SoftcoreMasterCloseButton", frame, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -5, -5)
