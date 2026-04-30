@@ -974,12 +974,23 @@ end
 
 local completionAwardFrame
 
+local function CleanAwardText(fontString)
+    if not fontString then return fontString end
+    if fontString.SetShadowColor then
+        fontString:SetShadowColor(0, 0, 0, 0)
+    end
+    if fontString.SetShadowOffset then
+        fontString:SetShadowOffset(0, 0)
+    end
+    return fontString
+end
+
 local function CreateAwardFont(parent, template, width, justify)
     local fs = parent:CreateFontString(nil, "OVERLAY", template or "GameFontHighlightSmall")
     fs:SetWidth(width or 360)
     fs:SetJustifyH(justify or "CENTER")
     fs:SetTextColor(0.18, 0.105, 0.035)
-    return fs
+    return CleanAwardText(fs)
 end
 
 local function FormatAwardCharacter(award)
@@ -1002,31 +1013,114 @@ local function FormatAwardRules(award)
     return label .. ", original terms"
 end
 
-local AWARD_LABEL_COLOR = { 0.42, 0.20, 0.04 }
-local AWARD_VALUE_COLOR = { 0.16, 0.08, 0.02 }
-local AWARD_FOOTER_COLOR = { 0.38, 0.20, 0.06 }
-local AWARD_STAMP_COLOR = { 0.62, 0.09, 0.07, 0.92 }
-local AWARD_PARCHMENT_COLOR = { 0.93, 0.78, 0.50, 1.0 }
+local AWARD_LAYOUT = {
+    panelWidth        = 620,
+    panelHeight       = 620,
+    innerPad          = 30,
+    contentWidth      = 520,
+    labelWidth        = 116,
+    labelValueGap     = 14,
+    rowHeight         = 18,
+    rowGap            = 6,
+    sectionGap        = 12,
+    headerTop         = -22,
+    headerIconBox     = 56,
+    headerIconInner   = 46,
+    headerToKicker    = 10,
+    kickerToTitle     = 4,
+    titleToCharacter  = 8,
+    characterToSub    = 4,
+    subToDivider      = 14,
+    afterDivider      = 12,
+    beforeFooter      = 14,
+    afterFooter       = 12,
+    dividerWidth      = 500,
+    dividerThickness  = 1,
+    sectionRule       = 380,
+    pageBorderSize    = 2,
+    stampDiameter     = 90,
+    stampRingPx       = 1,
+    stampBorderInset  = 26,
+}
+
+local AWARD_COLORS = {
+    label    = { 0.42, 0.20, 0.04 },
+    value    = { 0.16, 0.08, 0.02 },
+    title    = { 0.30, 0.12, 0.025 },
+    kicker   = { 0.42, 0.22, 0.06 },
+    muted    = { 0.50, 0.32, 0.10 },
+    border   = { 0.28, 0.15, 0.045, 0.76 },
+    divider  = { 0.50, 0.24, 0.06, 0.45 },
+    rule     = { 0.45, 0.22, 0.05, 0.18 },
+    stamp    = { 0.65, 0.10, 0.08, 0.95 },
+    parchment = { 0.93, 0.78, 0.50, 1.0 },
+}
+
 local AWARD_CIRCLE_TEXTURE = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 
-local function CreateAwardRow(parent, anchor, anchorPoint, label, valueWidth)
+local function CreateAwardRow(parent, label, valueWidth)
+    local L = AWARD_LAYOUT
     local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(520, 18)
-    row:SetPoint("TOPLEFT", anchor, anchorPoint or "BOTTOMLEFT", 0, -6)
+    row:SetSize(L.contentWidth, L.rowHeight)
 
     row.label = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     row.label:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
-    row.label:SetWidth(116)
+    row.label:SetWidth(L.labelWidth)
     row.label:SetJustifyH("LEFT")
-    row.label:SetTextColor(unpack(AWARD_LABEL_COLOR))
+    row.label:SetTextColor(unpack(AWARD_COLORS.label))
     row.label:SetText(string.upper(label))
+    CleanAwardText(row.label)
 
     row.value = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    row.value:SetPoint("TOPLEFT", row.label, "TOPRIGHT", 12, 1)
-    row.value:SetWidth(valueWidth or 392)
+    row.value:SetPoint("TOPLEFT", row.label, "TOPRIGHT", L.labelValueGap, 1)
+    row.value:SetWidth(valueWidth or (L.contentWidth - L.labelWidth - L.labelValueGap))
     row.value:SetJustifyH("LEFT")
-    row.value:SetTextColor(unpack(AWARD_VALUE_COLOR))
+    row.value:SetTextColor(unpack(AWARD_COLORS.value))
+    CleanAwardText(row.value)
     return row
+end
+
+local function CreateAwardPageBorder(parent)
+    local L = AWARD_LAYOUT
+    local C = AWARD_COLORS.border
+    local size = L.pageBorderSize
+
+    parent.borderTop = parent:CreateTexture(nil, "BACKGROUND")
+    parent.borderTop:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+    parent.borderTop:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
+    parent.borderTop:SetHeight(size)
+    parent.borderTop:SetColorTexture(unpack(C))
+
+    parent.borderBottom = parent:CreateTexture(nil, "BACKGROUND")
+    parent.borderBottom:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 0, 0)
+    parent.borderBottom:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
+    parent.borderBottom:SetHeight(size)
+    parent.borderBottom:SetColorTexture(unpack(C))
+
+    parent.borderLeft = parent:CreateTexture(nil, "BACKGROUND")
+    parent.borderLeft:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+    parent.borderLeft:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 0, 0)
+    parent.borderLeft:SetWidth(size)
+    parent.borderLeft:SetColorTexture(unpack(C))
+
+    parent.borderRight = parent:CreateTexture(nil, "BACKGROUND")
+    parent.borderRight:SetPoint("TOPRIGHT", parent, "TOPRIGHT", 0, 0)
+    parent.borderRight:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
+    parent.borderRight:SetWidth(size)
+    parent.borderRight:SetColorTexture(unpack(C))
+end
+
+local function AnchorRowBelow(row, prev, gap)
+    row:ClearAllPoints()
+    row:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -(gap or AWARD_LAYOUT.rowGap))
+end
+
+local function CreateAwardSectionRule(parent, anchorBelow, gap)
+    local rule = parent:CreateTexture(nil, "BACKGROUND")
+    rule:SetSize(AWARD_LAYOUT.sectionRule, 1)
+    rule:SetPoint("TOP", anchorBelow, "BOTTOM", 0, -(gap or AWARD_LAYOUT.sectionGap))
+    rule:SetColorTexture(unpack(AWARD_COLORS.rule))
+    return rule
 end
 
 local function CreateAwardCircle(parent, size, color, layer, sublevel)
@@ -1060,7 +1154,7 @@ local function FormatAwardRunId(award)
 end
 
 local function FormatAwardAddonVersion()
-    local meta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+    local meta = (C_AddOns and C_AddOns.GetAddOnMetadata) or _G.GetAddOnMetadata
     local v = meta and meta("Softcore", "Version") or nil
     if not v or v == "" then return "Softcore" end
     return "Softcore v" .. tostring(v)
@@ -1096,8 +1190,11 @@ local function EnsureCompletionAwardFrame()
         return completionAwardFrame
     end
 
+    local L = AWARD_LAYOUT
+    local C = AWARD_COLORS
+
     local frame = CreateFrame("Frame", "SoftcoreCompletionAwardFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(640, 660)
+    frame:SetSize(L.panelWidth, L.panelHeight)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 20)
     frame:SetFrameStrata("DIALOG")
     frame:SetMovable(true)
@@ -1112,33 +1209,21 @@ local function EnsureCompletionAwardFrame()
         edgeSize = 32,
         insets = { left = 10, right = 10, top = 10, bottom = 10 },
     })
-    frame:SetBackdropColor(0.78, 0.62, 0.36, 0.98)
+    frame:SetBackdropColor(0.78, 0.62, 0.36, 1.0)
     frame:SetBackdropBorderColor(0.72, 0.43, 0.12, 1)
 
-    frame.pageShadow = frame:CreateTexture(nil, "BACKGROUND")
-    frame.pageShadow:SetPoint("TOPLEFT", frame, "TOPLEFT", 36, -38)
-    frame.pageShadow:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, 32)
-    frame.pageShadow:SetColorTexture(0.11, 0.055, 0.02, 0.32)
-
-    frame.inner = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-    frame.inner:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -32)
-    frame.inner:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, 32)
-    frame.inner:SetBackdrop({
-        bgFile = "Interface\\Buttons\\WHITE8X8",
-        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = false,
-        edgeSize = 14,
-        insets = { left = 4, right = 4, top = 4, bottom = 4 },
-    })
-    frame.inner:SetBackdropColor(0.93, 0.78, 0.50, 0.98)
-    frame.inner:SetBackdropBorderColor(0.45, 0.25, 0.07, 0.92)
+    frame.inner = CreateFrame("Frame", nil, frame)
+    frame.inner:SetPoint("TOPLEFT", frame, "TOPLEFT", L.innerPad, -L.innerPad - 2)
+    frame.inner:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -L.innerPad, L.innerPad + 2)
+    CreateAwardPageBorder(frame.inner)
 
     frame.close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     frame.close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -10, -10)
 
+    -- Header: trophy icon, kicker, title, character, subtitle
     frame.headerIconFrame = CreateFrame("Frame", nil, frame.inner, "BackdropTemplate")
-    frame.headerIconFrame:SetSize(56, 56)
-    frame.headerIconFrame:SetPoint("TOP", frame.inner, "TOP", 0, -22)
+    frame.headerIconFrame:SetSize(L.headerIconBox, L.headerIconBox)
+    frame.headerIconFrame:SetPoint("TOP", frame.inner, "TOP", 0, L.headerTop)
     frame.headerIconFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -1149,112 +1234,121 @@ local function EnsureCompletionAwardFrame()
     frame.headerIconFrame:SetBackdropColor(0.30, 0.16, 0.04, 0.88)
     frame.headerIconFrame:SetBackdropBorderColor(0.78, 0.54, 0.18, 0.95)
     frame.headerIcon = frame.headerIconFrame:CreateTexture(nil, "ARTWORK")
-    frame.headerIcon:SetSize(46, 46)
+    frame.headerIcon:SetSize(L.headerIconInner, L.headerIconInner)
     frame.headerIcon:SetPoint("CENTER", frame.headerIconFrame, "CENTER", 0, 0)
     frame.headerIcon:SetTexture("Interface\\Icons\\INV_Misc_Trophy_Argent")
     frame.headerIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
-    frame.kicker = CreateAwardFont(frame.inner, "GameFontNormalSmall", 540)
-    frame.kicker:SetPoint("TOP", frame.headerIconFrame, "BOTTOM", 0, -10)
-    frame.kicker:SetTextColor(0.42, 0.22, 0.06)
+    frame.kicker = CreateAwardFont(frame.inner, "GameFontNormalSmall", L.contentWidth)
+    frame.kicker:SetPoint("TOP", frame.headerIconFrame, "BOTTOM", 0, -L.headerToKicker)
+    frame.kicker:SetTextColor(unpack(C.kicker))
     frame.kicker:SetText("SOFTCORE CERTIFICATE OF COMPLETION")
 
-    frame.title = CreateAwardFont(frame.inner, "GameFontNormalHuge", 540)
-    frame.title:SetPoint("TOP", frame.kicker, "BOTTOM", 0, -6)
-    frame.title:SetTextColor(0.30, 0.12, 0.025)
+    frame.title = CreateAwardFont(frame.inner, "GameFontNormalHuge", L.contentWidth)
+    frame.title:SetPoint("TOP", frame.kicker, "BOTTOM", 0, -L.kickerToTitle)
+    frame.title:SetTextColor(unpack(C.title))
     frame.title:SetText("Max Level Reached")
 
-    frame.character = CreateAwardFont(frame.inner, "GameFontNormalLarge", 540)
-    frame.character:SetPoint("TOP", frame.title, "BOTTOM", 0, -10)
-    frame.character:SetTextColor(0.16, 0.08, 0.02)
+    frame.character = CreateAwardFont(frame.inner, "GameFontNormalLarge", L.contentWidth)
+    frame.character:SetPoint("TOP", frame.title, "BOTTOM", 0, -L.titleToCharacter)
+    frame.character:SetTextColor(unpack(C.value))
 
-    frame.subtitle = CreateAwardFont(frame.inner, "GameFontHighlight", 540)
-    frame.subtitle:SetPoint("TOP", frame.character, "BOTTOM", 0, -6)
-    frame.subtitle:SetTextColor(0.34, 0.18, 0.04)
+    frame.subtitle = CreateAwardFont(frame.inner, "GameFontHighlight", L.contentWidth)
+    frame.subtitle:SetPoint("TOP", frame.character, "BOTTOM", 0, -L.characterToSub)
+    frame.subtitle:SetTextColor(unpack(C.muted))
 
     frame.dividerTop = frame.inner:CreateTexture(nil, "ARTWORK")
-    frame.dividerTop:SetPoint("TOP", frame.subtitle, "BOTTOM", 0, -16)
-    frame.dividerTop:SetSize(500, 2)
-    frame.dividerTop:SetColorTexture(0.50, 0.24, 0.06, 0.55)
-
-    frame.rowAnchor = CreateFrame("Frame", nil, frame.inner)
-    frame.rowAnchor:SetSize(520, 1)
-    frame.rowAnchor:SetPoint("TOP", frame.dividerTop, "BOTTOM", 0, -10)
+    frame.dividerTop:SetPoint("TOP", frame.subtitle, "BOTTOM", 0, -L.subToDivider)
+    frame.dividerTop:SetSize(L.dividerWidth, L.dividerThickness)
+    frame.dividerTop:SetColorTexture(unpack(C.divider))
 
     frame.rows = {}
-    frame.rows.run        = CreateAwardRow(frame.inner, frame.rowAnchor, "BOTTOMLEFT", "Run")
-    frame.rows.ruleset    = CreateAwardRow(frame.inner, frame.rows.run,  "BOTTOMLEFT", "Ruleset")
+    frame.rows.run        = CreateAwardRow(frame.inner, "Run")
+    frame.rows.ruleset    = CreateAwardRow(frame.inner, "Ruleset")
+    frame.rows.started    = CreateAwardRow(frame.inner, "Started")
+    frame.rows.completed  = CreateAwardRow(frame.inner, "Completed")
+    frame.rows.activeTime = CreateAwardRow(frame.inner, "Active Time")
+    frame.rows.violations = CreateAwardRow(frame.inner, "Violations")
+    frame.rows.dungeons   = CreateAwardRow(frame.inner, "Dungeons")
 
-    frame.rowSpacer1 = frame.inner:CreateTexture(nil, "BACKGROUND")
-    frame.rowSpacer1:SetPoint("TOP", frame.rows.ruleset, "BOTTOM", 0, -8)
-    frame.rowSpacer1:SetSize(440, 1)
-    frame.rowSpacer1:SetColorTexture(0.45, 0.22, 0.05, 0.18)
+    local function centerRow(row, anchorTo, anchorPoint, yOffset)
+        row:ClearAllPoints()
+        row:SetPoint("TOP", anchorTo, anchorPoint, 0, yOffset)
+    end
 
-    frame.rows.started    = CreateAwardRow(frame.inner, frame.rowSpacer1, "BOTTOMLEFT", "Started")
-    frame.rows.started:ClearAllPoints()
-    frame.rows.started:SetPoint("TOPLEFT", frame.rowSpacer1, "BOTTOMLEFT", 0, -10)
-    frame.rows.completed  = CreateAwardRow(frame.inner, frame.rows.started,    "BOTTOMLEFT", "Completed")
-    frame.rows.activeTime = CreateAwardRow(frame.inner, frame.rows.completed,  "BOTTOMLEFT", "Active Time")
+    centerRow(frame.rows.run, frame.dividerTop, "BOTTOM", -L.afterDivider)
+    AnchorRowBelow(frame.rows.ruleset, frame.rows.run)
 
-    frame.rowSpacer2 = frame.inner:CreateTexture(nil, "BACKGROUND")
-    frame.rowSpacer2:SetPoint("TOP", frame.rows.activeTime, "BOTTOM", 0, -8)
-    frame.rowSpacer2:SetSize(440, 1)
-    frame.rowSpacer2:SetColorTexture(0.45, 0.22, 0.05, 0.18)
+    frame.rule1 = CreateAwardSectionRule(frame.inner, frame.rows.ruleset)
+    centerRow(frame.rows.started, frame.rule1, "BOTTOM", -L.afterDivider)
+    AnchorRowBelow(frame.rows.completed, frame.rows.started)
+    AnchorRowBelow(frame.rows.activeTime, frame.rows.completed)
 
-    frame.rows.violations = CreateAwardRow(frame.inner, frame.rowSpacer2, "BOTTOMLEFT", "Violations")
-    frame.rows.violations:ClearAllPoints()
-    frame.rows.violations:SetPoint("TOPLEFT", frame.rowSpacer2, "BOTTOMLEFT", 0, -10)
-    frame.rows.dungeons   = CreateAwardRow(frame.inner, frame.rows.violations, "BOTTOMLEFT", "Dungeons")
+    frame.rule2 = CreateAwardSectionRule(frame.inner, frame.rows.activeTime)
+    centerRow(frame.rows.violations, frame.rule2, "BOTTOM", -L.afterDivider)
+    AnchorRowBelow(frame.rows.dungeons, frame.rows.violations)
 
     frame.dividerBottom = frame.inner:CreateTexture(nil, "ARTWORK")
-    frame.dividerBottom:SetPoint("TOP", frame.rows.dungeons, "BOTTOM", 0, -16)
-    frame.dividerBottom:SetSize(500, 2)
-    frame.dividerBottom:SetColorTexture(0.50, 0.24, 0.06, 0.55)
+    frame.dividerBottom:SetPoint("TOP", frame.rows.dungeons, "BOTTOM", 0, -L.beforeFooter)
+    frame.dividerBottom:SetSize(L.dividerWidth, L.dividerThickness)
+    frame.dividerBottom:SetColorTexture(unpack(C.divider))
 
-    -- left footer: identity / verification metadata
-    frame.footer = CreateFrame("Frame", nil, frame.inner)
-    frame.footer:SetPoint("TOPLEFT", frame.dividerBottom, "BOTTOMLEFT", 0, -14)
-    frame.footer:SetSize(360, 110)
+    -- Verification footer rows (muted)
+    frame.rows.runId = CreateAwardRow(frame.inner, "Run ID")
+    frame.rows.hash  = CreateAwardRow(frame.inner, "Hash")
+    frame.rows.addon = CreateAwardRow(frame.inner, "Addon")
 
-    frame.rows.runId   = CreateAwardRow(frame.footer, frame.footer,         "TOPLEFT",    "Run ID",   232)
-    frame.rows.runId:ClearAllPoints()
-    frame.rows.runId:SetPoint("TOPLEFT", frame.footer, "TOPLEFT", 0, 0)
-    frame.rows.hash    = CreateAwardRow(frame.footer, frame.rows.runId,     "BOTTOMLEFT", "Hash",     232)
-    frame.rows.addon   = CreateAwardRow(frame.footer, frame.rows.hash,      "BOTTOMLEFT", "Addon",    232)
+    centerRow(frame.rows.runId, frame.dividerBottom, "BOTTOM", -L.afterFooter)
+    AnchorRowBelow(frame.rows.hash, frame.rows.runId)
+    AnchorRowBelow(frame.rows.addon, frame.rows.hash)
 
-    -- right side: circular notary stamp
-    frame.stamp = CreateFrame("Frame", nil, frame.inner)
-    frame.stamp:SetSize(140, 140)
-    frame.stamp:SetPoint("RIGHT", frame.dividerBottom, "RIGHT", 4, -82)
+    for _, key in ipairs({ "runId", "hash", "addon" }) do
+        local r = frame.rows[key]
+        r.label:SetTextColor(unpack(C.muted))
+        r.value:SetTextColor(unpack(C.muted))
+    end
 
-    frame.stampOuterRing  = CreateAwardCircle(frame.stamp, 138, AWARD_STAMP_COLOR,     "BACKGROUND", 1)
-    frame.stampOuterFill  = CreateAwardCircle(frame.stamp, 124, AWARD_PARCHMENT_COLOR, "ARTWORK",    1)
-    frame.stampInnerRing  = CreateAwardCircle(frame.stamp, 108, AWARD_STAMP_COLOR,     "ARTWORK",    2)
-    frame.stampInnerFill  = CreateAwardCircle(frame.stamp, 96,  AWARD_PARCHMENT_COLOR, "ARTWORK",    3)
+    -- Circular notary stamp centered on the page border, like a real seal
+    -- pressed onto the certificate edge.
+    frame.stamp = CreateFrame("Frame", nil, frame)
+    frame.stamp:SetSize(L.stampDiameter, L.stampDiameter)
+    frame.stamp:SetPoint("CENTER", frame.inner, "BOTTOMRIGHT",
+        -L.stampBorderInset, L.stampBorderInset)
+    frame.stamp:SetFrameLevel(frame.inner:GetFrameLevel() + 8)
 
-    frame.stampTopText = frame.stamp:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    -- Two layered alpha-mask circles produce a restrained red ring with the
+    -- parchment showing through the center.
+    frame.stampRing = CreateAwardCircle(frame.stamp,
+        L.stampDiameter, C.stamp, "ARTWORK", 1)
+    frame.stampFill = CreateAwardCircle(frame.stamp,
+        L.stampDiameter - L.stampRingPx * 2, C.parchment, "ARTWORK", 2)
+
+    frame.stampTopText = frame.stamp:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     frame.stampTopText:SetPoint("CENTER", frame.stamp, "CENTER", 0, 12)
-    frame.stampTopText:SetTextColor(unpack(AWARD_STAMP_COLOR))
+    frame.stampTopText:SetTextColor(unpack(C.stamp))
     frame.stampTopText:SetText("SOFTCORE")
     frame.stampTopText:SetJustifyH("CENTER")
+    CleanAwardText(frame.stampTopText)
     if frame.stampTopText.SetRotation then
         frame.stampTopText:SetRotation(math.rad(-8))
     end
 
-    frame.stampStar = frame.stamp:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    frame.stampStar:SetPoint("CENTER", frame.stamp, "CENTER", 0, -2)
-    frame.stampStar:SetTextColor(unpack(AWARD_STAMP_COLOR))
+    frame.stampStar = frame.stamp:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.stampStar:SetPoint("CENTER", frame.stamp, "CENTER", 0, -1)
+    frame.stampStar:SetTextColor(unpack(C.stamp))
     frame.stampStar:SetText("* * *")
     frame.stampStar:SetJustifyH("CENTER")
+    CleanAwardText(frame.stampStar)
     if frame.stampStar.SetRotation then
         frame.stampStar:SetRotation(math.rad(-8))
     end
 
-    frame.stampBottomText = frame.stamp:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    frame.stampBottomText:SetPoint("CENTER", frame.stamp, "CENTER", 0, -16)
-    frame.stampBottomText:SetTextColor(unpack(AWARD_STAMP_COLOR))
+    frame.stampBottomText = frame.stamp:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.stampBottomText:SetPoint("CENTER", frame.stamp, "CENTER", 0, -14)
+    frame.stampBottomText:SetTextColor(unpack(C.stamp))
     frame.stampBottomText:SetText("CERTIFIED")
     frame.stampBottomText:SetJustifyH("CENTER")
+    CleanAwardText(frame.stampBottomText)
     if frame.stampBottomText.SetRotation then
         frame.stampBottomText:SetRotation(math.rad(-8))
     end

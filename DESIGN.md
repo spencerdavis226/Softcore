@@ -172,6 +172,10 @@ Avoid:
 - extra debug/sync timestamps
 - status and violation cells separated by unrelated flavor cells
 
+### Completion Award
+
+The max-level completion award should read as a clean parchment certificate: crisp text without heavy font shadows, concise run statistics, a simple page border, and one restrained stamp seated on the border rather than floating as decorative clutter.
+
 ## Charter Tab
 
 Charter is the setup, rules, governance, proposal, sync, and amendment surface. It replaced the visible "Run" label because the tab is the run agreement, not merely run status.
