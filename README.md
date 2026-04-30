@@ -106,7 +106,7 @@ Declining cancels the proposal for everyone. Pending proposals expire after 30 m
 
 Softcore syncs over Blizzard addon messages using the `SOFTCORE` prefix. It supports normal parties only; raid groups are treated as local-only and show a raid-unsupported note instead of syncing or displaying a 40-player roster.
 
-Status heartbeats are sent every 10 seconds as a safety net, while user-driven changes send compact high-priority updates immediately. Proposals and rule amendments wake the Charter tab with a tiny notice first, then fetch the larger rule details before acceptance is enabled. If details are delayed, the Charter tab offers retry/decline/cancel controls instead of leaving the flow stuck. Party audit logs are treated as delayed bulk traffic so they do not slow proposal/rule controls. Reloading or rejoining may briefly show Unsynced until addon messages arrive. Use `/sc resync` or **Party Sync** in the Charter tab if the display looks stale.
+Status heartbeats are sent every 10 seconds as a safety net, while user-driven changes send compact high-priority updates immediately. Proposals and rule amendments wake the Charter tab with a tiny notice first, then fetch the larger rule details before acceptance is enabled; acceptance and confirmation use explicit proposal controls, not status heartbeats alone. If details are delayed, the Charter tab offers retry/decline/cancel controls instead of leaving the flow stuck. Party audit logs are treated as delayed bulk traffic so they do not slow proposal/rule controls. Reloading or rejoining may briefly show Unsynced until addon messages arrive. Use `/sc resync` or **Party Sync** in the Charter tab if the display looks stale.
 
 Party state is display and compatibility data. Remote state should not reset, fail, or overwrite the local character's run.
 
@@ -119,7 +119,7 @@ Softcore sync is built around current WoW addon-message limits:
 - The `SOFTCORE` prefix is registered after login/reload and must fit the 16-byte prefix limit.
 - Addon message bodies are limited to 255 bytes and are delivered through `CHAT_MSG_ADDON`.
 - `C_ChatInfo.SendAddonMessage` success means the client enqueued the message, not that peers have received it.
-- Blizzard applies a per-prefix throttle; Softcore paces outbound messages through its send queue, prioritizes proposal/control/fresh-state traffic, coalesces disposable queued status updates, delays low-priority party audit logs, and chunks larger detail/full-state payloads.
+- Blizzard applies a per-prefix throttle; Softcore paces outbound messages through its send queue, prioritizes proposal/control/fresh-state traffic, coalesces disposable queued status updates, delays low-priority party audit logs, and chunks larger detail/full-state payloads. Chunk receive buffers expire without applying partial state, with larger chunk sets allowed more time under throttling.
 - Common sync payload keys and message types are compacted on the wire while the Lua code keeps readable field names.
 - Proposal and control retries must remain paced. Do not bypass the send queue for chunked messages.
 - Rule serialization must preserve booleans exactly. `false` is a real rule value, not an empty string.
@@ -135,15 +135,15 @@ Follower dungeons are allowed by default. Follower NPCs are not treated as unsyn
 
 Group Finder dungeons are allowed when the resulting player group is compatible with the run. If Group Finder adds unsynced, unconfirmed, or run-mismatched players, Softcore records that as an instance-with-unsynced-players rule outcome according to the active rules. This affects the ledger and party status, but it does not directly fail or reset the local character unless the accepted rules explicitly make that outcome fatal.
 
-Raid groups remain local-only. Raid and scenario entries are logged as audit context, but they do not count as repeated dungeons. Repeated dungeon entries are tracked by instance name and governed by the repeated-dungeon rule.
+Raid groups remain local-only. Raid and scenario entries are logged as audit context, but they do not count as repeated dungeons. Repeated dungeon entries are tracked by instance name and governed by the repeated-dungeon rule. Softcore remembers the current instance visit across `/reload`, so reloading inside the same dungeon should not count as a repeat; leaving and re-entering still does.
 
 ## Graceful World Mechanics
 
 Pet battles are allowed by default and do not create a violation. They are still written to the stored audit log for exports but are hidden in the Log tab and `/sc log` as non-ruleset noise.
 
-Quest vehicles, vehicle UI, override action bars, taxis, and forced movement are allowed by default. While those states are active, Softcore suppresses mount/flying rule outcomes so normal quest mechanics and forced flights do not create false violations. Player-selected flight paths are still detected through the taxi-node action when that rule is enabled. Druid land Travel/Mount Form follows the ground mount rule; Druid Flight Form and Dracthyr Soar follow the flying mount rule when the client reports flying.
+Quest vehicles, vehicle UI, override action bars, taxis, and forced movement are allowed by default. While those states are active, Softcore suppresses mount/flying rule outcomes so normal quest mechanics and forced flights do not create false violations. Player-selected flight paths are still detected through the taxi-node action when that rule is enabled. Druid land Travel/Mount Form and Worgen Running Wild follow the ground mount rule; Druid Flight Form and Dracthyr Soar follow the flying mount rule when the client reports flying or the known Soar aura.
 
-Consumable restrictions are recorded after the client confirms the item spell succeeded when that spell data is available, so failed clicks, cooldown attempts, and unusable-context attempts should not create accidental violations.
+Consumable restrictions are recorded after the client confirms the item spell succeeded when that spell data is available, so failed clicks, cooldown attempts, and unusable-context attempts should not create accidental violations. Bag, action-bar, and direct item-use paths are watched where the Retail client exposes stable hooks.
 
 Summons, portals, quest teleports, Chromie Time, Timewalking, level scaling, and similar world systems are treated as normal game context unless a future rule explicitly governs them.
 
@@ -187,7 +187,7 @@ Pending amendments expire after 30 minutes. Late amendment messages are ignored 
 
 Death is permanent for the character.
 
-Non-death disallowed actions generally create violations. Examples include disallowed bank/mail/auction/trade access, movement rules, equipped gear rules, and permanently enchanted gear when enchants are disallowed.
+Non-death disallowed actions generally create violations. Examples include disallowed bank/mail/auction/trade access, movement rules, equipped gear rules, and permanently enchanted gear when enchants are disallowed. Repeated access-window events are throttled so UI reopen spam does not flood the ledger.
 
 Clearing a violation marks it cleared, records who cleared it and when, and preserves the audit trail. Death and fatal/character-fail violations are not clearable.
 
@@ -213,13 +213,13 @@ The Overview and `/sc run chat` show addon-observed active time for the current 
 
 Boundary behavior:
 
-- Incomplete chunked sync messages are discarded after 30 seconds.
+- Incomplete chunked sync messages are discarded after a timeout; larger chunk sets receive more time under addon-message throttling.
 - Sync sequence checks are scoped by sender session, so a party member reinstalling, clearing saved variables, or reloading with a reset counter should not stay permanently ignored.
 - Stale proposals expire after 30 minutes.
 - Stale rule amendments expire after 30 minutes.
 - Simultaneous incoming proposals are declined if another proposal is already pending.
-- Remote status heartbeats update peer display/conflict data, but they do not add run participants unless normal late-join rules allow it.
-- Remote violation-clear messages can only clear imported shared violations, not local authoritative violations.
+- Remote status heartbeats update peer display/conflict data, but they do not accept/confirm proposals or add run participants unless normal late-join rules allow it.
+- Remote violation-clear messages can only clear imported shared violations from the peer that owns the violation, not local authoritative violations; heartbeat snapshots do not reactivate already-cleared shared rows.
 - Remote deaths, failures, mismatches, or resets do not fail or reset the local character.
 
 ## Backend Hardening TODOs

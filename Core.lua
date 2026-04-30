@@ -1478,12 +1478,15 @@ function SC:ImportSharedViolation(violation)
     return violation
 end
 
-function SC:ImportSharedViolationClear(violationId, clearedBy, clearedAt, clearReason)
+function SC:ImportSharedViolationClear(violationId, clearedBy, clearedAt, clearReason, ownerKey)
     local db = EnsureDatabase()
 
     for _, violation in ipairs(db.violations) do
         if violation.id == violationId then
             if not violation.shared then
+                return nil
+            end
+            if ownerKey and violation.playerKey ~= ownerKey then
                 return nil
             end
 
@@ -1551,6 +1554,18 @@ function SC:ImportSharedViolationSnapshot(snapshot)
     if existing then
         if existing.shared then
             local wasCleared = existing.status == "CLEARED"
+            if wasCleared then
+                if self.TraceDebug then
+                    self:TraceDebug("VIOLATION_SHARED_SNAPSHOT_IGNORED_CLEARED", {
+                        violationId = existing.id,
+                        runId = existing.runId,
+                        playerKey = existing.playerKey,
+                        violationType = existing.type,
+                    })
+                end
+                return existing
+            end
+
             existing.status = "ACTIVE"
             existing.clearedAt = nil
             existing.clearedBy = nil
@@ -1562,15 +1577,6 @@ function SC:ImportSharedViolationSnapshot(snapshot)
             existing.runId = snapshot.runId or existing.runId
             existing.createdAt = snapshot.createdAt or existing.createdAt or time()
 
-            if wasCleared and self.TraceDebug then
-                self:TraceDebug("VIOLATION_SHARED_REACTIVATED", {
-                    violationId = existing.id,
-                    runId = existing.runId,
-                    playerKey = existing.playerKey,
-                    violationType = existing.type,
-                    detail = existing.detail,
-                })
-            end
         end
 
         return existing

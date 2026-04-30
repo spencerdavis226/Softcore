@@ -32,9 +32,12 @@ local MOVEMENT_WARNING_THROTTLE = 30
 local ACCESS_WARNING_THROTTLE = 30
 local CONSUMABLE_USE_CONFIRM_WINDOW = 4
 local accessWarnedAt = {}
+local warningWarnedAt = {}
 local petBattleActive = false
 local pendingConsumableUse = nil
 local DRUID_TRAVEL_FORM_ID = 3
+local WORGEN_RUNNING_WILD_SPELL_ID = 87840
+local DRACTHYR_SOAR_SPELL_ID = 369536
 
 local function Broadcast(reason)
     if SC.Sync_BroadcastStatus then
@@ -137,6 +140,7 @@ function SC:ResetEventTracking()
     movementState.flyingWarnedAt = 0
     movementState.flightPathWarnedAt = 0
     accessWarnedAt = {}
+    warningWarnedAt = {}
     pvpWarnedAt = 0
     pvpAdvisoryWarnedAt = {}
     pendingConsumableUse = nil
@@ -169,6 +173,27 @@ local function SafeGlobalBoolean(func)
 
     local ok, result = pcall(func)
     return ok and result == true
+end
+
+local function IsPlayerAuraBySpellIdActive(spellId)
+    if not spellId then return false end
+
+    if C_UnitAuras and C_UnitAuras.GetPlayerAuraBySpellID then
+        local ok, aura = pcall(C_UnitAuras.GetPlayerAuraBySpellID, spellId)
+        if ok and aura then
+            return true
+        end
+    end
+
+    if AuraUtil and AuraUtil.FindAuraByName and GetSpellInfo then
+        local spellName = GetSpellInfo(spellId)
+        if spellName then
+            local aura = AuraUtil.FindAuraByName(spellName, "player", "HELPFUL")
+            return aura ~= nil
+        end
+    end
+
+    return false
 end
 
 local function AddLocalAudit(kind, message, extra)
@@ -257,6 +282,12 @@ local function HandleWarning(event)
     end
 
     local warning = WARNING_EVENTS[event]
+    local now = time()
+    if now - (warningWarnedAt[warning.rule] or 0) < ACCESS_WARNING_THROTTLE then
+        return
+    end
+    warningWarnedAt[warning.rule] = now
+
     SC:ApplyRuleOutcome(warning.rule, {
         playerKey = SC:GetPlayerKey(),
         detail = warning.detail,
@@ -379,6 +410,14 @@ local function IsDruidGroundTravelFormActive(flying)
     return true
 end
 
+local function IsWorgenRunningWildActive()
+    return IsPlayerAuraBySpellIdActive(WORGEN_RUNNING_WILD_SPELL_ID)
+end
+
+local function IsDracthyrSoarActive()
+    return IsPlayerAuraBySpellIdActive(DRACTHYR_SOAR_SPELL_ID)
+end
+
 local function ApplyMovementRule(ruleName, detail, throttleField)
     if not IsRunActiveForLocalAudit() then
         return
@@ -433,20 +472,24 @@ local function CheckMovementRules()
     -- in modern clients, but shapeshift edge cases may need live testing.
     local flying = IsFlying and IsFlying()
     local druidGroundTravelForm = IsDruidGroundTravelFormActive(flying)
+    local runningWild = IsWorgenRunningWildActive()
+    local dracthyrSoar = IsDracthyrSoarActive()
 
-    if (mounted or druidGroundTravelForm) and not movementState.mounted then
-        local detail = druidGroundTravelForm
+    if (mounted or druidGroundTravelForm or runningWild) and not movementState.mounted then
+        local detail = runningWild
+            and "Used Worgen Running Wild while on a Softcore run."
+            or druidGroundTravelForm
             and "Used Druid land Travel Form while on a Softcore run."
             or "Mounted while on a Softcore run."
         ApplyMovementRule("mounts", detail, "mountWarnedAt")
     end
 
-    if flying and not movementState.flying then
-        ApplyMovementRule("flying", "Flying while on a Softcore run.", "flyingWarnedAt")
+    if (flying or dracthyrSoar) and not movementState.flying then
+        ApplyMovementRule("flying", dracthyrSoar and "Used Dracthyr Soar while on a Softcore run." or "Flying while on a Softcore run.", "flyingWarnedAt")
     end
 
-    movementState.mounted = (mounted or druidGroundTravelForm) and true or false
-    movementState.flying = flying and true or false
+    movementState.mounted = (mounted or druidGroundTravelForm or runningWild) and true or false
+    movementState.flying = (flying or dracthyrSoar) and true or false
 end
 
 local function ApplyFlightPathRule(detail)
@@ -768,6 +811,7 @@ function SC:Events_Register()
             if SC.ScanEquippedGear then
                 SC:ScanEquippedGear(true)
             end
+            CheckInstancedPvP()
             if SC.CheckInstanceIntegrity then
                 SC:CheckInstanceIntegrity()
             end
@@ -807,6 +851,11 @@ function SC:Events_Register()
     end
     if UseAction then
         hooksecurefunc("UseAction", OnUseAction)
+    end
+    if C_Item and C_Item.UseItem then
+        hooksecurefunc(C_Item, "UseItem", function(itemRef)
+            QueueConsumableRule(itemRef)
+        end)
     end
 
     -- Flight paths are most reliably detected at the taxi API call.

@@ -539,6 +539,11 @@ function SC:ApplyRuleOutcome(ruleName, context)
     local evaluation = self:EvaluateRule(ruleName, context)
     local outcome = evaluation.outcome
     local detail = ContextDetail(ruleName, context)
+    local db = self.db or SoftcoreDB
+
+    if not (context and context.allowInactiveRunOutcome) and not (db and db.run and db.run.active) then
+        return evaluation
+    end
 
     if outcome == "ALLOWED" or outcome == true then
         return evaluation
@@ -555,7 +560,6 @@ function SC:ApplyRuleOutcome(ruleName, context)
     local playerKey = context and context.playerKey or self:GetPlayerKey()
 
     if outcome == "WARNING" then
-        local db = self.db or SoftcoreDB
         if db and db.run then
             db.run.warningCount = (db.run.warningCount or 0) + 1
         end

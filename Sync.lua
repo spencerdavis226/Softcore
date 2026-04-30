@@ -159,7 +159,8 @@ local function CleanupPendingChunks(now)
     now = now or time()
     local db = SoftcoreDB
     for key, buffer in pairs(pendingChunks) do
-        if now - (buffer.createdAt or now) > CHUNK_TIMEOUT_SECONDS then
+        local timeout = math.min(120, math.max(CHUNK_TIMEOUT_SECONDS, (tonumber(buffer.total) or 1) * 3))
+        if now - (buffer.createdAt or now) > timeout then
             pendingChunks[key] = nil
             if db and db.sync then
                 db.sync.expiredChunkBuffers = (db.sync.expiredChunkBuffers or 0) + 1
@@ -169,6 +170,7 @@ local function CleanupPendingChunks(now)
                     received = buffer.received or 0,
                     total = buffer.total or 0,
                     expiredAt = now,
+                    timeoutSeconds = timeout,
                 }
             end
         end
@@ -195,14 +197,6 @@ end
 local function ResolvePayloadPlayerKey(payload, sender)
     local senderName, senderRealm = SplitFullName(sender)
     local senderKey = PlayerKey(senderName, senderRealm)
-    local payloadKey = payload and payload.playerKey
-
-    if payloadKey and payloadKey ~= "" then
-        local payloadName = string.match(payloadKey, "^([^-]+)")
-        if not payloadName or payloadName == senderName then
-            return payloadKey, senderName, senderRealm
-        end
-    end
 
     return senderKey, senderName, senderRealm
 end
@@ -994,6 +988,10 @@ end
 
 function SC:Sync_BroadcastStatus(reason, options)
     options = options or {}
+    if not GetSyncChannel() then
+        return false
+    end
+
     local payload = self:Sync_BuildPayload(reason, options)
     if not payload then
         return false
@@ -1334,6 +1332,7 @@ function SC:Sync_BroadcastViolationClear(violation)
     SendPayload({
         type = "PARTY_VIOLATION_CLEAR",
         violationId = violation.id,
+        violationPlayerKey = violation.playerKey,
         clearedBy = violation.clearedBy,
         clearedAt = violation.clearedAt,
         clearReason = Trunc(violation.clearReason, MAX_AUDIT_TEXT),
@@ -1479,6 +1478,10 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
         end
 
         if buffer.total ~= chunkTotal then
+            pendingChunks[bufferKey] = nil
+            return
+        end
+        if buffer.sessionId ~= "" and chunkSessionId ~= "" and buffer.sessionId ~= chunkSessionId then
             pendingChunks[bufferKey] = nil
             return
         end
@@ -1667,11 +1670,17 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
 
     if payload.type == "PARTY_VIOLATION_CLEAR" then
         if CanImportSharedAudit(payload) and self.ImportSharedViolationClear then
+            local ownerKey = payload.violationPlayerKey or payload.playerKey or key
+            local clearedBy = payload.clearedBy or payload.playerKey or key
+            if ownerKey ~= key or clearedBy ~= key then
+                return
+            end
             self:ImportSharedViolationClear(
                 payload.violationId,
-                payload.clearedBy or payload.playerKey or key,
+                clearedBy,
                 tonumber(payload.clearedAt) or time(),
-                payload.clearReason
+                payload.clearReason,
+                ownerKey
             )
         end
         return
@@ -1840,13 +1849,6 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
             severity = "WARNING",
             createdAt = tonumber(payload.latestViolationAt) or time(),
         })
-    end
-
-    if payload.active == "1" and payload.runId and self.ConfirmAcceptedProposalFromStatus then
-        self:ConfirmAcceptedProposalFromStatus(key, payload.runId, payload.rulesetHash)
-    end
-    if payload.active == "1" and payload.runId and self.ConfirmPendingProposalPeerActive then
-        self:ConfirmPendingProposalPeerActive(key, payload.runId, payload.rulesetHash)
     end
 
     if self.RefreshParticipantsFromRoster then

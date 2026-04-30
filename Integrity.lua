@@ -11,13 +11,58 @@ local GEAR_VIOLATION_THROTTLE = 60
 local LEVEL_GAP_THROTTLE = 20
 
 local lastGearScanAt = 0
+local lastPendingGearRescanAt = 0
 local lastLevelGapCheckAt = 0
 local currentInstanceName
 local gearViolationTimes = {}
 
-local EQUIPMENT_SLOTS = {
-    1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
-}
+local EQUIPMENT_SLOTS = {}
+
+local function AddEquipmentSlot(slotId)
+    slotId = tonumber(slotId)
+    if not slotId or slotId <= 0 then return end
+    for _, existing in ipairs(EQUIPMENT_SLOTS) do
+        if existing == slotId then return end
+    end
+    table.insert(EQUIPMENT_SLOTS, slotId)
+end
+
+for _, slotId in ipairs({
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    11, 12, 13, 14, 15, 16, 17, 19,
+    20, 21, 22, 23, 24, 25,
+}) do
+    AddEquipmentSlot(slotId)
+end
+
+for _, globalName in ipairs({
+    "INVSLOT_AMMO",
+    "INVSLOT_HEAD",
+    "INVSLOT_NECK",
+    "INVSLOT_SHOULDER",
+    "INVSLOT_BODY",
+    "INVSLOT_CHEST",
+    "INVSLOT_WAIST",
+    "INVSLOT_LEGS",
+    "INVSLOT_FEET",
+    "INVSLOT_WRIST",
+    "INVSLOT_HAND",
+    "INVSLOT_FINGER1",
+    "INVSLOT_FINGER2",
+    "INVSLOT_TRINKET1",
+    "INVSLOT_TRINKET2",
+    "INVSLOT_BACK",
+    "INVSLOT_MAINHAND",
+    "INVSLOT_OFFHAND",
+    "INVSLOT_RANGED",
+    "INVSLOT_TABARD",
+    "INVSLOT_PROFESSION_TOOL",
+    "INVSLOT_PROFESSION_GEAR_1",
+    "INVSLOT_PROFESSION_GEAR_2",
+    "INVSLOT_PROFESSION_GEAR_3",
+}) do
+    AddEquipmentSlot(_G[globalName])
+end
 
 local tooltipScanner = nil
 local function GetTooltipScanner()
@@ -192,6 +237,7 @@ local function GetEquippedItems()
                 link = itemLink,
                 name = name or itemLink,
                 quality = quality,
+                qualityPending = quality == nil,
                 enchantId = GetPermanentEnchantId(itemLink),
             })
         end
@@ -245,6 +291,7 @@ end
 
 function SC:ResetGearScanTracking()
     lastGearScanAt = 0
+    lastPendingGearRescanAt = 0
     gearViolationTimes = {}
 end
 
@@ -294,6 +341,22 @@ function SC:ScanEquippedGear(force)
         return
     end
     lastGearScanAt = now
+
+    local pendingItemInfo = false
+    for _, item in ipairs(GetEquippedItems()) do
+        if item.qualityPending then
+            pendingItemInfo = true
+            break
+        end
+    end
+    if pendingItemInfo and C_Timer and C_Timer.After and now - lastPendingGearRescanAt >= GEAR_SCAN_THROTTLE then
+        lastPendingGearRescanAt = now
+        C_Timer.After(2, function()
+            if SC.ScanEquippedGear then
+                SC:ScanEquippedGear(true)
+            end
+        end)
+    end
 
     for _, invalid in ipairs(self:GetInvalidEquippedItems()) do
         local item = invalid.item
@@ -498,6 +561,15 @@ local function BuildInstanceEntryMessage(instanceName, entrySource)
     return "Entered instance: " .. instanceName
 end
 
+local function BuildInstanceVisitKey(instanceName, instanceType, difficultyID, lfgDungeonID)
+    return table.concat({
+        tostring(instanceName or ""),
+        tostring(instanceType or ""),
+        tostring(difficultyID or ""),
+        tostring(lfgDungeonID or ""),
+    }, "|")
+end
+
 function SC:CheckInstanceIntegrity()
     local db = GetDB()
     if not IsRunActive() then
@@ -507,19 +579,38 @@ function SC:CheckInstanceIntegrity()
     local inInstance, instanceType = IsInInstance()
     if not inInstance then
         currentInstanceName = nil
+        if db.run then
+            db.run.currentInstanceVisit = nil
+        end
         return
     end
 
     local instanceName, _, difficultyID, difficultyName, _, _, _, _, instanceGroupSize, lfgDungeonID = GetInstanceInfo()
-    if not instanceName or instanceName == "" or currentInstanceName == instanceName then
+    if not instanceName or instanceName == "" then
         return
     end
 
     local entrySource = GetInstanceEntrySource()
     local instanceKind = GetTrackedInstanceKind(instanceType, entrySource)
+    local visitKey = BuildInstanceVisitKey(instanceName, instanceType, difficultyID, lfgDungeonID)
+    local currentVisit = db.run and db.run.currentInstanceVisit
+    if currentVisit and currentVisit.visitKey == visitKey and currentVisit.active then
+        currentInstanceName = instanceName
+        return
+    end
+
     currentInstanceName = instanceName
     db.run.dungeons = db.run.dungeons or {}
     db.run.dungeonOrder = db.run.dungeonOrder or {}
+    db.run.currentInstanceVisit = {
+        visitKey = visitKey,
+        instanceName = instanceName,
+        instanceType = instanceType,
+        difficultyID = difficultyID,
+        lfgDungeonID = lfgDungeonID,
+        active = true,
+        enteredAt = time(),
+    }
 
     local entry = db.run.dungeons[instanceName]
     if not entry then

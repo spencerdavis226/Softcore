@@ -51,6 +51,8 @@ Do not move active run state back to account-wide storage unless there is a very
 
 The latest max-level completion award is also character-scoped. It is stored with the character ledger so the award can be reopened after reset/start-new-run without becoming account-wide progress.
 
+The active run may also store transient continuity markers, such as the current instance visit, so `/reload` or relog inside the same dungeon does not look like a repeat entry. These markers are character-scoped run context, not account-wide history.
+
 ## Sync Model
 
 Sync uses Blizzard addon messages with the `SOFTCORE` prefix.
@@ -62,7 +64,7 @@ The channel is selected automatically:
 
 Raid groups are intentionally unsupported because the UI is designed for party-scale accountability, not raid-scale rosters. When a party converts to raid, Softcore should become local-only: stop party sync, avoid raid roster display, and expire pending group proposals/amendments rather than applying them late.
 
-Status heartbeats are sent periodically as a safety net. User-driven run, proposal, amendment, roster, and resync changes should also send compact fast status/control messages so Party Sync does not wait for the next heartbeat. Proposals and amendments use a control-plane/data-plane split: send a tiny notice first, then let the receiver request targeted details before enabling acceptance. Full rules/details may be chunked, but the serializer uses compact wire aliases for common payload keys/types and rule payloads use compact rule keys to keep review delivery responsive. Incomplete chunk buffers expire and should never mutate run state.
+Status heartbeats are sent periodically as a safety net. User-driven run, proposal, amendment, roster, and resync changes should also send compact fast status/control messages so Party Sync does not wait for the next heartbeat. Heartbeats/full-state responses are advisory display and wake-up traffic only; explicit proposal/amendment control messages drive acceptance and confirmation. Proposals and amendments use a control-plane/data-plane split: send a tiny notice first, then let the receiver request targeted details before enabling acceptance. Full rules/details may be chunked, but the serializer uses compact wire aliases for common payload keys/types and rule payloads use compact rule keys to keep review delivery responsive. Incomplete chunk buffers expire and should never mutate run state.
 
 WoW addon-message API constraints are gospel for this project:
 
@@ -81,7 +83,7 @@ There is no separate HTTP or server “backend.” All multiplayer behavior is *
 
 **Where to look in code**
 
-- `Sync.lua`: prefix registration, inbound `CHAT_MSG_ADDON`, compact wire key/type aliases, **chunk reassembly** (per-sender buffers that **expire** without applying partial state), **outbound send queue** (token-budget pacing, priority insertion, send failure retries), compact fast status nudges, targeted full-state/proposal/amendment detail request-response metadata, queued status coalescing before higher-priority traffic, delayed bulk party-log sends, **stale send drops** for obsolete queued items, and serialization/chunking to the 255-byte body limit.
+- `Sync.lua`: prefix registration, inbound `CHAT_MSG_ADDON`, compact wire key/type aliases, **chunk reassembly** (per-sender buffers that **expire** without applying partial state, with timeout scaled by chunk count), **outbound send queue** (token-budget pacing, priority insertion, send failure retries), compact fast status nudges, targeted full-state/proposal/amendment detail request-response metadata, queued status coalescing before higher-priority traffic, delayed bulk party-log sends, **stale send drops** for obsolete queued items, sender-derived identity for authorization, and serialization/chunking to the 255-byte body limit.
 - `Core.lua`: slash commands; **`/sc dc`** (`ClearDebugTrace`) clears the capped in-memory **debug trace** and resets **test-oriented `db.sync` counters** (stale send drops, coalesced status drops, last drop metadata, send failure count/last error, expired chunk buffer count/last expiry). **`/sc dl`** builds the CSV-style export that includes those fields.
 - `Events.lua`: game events that drive periodic **STATUS** heartbeats and other local hooks.
 - `ProposalUI.lua` / `MasterUI.lua`: Charter-tab proposal UX; user actions enqueue outbound payloads through `Sync` rather than calling `SendAddonMessage` directly. Party Sync treats pending governance and just-applied rule changes as settling states, and detail-loading accept buttons become retry actions instead of dead ends.
@@ -92,7 +94,7 @@ Structured payloads are queued (with a **priority** ordering so proposal/control
 
 **Inbound path**
 
-Each received segment is either a standalone message or part of a **chunk sequence**. Reassembly uses a buffer key (sender + chunk id); **incomplete buffers expire** and must not mutate run state. Fully reassembled payloads dispatch to type-specific handlers (proposal/amendment notices, detail responses, status, party log import, etc.). Proposal/amendment notice and detail paths record timing breadcrumbs in the debug trace. Fresh status/full-state responses also wake an active Party Sync plan so staged flows can continue without waiting on the fallback timer.
+Each received segment is either a standalone message or part of a **chunk sequence**. Reassembly uses a buffer key (sender + chunk id); **incomplete buffers expire** and must not mutate run state. Conflicting chunk totals or sender session IDs reset the buffer. Fully reassembled payloads dispatch to type-specific handlers (proposal/amendment notices, detail responses, status, party log import, etc.). Proposal/amendment notice and detail paths record timing breadcrumbs in the debug trace. Fresh status/full-state responses can wake an active Party Sync plan so staged flows can continue without waiting on the fallback timer, but they must not mark proposal acceptances or confirm/start runs by themselves.
 
 **Stale send drops (`SYNC_DROP_STALE_SEND`)**
 
@@ -122,6 +124,7 @@ Incoming sync must not directly:
 - replace local rules
 - overwrite local logs/history
 - start a new run without local acceptance
+- accept or confirm a proposal from status/heartbeat data alone
 
 ## Proposal And Amendment Boundaries
 
@@ -180,7 +183,7 @@ Preserve audit history.
 
 Do not delete important history. Clearing a violation should mark it cleared and log the clear event. Death and fatal/character-fail violations are not clearable.
 
-Remote violation-clear messages may clear imported shared violations only. They must not clear local authoritative violations.
+Remote violation-clear messages may clear imported shared violations only. They must not clear local authoritative violations. Shared violation clears are accepted only from the peer that owns the shared violation, and heartbeat snapshots must not reactivate an imported shared violation that was already cleared locally.
 
 Logs should display newest first in the UI.
 
