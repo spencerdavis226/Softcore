@@ -44,12 +44,25 @@ local RUN_LAYOUT = {
 RUN_LAYOUT.COLUMN_WIDTH = math.floor((RUN_LAYOUT.CONTENT_WIDTH - RUN_LAYOUT.COLUMN_GAP) / 2)
 RUN_LAYOUT.RIGHT_COLUMN_X = RUN_LAYOUT.COLUMN_WIDTH + RUN_LAYOUT.COLUMN_GAP
 SC.MasterUIRunLayout = RUN_LAYOUT
-local LOG_ROWS = 26
-local LOG_ROW_TOP = -66
-local LOG_ROW_HEIGHT = 18
-local VIOLATION_ROWS = LOG_ROWS
-local VIOLATION_ROW_TOP = LOG_ROW_TOP
-local VIOLATION_ROW_HEIGHT = LOG_ROW_HEIGHT
+local AUDIT_LIST_LAYOUT = {
+    CONTENT_WIDTH = 690,
+    SUMMARY_TOP = -34,
+    COLUMN_TOP = -58,
+    DIVIDER_TOP = -72,
+    ROW_TOP = -86,
+    ROW_HEIGHT = 34,
+    FOOTER_HEIGHT = 36,
+    ROW_TEXT_INSET = 10,
+    SCROLL_RIGHT_INSET = 24,
+}
+AUDIT_LIST_LAYOUT.VISIBLE_ROWS = math.floor((PANEL_HEIGHT + AUDIT_LIST_LAYOUT.ROW_TOP - AUDIT_LIST_LAYOUT.FOOTER_HEIGHT - 8) / AUDIT_LIST_LAYOUT.ROW_HEIGHT)
+local LOG_UI_MAX_ENTRIES = 1000
+local LOG_ROWS = AUDIT_LIST_LAYOUT.VISIBLE_ROWS
+local LOG_ROW_TOP = AUDIT_LIST_LAYOUT.ROW_TOP
+local LOG_ROW_HEIGHT = AUDIT_LIST_LAYOUT.ROW_HEIGHT
+local VIOLATION_ROWS = AUDIT_LIST_LAYOUT.VISIBLE_ROWS
+local VIOLATION_ROW_TOP = AUDIT_LIST_LAYOUT.ROW_TOP
+local VIOLATION_ROW_HEIGHT = AUDIT_LIST_LAYOUT.ROW_HEIGHT
 local OVERVIEW_PARTY_ROWS = 5
 local OVERVIEW_LAYOUT = {
     CONTENT_WIDTH = 690,
@@ -310,17 +323,21 @@ local function ShouldShowLogEntry(entry)
     return true
 end
 
-local function GetVisibleLogEntries(log)
+local function GetVisibleLogEntries(log, maxEntries)
     local entries = {}
+    local totalVisible = 0
 
     for index = #log, 1, -1 do
         local entry = log[index]
         if ShouldShowLogEntry(entry) then
-            table.insert(entries, entry)
+            totalVisible = totalVisible + 1
+            if not maxEntries or #entries < maxEntries then
+                table.insert(entries, entry)
+            end
         end
     end
 
-    return entries
+    return entries, totalVisible
 end
 
 local LOG_VIOLATION_LABELS = {
@@ -531,6 +548,78 @@ local function CreateLabel(parent, text, x, y, template, width)
     end
     fs:SetText(text)
     return fs
+end
+
+local function CreateAuditColumn(parent, text, x, width)
+    local label = CreateLabel(parent, text, x, AUDIT_LIST_LAYOUT.COLUMN_TOP, "GameFontNormalSmall", width)
+    label:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
+    return label
+end
+
+local function CreateAuditListFooter(parent)
+    local footer = CreateFrame("Frame", nil, parent)
+    footer:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 0, 0)
+    footer:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
+    footer:SetHeight(AUDIT_LIST_LAYOUT.FOOTER_HEIGHT)
+    local divider = footer:CreateTexture(nil, "ARTWORK")
+    divider:SetHeight(1)
+    divider:SetPoint("TOPLEFT", footer, "TOPLEFT", 0, 0)
+    divider:SetPoint("TOPRIGHT", footer, "TOPRIGHT", -AUDIT_LIST_LAYOUT.SCROLL_RIGHT_INSET, 0)
+    divider:SetColorTexture(0.72, 0.49, 0.18, 0.30)
+    footer.text = CreateField(footer, 0, -11, 500)
+    footer.text:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
+    return footer
+end
+
+local function CreateAuditRow(parent, index)
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetSize(AUDIT_LIST_LAYOUT.CONTENT_WIDTH, AUDIT_LIST_LAYOUT.ROW_HEIGHT)
+    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, AUDIT_LIST_LAYOUT.ROW_TOP - ((index - 1) * AUDIT_LIST_LAYOUT.ROW_HEIGHT))
+    row:EnableMouse(true)
+
+    row.bg = row:CreateTexture(nil, "BACKGROUND")
+    row.bg:SetAllPoints(row)
+    row.bg:SetColorTexture(0.82, 0.58, 0.22, index % 2 == 0 and 0.08 or 0.035)
+
+    row.accent = row:CreateTexture(nil, "ARTWORK")
+    row.accent:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -3)
+    row.accent:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 3)
+    row.accent:SetWidth(3)
+    row.accent:SetColorTexture(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b, 0.85)
+
+    return row
+end
+
+local function SetAuditRowAccent(row, color)
+    if not row or not row.accent then return end
+    color = color or BODY_TEXT
+    row.accent:SetColorTexture(color.r, color.g, color.b, 0.85)
+end
+
+local function SetAuditRowTooltip(row, title, body)
+    if not row then return end
+    if (not title or title == "") and (not body or body == "") then
+        row:SetScript("OnEnter", nil)
+        row:SetScript("OnLeave", nil)
+        return
+    end
+
+    row:SetScript("OnEnter", function(self)
+        if not GameTooltip then return end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        if title and title ~= "" then
+            GameTooltip:AddLine(title, GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
+        end
+        if body and body ~= "" then
+            GameTooltip:AddLine(body, BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b, true)
+        end
+        GameTooltip:Show()
+    end)
+    row:SetScript("OnLeave", function()
+        if GameTooltip then
+            GameTooltip:Hide()
+        end
+    end)
 end
 
 function RUN_LAYOUT:SectionHeight(rowCount, extraHeight)
@@ -2159,8 +2248,38 @@ end
 
 local function RefreshViolationsPanel(frame)
     local violations = GetSortedActiveViolations()
+    local clearable = 0
+    local shared = 0
+
+    for _, violation in ipairs(violations) do
+        if SC:IsViolationClearable(violation) then
+            clearable = clearable + 1
+        end
+        if violation.shared then
+            shared = shared + 1
+        end
+    end
+
+    if frame.violations.summary then
+        local summary
+        if #violations == 0 then
+            summary = "No active issues."
+        else
+            summary = tostring(#violations) .. " active"
+            if clearable > 0 then
+                summary = summary .. " / " .. tostring(clearable) .. " clearable"
+            end
+            if shared > 0 then
+                summary = summary .. " / " .. tostring(shared) .. " shared"
+            end
+        end
+        frame.violations.summary:SetText(summary)
+    end
 
     frame.violations.empty:SetShown(#violations == 0)
+    if frame.violations.footer and frame.violations.footer.text then
+        frame.violations.footer.text:SetText(#violations == 0 and "Cleared issues remain in the audit log." or "Only active issues are listed here.")
+    end
     if frame.violations.scroll then
         FauxScrollFrame_Update(frame.violations.scroll, #violations, VIOLATION_ROWS, VIOLATION_ROW_HEIGHT)
     end
@@ -2170,11 +2289,17 @@ local function RefreshViolationsPanel(frame)
         local violation = violations[offset + rowIndex]
 
         if violation then
+            local severity = tostring(violation.severity or "")
+            local tone = (violation.type == "death" or severity == "FATAL" or severity == "CHARACTER_FAIL") and RED_TEXT or GOLD_TEXT
+
             row:Show()
-            row.time:SetText(Trunc(FormatTime(violation.createdAt), 19))
-            row.owner:SetText(Trunc(FormatPlayerLabel(violation.playerKey), 16))
-            row.type:SetText(Trunc(FormatViolationLogLabel(violation.type), 18))
-            SetCompactText(row.detail, FormatViolationDetail(violation), 38)
+            SetAuditRowAccent(row, tone)
+            row.time:SetText(Trunc(FormatTime(violation.createdAt), 16))
+            row.owner:SetText(Trunc(FormatPlayerLabel(violation.playerKey), 18))
+            row.type:SetText(Trunc(FormatViolationLogLabel(violation.type), 20))
+            row.type:SetTextColor(tone.r, tone.g, tone.b)
+            SetCompactText(row.detail, FormatViolationDetail(violation), 74)
+            SetAuditRowTooltip(row, FormatViolationLogLabel(violation.type), FormatViolationDetail(violation))
 
             if SC:IsViolationClearable(violation) then
                 local violationId = violation.id
@@ -2190,6 +2315,7 @@ local function RefreshViolationsPanel(frame)
             end
         else
             row:Hide()
+            SetAuditRowTooltip(row, nil, nil)
             row.clearBtn:SetScript("OnClick", nil)
         end
     end
@@ -2198,12 +2324,33 @@ end
 local function RefreshLogPanel(frame)
     local db = SC.db or SoftcoreDB
     local log = (db and db.eventLog) or {}
-    local entries = GetVisibleLogEntries(log)
+    local entries, totalVisible = GetVisibleLogEntries(log, LOG_UI_MAX_ENTRIES)
+    local totalStored = #log
+    local capped = totalVisible > #entries
+
+    if frame.log.summary then
+        if totalVisible == 0 then
+            frame.log.summary:SetText("No visible audit rows.")
+        elseif capped then
+            frame.log.summary:SetText("Showing newest " .. tostring(#entries) .. " of " .. tostring(totalVisible) .. " visible rows.")
+        else
+            frame.log.summary:SetText("Showing " .. tostring(totalVisible) .. " visible audit rows.")
+        end
+    end
+
+    if frame.log.footer and frame.log.footer.text then
+        local footerText = "CSV export includes all " .. tostring(totalStored) .. " stored rows."
+        if capped then
+            footerText = footerText .. " Menu list is capped for responsiveness."
+        end
+        frame.log.footer.text:SetText(footerText)
+    end
 
     if #entries == 0 then
         frame.log.empty:Show()
         for _, row in ipairs(frame.log.rows) do
             row:Hide()
+            SetAuditRowTooltip(row, nil, nil)
         end
         if frame.log.scroll then
             FauxScrollFrame_Update(frame.log.scroll, 0, LOG_ROWS, LOG_ROW_HEIGHT)
@@ -2222,17 +2369,116 @@ local function RefreshLogPanel(frame)
 
         if entry then
             local eventLabel, eventColor = FormatLogEvent(entry)
+            local message = FormatLogMessage(entry)
 
             row:Show()
-            row.time:SetText(FormatTime(entry.time))
-            row.actor:SetText(Trunc(FormatPlayerLabel(entry.actorKey or entry.playerKey), 16))
-            row.kind:SetText(Trunc(eventLabel, 18))
+            SetAuditRowAccent(row, eventColor)
+            row.time:SetText(Trunc(FormatTime(entry.time), 16))
+            row.actor:SetText(Trunc(FormatPlayerLabel(entry.actorKey or entry.playerKey), 18))
+            row.kind:SetText(Trunc(eventLabel, 20))
             row.kind:SetTextColor(eventColor.r, eventColor.g, eventColor.b)
-            SetCompactText(row.message, FormatLogMessage(entry), 52)
+            SetCompactText(row.message, message, 92)
+            SetAuditRowTooltip(row, eventLabel, message)
         else
             row:Hide()
+            SetAuditRowTooltip(row, nil, nil)
         end
     end
+end
+
+local function CreateViolationsTab(frame)
+    local violationsPanel = CreatePanel(frame)
+    frame.panels[TAB_VIOLATIONS] = violationsPanel
+    frame.violations = { rows = {} }
+
+    CreateSectionHeader(violationsPanel, "Active Violations", 0, 0, AUDIT_LIST_LAYOUT.CONTENT_WIDTH)
+    frame.violations.summary = CreateField(violationsPanel, 0, AUDIT_LIST_LAYOUT.SUMMARY_TOP, 420)
+    frame.violations.summary:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
+    CreateAuditColumn(violationsPanel, "Issue", 10, 142)
+    CreateAuditColumn(violationsPanel, "Character", 164, 110)
+    CreateAuditColumn(violationsPanel, "Time", 286, 116)
+    local violColSep = CreateDivider(violationsPanel, 0, AUDIT_LIST_LAYOUT.DIVIDER_TOP, AUDIT_LIST_LAYOUT.CONTENT_WIDTH - AUDIT_LIST_LAYOUT.SCROLL_RIGHT_INSET)
+    violColSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
+
+    frame.violations.empty = CreateField(violationsPanel, 0, AUDIT_LIST_LAYOUT.ROW_TOP, 620)
+    frame.violations.empty:SetText("No active violations.")
+    frame.violations.scroll = CreateFrame("ScrollFrame", "SoftcoreViolationsScrollFrame", violationsPanel, "FauxScrollFrameTemplate")
+    frame.violations.scroll:SetPoint("TOPLEFT", violationsPanel, "TOPLEFT", 0, VIOLATION_ROW_TOP)
+    frame.violations.scroll:SetPoint("BOTTOMRIGHT", violationsPanel, "BOTTOMRIGHT", -AUDIT_LIST_LAYOUT.SCROLL_RIGHT_INSET, AUDIT_LIST_LAYOUT.FOOTER_HEIGHT + 4)
+    frame.violations.scroll:SetScript("OnVerticalScroll", function(self, offset)
+        FauxScrollFrame_OnVerticalScroll(self, offset, VIOLATION_ROW_HEIGHT, function()
+            SC:MasterUI_Refresh()
+        end)
+    end)
+
+    for index = 1, VIOLATION_ROWS do
+        local row = CreateAuditRow(violationsPanel, index)
+        row.type = CreateField(row, AUDIT_LIST_LAYOUT.ROW_TEXT_INSET, -4, 142)
+        row.owner = CreateField(row, 164, -4, 110)
+        row.time = CreateField(row, 286, -4, 116)
+        row.detail = CreateField(row, AUDIT_LIST_LAYOUT.ROW_TEXT_INSET, -19, 566)
+        row.time:SetWordWrap(false)
+        row.owner:SetWordWrap(false)
+        row.type:SetWordWrap(false)
+        row.detail:SetWordWrap(false)
+        row.clearBtn = CreateButton(row, "Clear", 58, 17)
+        row.clearBtn:SetPoint("RIGHT", row, "RIGHT", -18, 1)
+        frame.violations.rows[index] = row
+    end
+
+    frame.violations.footer = CreateAuditListFooter(violationsPanel)
+end
+
+local function CreateLogTab(frame)
+    local logPanel = CreatePanel(frame)
+    frame.panels[TAB_LOG] = logPanel
+    frame.log = { rows = {} }
+
+    CreateSectionHeader(logPanel, "Audit Log", 0, 0, AUDIT_LIST_LAYOUT.CONTENT_WIDTH)
+    frame.log.summary = CreateField(logPanel, 0, AUDIT_LIST_LAYOUT.SUMMARY_TOP, 440)
+    frame.log.summary:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
+    CreateAuditColumn(logPanel, "Event", 10, 132)
+    CreateAuditColumn(logPanel, "Character", 154, 120)
+    CreateAuditColumn(logPanel, "Time", 286, 116)
+    local logColSep = CreateDivider(logPanel, 0, AUDIT_LIST_LAYOUT.DIVIDER_TOP, AUDIT_LIST_LAYOUT.CONTENT_WIDTH - AUDIT_LIST_LAYOUT.SCROLL_RIGHT_INSET)
+    logColSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
+
+    frame.log.empty = CreateField(logPanel, 0, AUDIT_LIST_LAYOUT.ROW_TOP, 620)
+    frame.log.empty:SetText("No events recorded.")
+    frame.log.scroll = CreateFrame("ScrollFrame", "SoftcoreLogScrollFrame", logPanel, "FauxScrollFrameTemplate")
+    frame.log.scroll:SetPoint("TOPLEFT", logPanel, "TOPLEFT", 0, LOG_ROW_TOP)
+    frame.log.scroll:SetPoint("BOTTOMRIGHT", logPanel, "BOTTOMRIGHT", -AUDIT_LIST_LAYOUT.SCROLL_RIGHT_INSET, AUDIT_LIST_LAYOUT.FOOTER_HEIGHT + 4)
+    frame.log.scroll:SetScript("OnVerticalScroll", function(self, offset)
+        FauxScrollFrame_OnVerticalScroll(self, offset, LOG_ROW_HEIGHT, function()
+            SC:MasterUI_Refresh()
+        end)
+    end)
+
+    for index = 1, LOG_ROWS do
+        local row = CreateAuditRow(logPanel, index)
+        row.kind = CreateField(row, AUDIT_LIST_LAYOUT.ROW_TEXT_INSET, -4, 132)
+        row.actor = CreateField(row, 154, -4, 120)
+        row.time = CreateField(row, 286, -4, 116)
+        row.message = CreateField(row, AUDIT_LIST_LAYOUT.ROW_TEXT_INSET, -19, 650)
+        row.time:SetWordWrap(false)
+        row.actor:SetWordWrap(false)
+        row.kind:SetWordWrap(false)
+        row.message:SetWordWrap(false)
+        frame.log.rows[index] = row
+    end
+
+    frame.log.footer = CreateAuditListFooter(logPanel)
+    frame.log.exportBtn = CreateButton(logPanel, "Export CSV", 96, 24)
+    frame.log.exportBtn:SetPoint("BOTTOMRIGHT", logPanel, "BOTTOMRIGHT", -AUDIT_LIST_LAYOUT.SCROLL_RIGHT_INSET, 3)
+    frame.log.exportBtn:SetScript("OnClick", function()
+        if SC.ShowRunExport then
+            SC:ShowRunExport()
+        elseif SC.PrintRunExport then
+            SC:PrintRunExport()
+        else
+            Print("CSV export is not loaded.")
+        end
+    end)
 end
 
 local function CreateAchievementRow(parent, index)
@@ -3159,109 +3405,8 @@ function SC:OpenMasterWindow(focusTab)
 
     CreateOverviewTab(frame)
 
-    local violationsPanel = CreatePanel(frame)
-    frame.panels[TAB_VIOLATIONS] = violationsPanel
-    frame.violations = { rows = {} }
-    CreateSectionHeader(violationsPanel, "Active Violations", 0, 0, 650)
-    CreateLabel(violationsPanel, "Time", 0, -38, "GameFontNormalSmall", 130)
-    CreateLabel(violationsPanel, "Character", 134, -38, "GameFontNormalSmall", 100)
-    CreateLabel(violationsPanel, "Issue", 242, -38, "GameFontNormalSmall", 128)
-    CreateLabel(violationsPanel, "Details", 378, -38, "GameFontNormalSmall", 230)
-    local violColSep = violationsPanel:CreateTexture(nil, "ARTWORK")
-    violColSep:SetHeight(1)
-    violColSep:SetPoint("TOPLEFT",  violationsPanel, "TOPLEFT",  0, -53)
-    violColSep:SetPoint("TOPRIGHT", violationsPanel, "TOPRIGHT", -20, -53)
-    violColSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
-    frame.violations.empty = CreateField(violationsPanel, 0, -66, 620)
-    frame.violations.empty:SetText("No active violations.")
-    frame.violations.scroll = CreateFrame("ScrollFrame", "SoftcoreViolationsScrollFrame", violationsPanel, "FauxScrollFrameTemplate")
-    frame.violations.scroll:SetPoint("TOPLEFT", violationsPanel, "TOPLEFT", 0, VIOLATION_ROW_TOP)
-    frame.violations.scroll:SetPoint("BOTTOMRIGHT", violationsPanel, "BOTTOMRIGHT", -24, 18)
-    frame.violations.scroll:SetScript("OnVerticalScroll", function(self, offset)
-        FauxScrollFrame_OnVerticalScroll(self, offset, VIOLATION_ROW_HEIGHT, function()
-            SC:MasterUI_Refresh()
-        end)
-    end)
-    for index = 1, VIOLATION_ROWS do
-        local row = CreateFrame("Frame", nil, violationsPanel)
-        row:SetSize(690, VIOLATION_ROW_HEIGHT)
-        row:SetPoint("TOPLEFT", violationsPanel, "TOPLEFT", 0, VIOLATION_ROW_TOP - ((index - 1) * VIOLATION_ROW_HEIGHT))
-        if index % 2 == 0 then
-            local rowBg = row:CreateTexture(nil, "BACKGROUND")
-            rowBg:SetAllPoints(row)
-            rowBg:SetColorTexture(0.82, 0.58, 0.22, 0.08)
-        end
-        row.time = CreateField(row, 0, 0, 130)
-        row.owner = CreateField(row, 134, 0, 100)
-        row.type = CreateField(row, 242, 0, 128)
-        row.detail = CreateField(row, 378, 0, 230)
-        row.time:ClearAllPoints()
-        row.time:SetPoint("LEFT", row, "LEFT", 0, 0)
-        row.owner:ClearAllPoints()
-        row.owner:SetPoint("LEFT", row, "LEFT", 134, 0)
-        row.type:ClearAllPoints()
-        row.type:SetPoint("LEFT", row, "LEFT", 242, 0)
-        row.detail:ClearAllPoints()
-        row.detail:SetPoint("LEFT", row, "LEFT", 378, 0)
-        row.time:SetWordWrap(false)
-        row.owner:SetWordWrap(false)
-        row.type:SetWordWrap(false)
-        row.detail:SetWordWrap(false)
-        row.clearBtn = CreateButton(row, "Clear", 58, 17)
-        row.clearBtn:SetPoint("RIGHT", row, "RIGHT", -18, 0)
-        frame.violations.rows[index] = row
-    end
-
-    local logPanel = CreatePanel(frame)
-    frame.panels[TAB_LOG] = logPanel
-    frame.log = { rows = {} }
-    CreateSectionHeader(logPanel, "Audit Log", 0, 0, 650)
-    CreateLabel(logPanel, "Time", 0, -38, "GameFontNormalSmall", 130)
-    CreateLabel(logPanel, "Character", 134, -38, "GameFontNormalSmall", 100)
-    CreateLabel(logPanel, "Event", 242, -38, "GameFontNormalSmall", 128)
-    CreateLabel(logPanel, "Message", 378, -38, "GameFontNormalSmall", 300)
-    local logColSep = logPanel:CreateTexture(nil, "ARTWORK")
-    logColSep:SetHeight(1)
-    logColSep:SetPoint("TOPLEFT",  logPanel, "TOPLEFT",  0, -53)
-    logColSep:SetPoint("TOPRIGHT", logPanel, "TOPRIGHT", -20, -53)
-    logColSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
-    frame.log.empty = CreateField(logPanel, 0, -66, 620)
-    frame.log.empty:SetText("No events recorded.")
-    frame.log.scroll = CreateFrame("ScrollFrame", "SoftcoreLogScrollFrame", logPanel, "FauxScrollFrameTemplate")
-    frame.log.scroll:SetPoint("TOPLEFT", logPanel, "TOPLEFT", 0, LOG_ROW_TOP)
-    frame.log.scroll:SetPoint("BOTTOMRIGHT", logPanel, "BOTTOMRIGHT", -24, 18)
-    frame.log.scroll:SetScript("OnVerticalScroll", function(self, offset)
-        FauxScrollFrame_OnVerticalScroll(self, offset, LOG_ROW_HEIGHT, function()
-            SC:MasterUI_Refresh()
-        end)
-    end)
-    for index = 1, LOG_ROWS do
-        local row = CreateFrame("Frame", nil, logPanel)
-        row:SetSize(690, LOG_ROW_HEIGHT)
-        row:SetPoint("TOPLEFT", logPanel, "TOPLEFT", 0, LOG_ROW_TOP - ((index - 1) * LOG_ROW_HEIGHT))
-        if index % 2 == 0 then
-            local rowBg = row:CreateTexture(nil, "BACKGROUND")
-            rowBg:SetAllPoints(row)
-            rowBg:SetColorTexture(0.82, 0.58, 0.22, 0.08)
-        end
-        row.time = CreateField(row, 0, 0, 130)
-        row.actor = CreateField(row, 134, 0, 100)
-        row.kind = CreateField(row, 242, 0, 128)
-        row.message = CreateField(row, 378, 0, 300)
-        row.time:ClearAllPoints()
-        row.time:SetPoint("LEFT", row, "LEFT", 0, 0)
-        row.actor:ClearAllPoints()
-        row.actor:SetPoint("LEFT", row, "LEFT", 134, 0)
-        row.kind:ClearAllPoints()
-        row.kind:SetPoint("LEFT", row, "LEFT", 242, 0)
-        row.message:ClearAllPoints()
-        row.message:SetPoint("LEFT", row, "LEFT", 378, 0)
-        row.time:SetWordWrap(false)
-        row.actor:SetWordWrap(false)
-        row.kind:SetWordWrap(false)
-        row.message:SetWordWrap(false)
-        frame.log.rows[index] = row
-    end
+    CreateViolationsTab(frame)
+    CreateLogTab(frame)
 
     local achievementsPanel = CreatePanel(frame)
     frame.panels[TAB_ACHIEVEMENTS] = achievementsPanel

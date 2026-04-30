@@ -116,6 +116,17 @@ Rules:
 - show time, event kind, character when space allows, and a compact message
 - do not add actions here
 
+## Violations And Log Tabs
+
+Violations and Log are dense audit surfaces, so they should share the same scalable list language:
+
+- use a fixed pool of virtualized rows rather than creating one frame per stored entry
+- keep a short summary line above the list and low-priority count/export context in the footer
+- show newest-first rows with a colored left accent, compact primary metadata, and a second-line detail/message
+- preserve full row text in hover tooltips when the visible row is compacted
+- cap the Log tab's in-menu display to the newest 1000 displayable entries for responsiveness while keeping CSV/debug exports complete
+- keep the Log tab export button always available in the footer; do not add an export action to Violations
+
 ### Party Ledger
 
 The ledger is a five-member surface because normal party scale is the product boundary.
