@@ -227,8 +227,6 @@ function SC:GetAchievementDefinitions()
     local result = {}
     local maxLevel = GetMaxLevel()
 
-    AddDefinition(result, "acct_first_run", "ACCOUNT", "Account", "First Steps", "Start your first Softcore run on this account.", "BINARY")
-
     for level = 10, maxLevel, 10 do
         AddDefinition(result, "char_level_" .. tostring(level), "ACCOUNT", "Leveling", "Still Breathing: " .. tostring(level), "Reach level " .. tostring(level) .. " in an active run started at level 10 or below.", "LEVEL", level)
     end
@@ -568,7 +566,6 @@ function SC:Achievements_OnRunStart(runOptions)
         ruleViolations = {},
     }
 
-    Earn("acct_first_run", "ACCOUNT", "First Steps")
     self:Achievements_OnLevelChanged(db.character.level)
 end
 

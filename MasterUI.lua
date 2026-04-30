@@ -149,7 +149,6 @@ local CLASS_LABELS = {
 }
 
 local ACHIEVEMENT_CATEGORY_ORDER = {
-    "Account",
     "Leveling",
     "Max Level",
     "Classes",
@@ -157,7 +156,6 @@ local ACHIEVEMENT_CATEGORY_ORDER = {
 }
 
 local ACHIEVEMENT_CATEGORY_META = {
-    Account = { label = "Account", icon = "Interface\\Icons\\Achievement_General", color = BLUE_TEXT },
     Leveling = { label = "Leveling", icon = "Interface\\Icons\\Achievement_Level_10", color = GREEN_TEXT },
     ["Max Level"] = { label = "Max Level", icon = "Interface\\Icons\\INV_Misc_Trophy_Argent", color = GOLD_TEXT },
     Classes = { label = "Classes", icon = "Interface\\Icons\\Achievement_Character_Human_Male", color = PURPLE_TEXT },
