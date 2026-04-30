@@ -65,6 +65,9 @@ local OVERVIEW_LAYOUT = {
     LEDGER_HEADER_HEIGHT = 38,
     LEDGER_ROW_HEIGHT = 44,
     LEDGER_ROW_GAP = 6,
+    LEDGER_BADGE_WIDTH = 136,
+    LEDGER_BADGE_HEIGHT = 24,
+    LEDGER_BADGE_GAP = 12,
 }
 OVERVIEW_LAYOUT.LEDGER_MAX_ROWS_HEIGHT = (OVERVIEW_PARTY_ROWS * OVERVIEW_LAYOUT.LEDGER_ROW_HEIGHT)
     + ((OVERVIEW_PARTY_ROWS - 1) * OVERVIEW_LAYOUT.LEDGER_ROW_GAP)
@@ -1438,11 +1441,16 @@ local function CreateOverviewPartyRow(parent, index, width)
     row.meta:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
     row.meta:SetWordWrap(false)
 
-    row.classBadge = CreateOverviewSmallBadge(row, 104, 24)
-    row.classBadge:SetPoint("TOPLEFT", row, "TOPLEFT", 252, -10)
-    row.statusPill = CreateStatusPill(row, 384, -9, 112)
-    row.totalBadge = CreateOverviewSmallBadge(row, 150, 24)
-    row.totalBadge:SetPoint("TOPRIGHT", row, "TOPRIGHT", -14, -10)
+    local badgeWidth = OVERVIEW_LAYOUT.LEDGER_BADGE_WIDTH
+    local badgeHeight = OVERVIEW_LAYOUT.LEDGER_BADGE_HEIGHT
+    local badgeGap = OVERVIEW_LAYOUT.LEDGER_BADGE_GAP
+    local badgeLeft = width - 14 - (badgeWidth * 3) - (badgeGap * 2)
+    row.classBadge = CreateOverviewSmallBadge(row, badgeWidth, badgeHeight)
+    row.classBadge:SetPoint("TOPLEFT", row, "TOPLEFT", badgeLeft, -10)
+    row.statusPill = CreateStatusPill(row, badgeLeft + badgeWidth + badgeGap, -9, badgeWidth)
+    row.statusPill:SetHeight(badgeHeight)
+    row.totalBadge = CreateOverviewSmallBadge(row, badgeWidth, badgeHeight)
+    row.totalBadge:SetPoint("TOPLEFT", row, "TOPLEFT", badgeLeft + ((badgeWidth + badgeGap) * 2), -10)
     row:Hide()
     return row
 end
