@@ -60,6 +60,18 @@ end
 
 local ACHIEVEMENT_NAME_MAX_LEN = 34
 local ACHIEVEMENT_DESC_MAX_LEN = 160
+local lastAchievementSoundAt = 0
+
+local function NotifyAchievementEarned(detail)
+    if DEFAULT_CHAT_FRAME then
+        DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r achievement earned: |cffffd100" .. tostring(detail or "Achievement") .. "|r")
+    end
+    local now = time()
+    if SC.PlayUISound and now ~= lastAchievementSoundAt then
+        lastAchievementSoundAt = now
+        SC:PlayUISound("ACHIEVEMENT_EARNED")
+    end
+end
 
 local function ClampAchievementText(value, maxLen)
     local text = tostring(value or "")
@@ -135,6 +147,8 @@ local function Earn(id, scope, detail)
         })
     end
 
+    NotifyAchievementEarned(detail or id)
+
     return true
 end
 
@@ -196,6 +210,10 @@ local function IsIronmanPreset(preset)
     return preset == "IRONMAN" or preset == "IRON_VIGIL"
 end
 
+local function IsChefSpecialPreset(preset)
+    return preset == "CHEF_SPECIAL"
+end
+
 local function IsCameraEnforcedRules(rules)
     if not rules then return false end
     return IsDisallowed(rules.actionCam)
@@ -238,6 +256,7 @@ function SC:GetAchievementDefinitions()
 
     AddDefinition(result, "char_max_level", "ACCOUNT", "Max Level", "Softcore Champion", "Reach max level after starting the run at level 10 or below.", "MAX_LEVEL")
     AddDefinition(result, "char_clean_max_level", "ACCOUNT", "Max Level", "Clean Finish", "Reach max level on an eligible run without any local violations.", "CLEAN_MAX")
+    AddDefinition(result, "char_chef_special_max_level", "ACCOUNT", "Max Level", "Chef's Table", "Reach max level using the Chef's Special preset without rule amendments.", "CHEF_SPECIAL_MAX")
     AddDefinition(result, "char_ironman_max_level", "ACCOUNT", "Max Level", "Iron Will", "Reach max level using an Ironman preset.", "IRONMAN_MAX")
     AddDefinition(result, "char_camera_max_level", "ACCOUNT", "Max Level", "Locked Perspective", "Reach max level on an eligible run with Cinematic Camera enforced from run start.", "CAMERA_MAX")
     AddDefinition(result, "char_camera_ironman_no_flight_paths_max_level", "ACCOUNT", "Max Level", "Iron Vigil", "Reach max level using the Iron Vigil preset.", "CAMERA_IRONMAN_NO_FLIGHT_PATHS_MAX")
@@ -334,6 +353,19 @@ local function BuildProgress(definition, earned)
             return 0, "Violation recorded"
         end
         return math.min(currentLevel / maxLevel, 1), "Clean run: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
+    end
+
+    if definition.progressKind == "CHEF_SPECIAL_MAX" then
+        if not eligibility.startedAtOrBelow10 then
+            return 0, "Started above level 10"
+        end
+        if not IsChefSpecialPreset(eligibility.initialPreset) then
+            return 0, "Not a Chef's Special start"
+        end
+        if eligibility.anyRuleChanged then
+            return 0, "Rules changed"
+        end
+        return math.min(currentLevel / maxLevel, 1), "Chef's Special: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
     end
 
     if definition.progressKind == "IRONMAN_MAX" then
@@ -509,6 +541,24 @@ function SC:GetAchievementRows()
         })
     end
 
+    local award = self.GetCompletionAward and self:GetCompletionAward() or nil
+    if award then
+        table.insert(rows, {
+            id = "completion_award_" .. tostring(award.id or award.runId or "latest"),
+            scope = "CHARACTER",
+            category = "Award",
+            name = "Max-Level Award",
+            description = "Reopen the parchment award for " .. tostring(award.characterName or "this character") .. ".",
+            progressKind = "COMPLETION_AWARD",
+            earned = true,
+            earnedAt = award.completedAt,
+            progressValue = 1,
+            progressText = "Click to view award",
+            sortOrder = -1000,
+            isCompletionAward = true,
+        })
+    end
+
     table.sort(rows, function(left, right)
         if left.earned ~= right.earned then
             return not left.earned
@@ -574,10 +624,17 @@ function SC:Achievements_OnLevelChanged(level)
     if not IsLocalActiveAndValid(db) then return end
 
     local eligibility = CurrentEligibility()
-    if not eligibility or eligibility.failed then return end
-
     level = tonumber(level or db.character.level or 0) or 0
     local maxLevel = GetMaxLevel()
+    if not eligibility then
+        local fallbackStartLevel = tonumber(db.run and db.run.startLevel or 0) or 0
+        if level >= maxLevel and fallbackStartLevel < maxLevel and self.CompleteRunAtMaxLevel then
+            self:CompleteRunAtMaxLevel(maxLevel)
+        end
+        return
+    end
+    if eligibility.failed then return end
+
     local startLevel = tonumber(eligibility.startLevel or db.run.startLevel or 0) or 0
 
     for milestone = 10, maxLevel, 10 do
@@ -592,7 +649,11 @@ function SC:Achievements_OnLevelChanged(level)
         end
     end
 
+    local reachedMaxFromLeveling = level >= maxLevel and startLevel < maxLevel
     if level < maxLevel or not CanEarnMaxRunAchievement(eligibility) then
+        if reachedMaxFromLeveling and self.CompleteRunAtMaxLevel then
+            self:CompleteRunAtMaxLevel(maxLevel)
+        end
         return
     end
 
@@ -606,6 +667,10 @@ function SC:Achievements_OnLevelChanged(level)
 
     if not eligibility.hadViolation then
         Earn("char_clean_max_level", "CHARACTER", "Clean Finish")
+    end
+
+    if IsChefSpecialPreset(eligibility.initialPreset) and not eligibility.anyRuleChanged then
+        Earn("char_chef_special_max_level", "CHARACTER", "Chef's Table")
     end
 
     if IsIronmanPreset(eligibility.initialPreset) and IsIronmanRules(eligibility.initialRules) and not eligibility.anyRuleChanged then
@@ -651,6 +716,10 @@ function SC:Achievements_OnLevelChanged(level)
         if RequirementStayedLocked(eligibility, db.run.ruleset, spec.rule) then
             Earn("char_max_" .. spec.id, "CHARACTER", spec.name)
         end
+    end
+
+    if self.CompleteRunAtMaxLevel then
+        self:CompleteRunAtMaxLevel(maxLevel)
     end
 end
 

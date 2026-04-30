@@ -93,6 +93,8 @@ function SC:PlayUISound(event)
         DEATH             = SK.IG_QUEST_FAILED               or 851,
         VIOLATION_CLEARED = SK.IG_QUEST_OBJECTIVE_COMPLETE   or 879,
         PROPOSAL_RECEIVED = SK.READY_CHECK                   or 8960,
+        ACHIEVEMENT_EARNED = SK.UI_EpicLoot_Toasts           or SK.UI_BonusLootRoll_Start or 31578,
+        RUN_COMPLETED     = SK.UI_AzeriteEmpoweredItem       or SK.UI_EpicLoot_Toasts or 31578,
     }
     local id = sounds[event]
     if id then PlaySound(id, "Master") end
@@ -285,10 +287,12 @@ local function EnsureRunDefaults(run)
     if run.active == nil then run.active = false end
     if run.valid == nil then run.valid = true end
     if run.failed == nil then run.failed = false end
+    if run.completed == nil then run.completed = false end
     if run.levelGapBlocked == nil then run.levelGapBlocked = false end
     run.runId = run.runId or nil
     run.runName = run.runName or nil
     run.startTime = run.startTime or nil
+    run.completedAt = run.completedAt or nil
     run.activeTimeSeconds = tonumber(run.activeTimeSeconds or 0) or 0
     run.activeTimeUpdatedAt = run.activeTimeUpdatedAt or nil
     run.deathCount = run.deathCount or 0
@@ -469,6 +473,150 @@ end
 
 function SC:ApplyGroupingMode(ruleset)
     return ApplyGroupingModeRules(ruleset)
+end
+
+local PRESET_AWARD_LABELS = {
+    CASUAL = "Casual",
+    CHEF_SPECIAL = "Chef's Special",
+    IRONMAN = "Ironman",
+    IRON_VIGIL = "Iron Vigil",
+    CUSTOM = "Custom",
+}
+
+local CLASS_AWARD_LABELS = {
+    DEATHKNIGHT = "Death Knight",
+    DEMONHUNTER = "Demon Hunter",
+}
+
+local function FormatAwardClass(classFile)
+    classFile = tostring(classFile or "")
+    if classFile == "" then return "Unknown" end
+    return CLASS_AWARD_LABELS[classFile] or (string.sub(classFile, 1, 1) .. string.lower(string.sub(classFile, 2)))
+end
+
+local function CountAwardViolations(violations)
+    local total, active, cleared = 0, 0, 0
+    for _, violation in ipairs(violations or {}) do
+        total = total + 1
+        if violation.status == "CLEARED" then
+            cleared = cleared + 1
+        else
+            active = active + 1
+        end
+    end
+    return total, active, cleared
+end
+
+local function CountAwardDungeons(run)
+    local order = run and run.dungeonOrder
+    if order and #order > 0 then
+        return #order
+    end
+
+    local count = 0
+    for _ in pairs((run and run.dungeons) or {}) do
+        count = count + 1
+    end
+    return count
+end
+
+local function CountAwardPartyMembers(run)
+    local count = 0
+    for _ in pairs((run and run.participants) or {}) do
+        count = count + 1
+    end
+    return count
+end
+
+function SC:GetCompletionAward()
+    local db = EnsureDatabase()
+    return db.completionAward
+end
+
+function SC:BuildCompletionAwardSnapshot(maxLevel)
+    local db = EnsureDatabase()
+    local run = db.run or {}
+    local character = db.character or GetPlayerSnapshot()
+    local totalViolations, activeViolations, clearedViolations = CountAwardViolations(db.violations)
+    local preset = run.ruleset and run.ruleset.achievementPreset or "CUSTOM"
+
+    return {
+        id = run.runId or ("SC-COMPLETION-" .. tostring(time())),
+        runId = run.runId,
+        runName = run.runName or "Softcore Run",
+        characterName = character.name,
+        realm = character.realm,
+        class = character.class,
+        classLabel = FormatAwardClass(character.class),
+        startLevel = run.startLevel or character.level,
+        completedLevel = maxLevel or character.level,
+        startedAt = run.startTime,
+        completedAt = time(),
+        activeTimeSeconds = self.GetActiveRunTimeSeconds and self:GetActiveRunTimeSeconds() or run.activeTimeSeconds or 0,
+        deaths = run.deathCount or 0,
+        totalViolations = totalViolations,
+        activeViolations = activeViolations,
+        clearedViolations = clearedViolations,
+        dungeonCount = CountAwardDungeons(run),
+        partyMembers = CountAwardPartyMembers(run),
+        rulesetHash = self.GetRulesetHash and self:GetRulesetHash() or "",
+        preset = preset,
+        presetLabel = PRESET_AWARD_LABELS[preset] or "Custom",
+        rulesetModified = run.rulesetModified == true,
+        rulesetModifiedAtLevel = run.rulesetModifiedAtLevel,
+    }
+end
+
+function SC:CompleteRunAtMaxLevel(maxLevel)
+    local db = EnsureDatabase()
+    if not db.run or not db.run.active or db.run.completed then
+        return db.completionAward
+    end
+    if self:IsLocalCharacterFailed() then
+        return nil
+    end
+
+    if self.UpdateActiveRunTime then
+        self:UpdateActiveRunTime()
+    end
+
+    local award = self:BuildCompletionAwardSnapshot(maxLevel)
+    db.completionAward = award
+    db.run.completed = true
+    db.run.completedAt = award.completedAt
+    db.run.completionAward = award
+
+    local participant = db.run.participants and db.run.participants[GetPlayerKey(db.character)]
+    if participant and participant.status ~= "FAILED" and participant.status ~= "RETIRED" then
+        participant.status = "COMPLETED"
+    end
+
+    self:AddLog("RUN_COMPLETED", "Reached max level. Softcore run completed.", {
+        runId = db.run.runId,
+        completedLevel = award.completedLevel,
+    })
+
+    db.run.active = false
+    db.run.activeTimeUpdatedAt = nil
+    db.run.partyStatus = "COMPLETED"
+
+    Print("max level reached. Run completed.")
+    self:PlayUISound("RUN_COMPLETED")
+
+    if self.Sync_BroadcastStatus then
+        self:Sync_BroadcastStatus("RUN_COMPLETED", { fast = true })
+    end
+    if self.HUD_Refresh then
+        self:HUD_Refresh()
+    end
+    if self.MasterUI_Refresh then
+        self:MasterUI_Refresh()
+    end
+    if self.ShowCompletionAward then
+        self:ShowCompletionAward(award)
+    end
+
+    return award
 end
 
 local function ArchiveCurrentRun(db, reason)
@@ -865,6 +1013,7 @@ function SC:GetLocalPlayerStatus()
         zone = db.character.zone,
         active = db.run.active,
         valid = db.run.valid,
+        completed = db.run.completed == true,
         failed = participant and participant.status == "FAILED",
         participantStatus = participant and participant.status or "NOT_IN_RUN",
         rulesetVersion = db.run.ruleset.version,
@@ -1556,6 +1705,8 @@ function SC:StartRun(runOptions)
     db.run.active = true
     db.run.valid = true
     db.run.failed = false
+    db.run.completed = false
+    db.run.completedAt = nil
     db.run.startTime = time()
     db.run.activeTimeSeconds = 0
     db.run.activeTimeUpdatedAt = db.run.startTime
@@ -1640,6 +1791,8 @@ function SC:ResetRun()
     db.run.active = false
     db.run.valid = true
     db.run.failed = false
+    db.run.completed = false
+    db.run.completedAt = nil
     db.run.startTime = nil
     db.run.activeTimeSeconds = 0
     db.run.activeTimeUpdatedAt = nil
@@ -1693,6 +1846,10 @@ function SC:GetStatusText()
 
     if run.active then
         return "Active"
+    end
+
+    if run.completed then
+        return "Completed"
     end
 
     return "Inactive"
@@ -2055,6 +2212,8 @@ local function BuildRunExportText()
     AddCsvLine(lines, "Run", "Active", run.active == true)
     AddCsvLine(lines, "Run", "Valid", run.valid ~= false)
     AddCsvLine(lines, "Run", "Failed", run.failed == true)
+    AddCsvLine(lines, "Run", "Completed", run.completed == true)
+    AddCsvLine(lines, "Run", "Completed At", FormatTime(run.completedAt))
     AddCsvLine(lines, "Run", "Started", FormatTime(run.startTime))
     AddCsvLine(lines, "Run", "Observed Time", FormatDuration(SC:GetActiveRunTimeSeconds()))
     AddCsvLine(lines, "Run", "Deaths", run.deathCount or 0)
@@ -2063,6 +2222,18 @@ local function BuildRunExportText()
     AddCsvLine(lines, "Run", "Ruleset Version", run.ruleset and run.ruleset.version or "?")
     AddCsvLine(lines, "Run", "Ruleset Hash", SC.GetRulesetHash and SC:GetRulesetHash() or "unknown")
     AddCsvLine(lines, "Run", "Party Status", SC:GetPartyStatus())
+
+    if db.completionAward then
+        local award = db.completionAward
+        AddCsvLine(lines, "Completion Award", "Run ID", award.runId or "")
+        AddCsvLine(lines, "Completion Award", "Preset", award.presetLabel or award.preset or "")
+        AddCsvLine(lines, "Completion Award", "Completed At", FormatTime(award.completedAt))
+        AddCsvLine(lines, "Completion Award", "Observed Time", FormatDuration(award.activeTimeSeconds))
+        AddCsvLine(lines, "Completion Award", "Deaths", award.deaths or 0)
+        AddCsvLine(lines, "Completion Award", "Total Violations", award.totalViolations or 0)
+        AddCsvLine(lines, "Completion Award", "Dungeons", award.dungeonCount or 0)
+        AddCsvLine(lines, "Completion Award", "Party Members", award.partyMembers or 0)
+    end
 
     if #(run.participantOrder or {}) > 0 then
         for _, playerKey in ipairs(run.participantOrder) do

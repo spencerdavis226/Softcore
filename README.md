@@ -29,12 +29,12 @@ Open with `/sc menu`, the minimap button, or the HUD.
 - **Charter**: start a run, review locked active rules in native-WoW styled rule groups, stop a run, invite party members, propose run sync, or modify rules. Proposal/amendment state is shown through the visible rule review and footer actions rather than a top detail banner.
 - **Violations**: active issues in a virtualized compact list with one-click Clear where allowed, active/clearable/shared counts, and full-detail tooltips for long rows.
 - **Log**: audit history, newest first, in a virtualized compact list. The menu caps the visible list to the newest 1000 displayable rows for responsiveness and always shows an **Export CSV** button; exports still include the full stored log. The menu and `/sc log` omit entries that are not relevant to your current rules (for example pet battles; taxi trips when flight paths are allowed even if mounts/flying are restricted; vehicle/override-bar notes when mounts and flying are both allowed; instance entries when no dungeon/unsynced-instance rules apply). A successful rule amendment produces one **Rules Amended** row per changed rule in plain language (for example "Auction house: restricted (was allowed)"); applying changes that match the current rules adds no log line.
-- **Achievements**: account-level leveling, class, ruleset, and max-level milestones in an expandable native-WoW styled journal with category summaries, progress bars, and achievement-specific icons.
+- **Achievements**: account-level leveling, class, ruleset, and max-level milestones in an expandable native-WoW styled journal with category summaries, progress bars, and achievement-specific icons. Characters that complete a max-level run also get a hidden-until-earned **Completion Award** section for reopening the parchment award screen.
 
 When no run is active, the menu focuses on starting a run. When a run is active, it focuses on current status.
 The Charter tab groups setup into Run Charter, Access and Economy, Travel and Camera, Gear and Items, and Party and Dungeons sections using a consistent two-column rule grid. Travel rule hover tooltips clarify mount-like racial and class forms such as Worgen Running Wild, Druid Travel/Flight Form, and Dracthyr Soar. Restrict Camera is a single rule with a mode selector for the active camera preference. Gear restriction uses a checkbox; when unchecked, any gear quality is allowed, and when checked, the dropdown selects the limit. A subordinate `Allow any self-crafted gear` checkbox is only active while gear restriction is enabled and is included in Modify Rules/amendment diffing. The Run Charter section also includes compact own-character death announcement checkboxes beside the core run options.
 The `Casual` preset is the low-restriction baseline: grouped mode, no gear restriction, no enforced level gap, economy access allowed (including auction/mail/trade/banks), mounts/flying/flight paths allowed, heirlooms/enchants/consumables/repeated dungeons allowed, and instanced PvP disallowed.
-The `Chef's Special` preset is the addon creator's personal preferred run profile: grouped play with white/gray gear limits, mailbox/trade/bank allowed while auction/warband/guild banks stay disallowed, mounts and flight paths allowed (but not flying mounts), and enchants/consumables/repeated dungeons enabled.
+The `Chef's Special` preset is the addon creator's personal preferred run profile: grouped play with white/gray gear limits, mailbox/trade/bank allowed while auction/warband/guild banks stay disallowed, mounts and flight paths allowed (but not flying mounts), and enchants/consumables/repeated dungeons enabled. It has its own max-level achievement, **Chef's Table**, when completed without rule amendments.
 The `Ironman` preset follows the common WoW Challenges shape and allows flight paths. `Iron Vigil` is the stricter Ironman variant with no flight paths and cinematic camera enforced from run start. White/gray-only progression is split so `White Knuckles` requires no self-crafted exemption, while `Self-Forged` tracks white/gray-only runs that keep the self-crafted exemption enabled from start to max level.
 
 ## HUD
@@ -197,6 +197,10 @@ PvP safety checks are advisory only. During an active run, Softcore warns locall
 
 Use `/sc export` to open a comma-delimited CSV summary for spreadsheets. It is derived from the current local ledger: character, run ID/status, observed active time, death/violation/conflict counts, rules hash, participants, and recent log entries. The export is a convenience summary, not external verification.
 
+## Completion Awards
+
+When an active valid run reaches max level after starting below max level, Softcore marks the local run completed, stops active tracking for that run, records a **Run Completed** audit row, plays achievement/completion feedback, and opens a parchment-style award screen with concise run statistics. The latest completion award is stored per character and can be reopened from the Achievements tab's **Completion Award** section or from the completed Overview state.
+
 ## Persistence And Safety
 
 Run data is stored per character in `SoftcoreCharDB`. This protects alts and replacement characters from inheriting another character's active run.
@@ -227,6 +231,7 @@ Boundary behavior:
 
 - Character name, realm, class, level, and zone
 - Active run ID, start time, addon-observed active time, start level, rules, and party status
+- Per-character max-level completion award snapshot
 - Local deaths and violations
 - Active and cleared violations
 - Participants and participant states

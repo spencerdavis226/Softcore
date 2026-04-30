@@ -149,6 +149,7 @@ local CLASS_LABELS = {
 }
 
 local ACHIEVEMENT_CATEGORY_ORDER = {
+    "Award",
     "Leveling",
     "Max Level",
     "Classes",
@@ -156,6 +157,7 @@ local ACHIEVEMENT_CATEGORY_ORDER = {
 }
 
 local ACHIEVEMENT_CATEGORY_META = {
+    Award = { label = "Completion Award", icon = "Interface\\Icons\\INV_Letter_18", color = GOLD_TEXT },
     Leveling = { label = "Leveling", icon = "Interface\\Icons\\Achievement_Level_10", color = GREEN_TEXT },
     ["Max Level"] = { label = "Max Level", icon = "Interface\\Icons\\INV_Misc_Trophy_Argent", color = GOLD_TEXT },
     Classes = { label = "Classes", icon = "Interface\\Icons\\Achievement_Character_Human_Male", color = PURPLE_TEXT },
@@ -203,7 +205,9 @@ local ACHIEVEMENT_KIND_ICONS = {
     BINARY = "Interface\\Icons\\Achievement_General",
     CAMERA_IRONMAN_NO_FLIGHT_PATHS_MAX = "Interface\\Icons\\Ability_Mount_Gryphon_01",
     CAMERA_MAX = "Interface\\Icons\\INV_Misc_Spyglass_02",
+    CHEF_SPECIAL_MAX = "Interface\\Icons\\INV_Misc_Food_15",
     CLEAN_MAX = "Interface\\Icons\\INV_Misc_Rune_01",
+    COMPLETION_AWARD = "Interface\\Icons\\INV_Letter_18",
     GEAR_QUALITY_CRAFTED_MAX = "Interface\\Icons\\Trade_BlackSmithing",
     GEAR_QUALITY_MAX = "Interface\\Icons\\INV_Chest_Cloth_17",
     GROUPED_MAX = "Interface\\Icons\\Achievement_GuildPerk_EverybodysFriend",
@@ -392,6 +396,7 @@ local LOG_EVENT_DISPLAY = {
     RULE_UNKNOWN_OUTCOME = { label = "Rule Notice", group = "rules" },
     RUN_RESET = { label = "Run Reset", group = "run" },
     RUN_START = { label = "Run Started", group = "run" },
+    RUN_COMPLETED = { label = "Run Completed", group = "run" },
     RUN_SYNCED = { label = "Run Synced", group = "run" },
     VIOLATION_ADDED = { label = "Violation", group = "violation" },
     VIOLATION_CLEARED = { label = "Cleared", group = "violation" },
@@ -965,6 +970,185 @@ local function SetCardValue(card, value, detail, color)
     color = color or BODY_TEXT
     card.value:SetTextColor(color.r, color.g, color.b)
     SetOverviewCardTone(card, color)
+end
+
+local completionAwardFrame
+
+local function CreateAwardFont(parent, template, width, justify)
+    local fs = parent:CreateFontString(nil, "OVERLAY", template or "GameFontHighlightSmall")
+    fs:SetWidth(width or 360)
+    fs:SetJustifyH(justify or "CENTER")
+    fs:SetTextColor(0.18, 0.105, 0.035)
+    return fs
+end
+
+local function FormatAwardCharacter(award)
+    local name = tostring(award and award.characterName or "Unknown")
+    local realm = tostring(award and award.realm or "")
+    if realm ~= "" and realm ~= "Unknown" then
+        return name .. "-" .. realm
+    end
+    return name
+end
+
+local function FormatAwardRules(award)
+    local label = tostring(award and (award.presetLabel or award.preset) or "Custom")
+    if award and award.rulesetModified then
+        if award.rulesetModifiedAtLevel then
+            return label .. ", amended at level " .. tostring(award.rulesetModifiedAtLevel)
+        end
+        return label .. ", amended"
+    end
+    return label .. ", original terms"
+end
+
+local function SetAwardStat(row, label, value)
+    if not row then return end
+    row.label:SetText(label or "")
+    row.value:SetText(value or "")
+end
+
+local function EnsureCompletionAwardFrame()
+    if completionAwardFrame then
+        return completionAwardFrame
+    end
+
+    local frame = CreateFrame("Frame", "SoftcoreCompletionAwardFrame", UIParent, "BackdropTemplate")
+    frame:SetSize(560, 520)
+    frame:SetPoint("CENTER", UIParent, "CENTER", 0, 28)
+    frame:SetFrameStrata("DIALOG")
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:RegisterForDrag("LeftButton")
+    frame:SetScript("OnDragStart", frame.StartMoving)
+    frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
+    frame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border",
+        tile = false,
+        edgeSize = 32,
+        insets = { left = 10, right = 10, top = 10, bottom = 10 },
+    })
+    frame:SetBackdropColor(0.78, 0.62, 0.36, 0.98)
+    frame:SetBackdropBorderColor(0.72, 0.43, 0.12, 1)
+
+    frame.inner = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    frame.inner:SetPoint("TOPLEFT", frame, "TOPLEFT", 26, -28)
+    frame.inner:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -26, 28)
+    frame.inner:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = false,
+        edgeSize = 14,
+        insets = { left = 4, right = 4, top = 4, bottom = 4 },
+    })
+    frame.inner:SetBackdropColor(0.92, 0.78, 0.50, 0.98)
+    frame.inner:SetBackdropBorderColor(0.45, 0.25, 0.07, 0.92)
+
+    frame.close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    frame.close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -10, -10)
+
+    frame.kicker = CreateAwardFont(frame.inner, "GameFontNormalSmall", 440)
+    frame.kicker:SetPoint("TOP", frame.inner, "TOP", 0, -28)
+    frame.kicker:SetTextColor(0.42, 0.22, 0.06)
+    frame.kicker:SetText("SOFTCORE RUN LEDGER")
+
+    frame.title = CreateAwardFont(frame.inner, "GameFontNormalLarge", 440)
+    frame.title:SetPoint("TOP", frame.kicker, "BOTTOM", 0, -8)
+    frame.title:SetTextColor(0.30, 0.12, 0.025)
+    frame.title:SetText("Max Level Reached")
+
+    frame.subtitle = CreateAwardFont(frame.inner, "GameFontHighlight", 430)
+    frame.subtitle:SetPoint("TOP", frame.title, "BOTTOM", 0, -10)
+
+    frame.ribbon = frame.inner:CreateTexture(nil, "ARTWORK")
+    frame.ribbon:SetPoint("TOP", frame.subtitle, "BOTTOM", 0, -14)
+    frame.ribbon:SetSize(360, 2)
+    frame.ribbon:SetColorTexture(0.50, 0.24, 0.06, 0.70)
+
+    frame.body = CreateAwardFont(frame.inner, "GameFontHighlightSmall", 430)
+    frame.body:SetPoint("TOP", frame.ribbon, "BOTTOM", 0, -18)
+    frame.body:SetTextColor(0.24, 0.13, 0.04)
+
+    frame.stats = {}
+    local labels = { "Observed Time", "Deaths", "Violations", "Dungeons", "Party Ledger", "Rules" }
+    for index, label in ipairs(labels) do
+        local row = CreateFrame("Frame", nil, frame.inner)
+        row:SetSize(420, 26)
+        row:SetPoint("TOP", frame.body, "BOTTOM", 0, -22 - ((index - 1) * 29))
+        row.line = row:CreateTexture(nil, "BACKGROUND")
+        row.line:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
+        row.line:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
+        row.line:SetHeight(1)
+        row.line:SetColorTexture(0.45, 0.25, 0.08, 0.18)
+        row.label = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.label:SetPoint("LEFT", row, "LEFT", 0, 0)
+        row.label:SetWidth(150)
+        row.label:SetJustifyH("LEFT")
+        row.label:SetTextColor(0.38, 0.19, 0.05)
+        row.value = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        row.value:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+        row.value:SetWidth(260)
+        row.value:SetJustifyH("RIGHT")
+        row.value:SetTextColor(0.18, 0.10, 0.035)
+        row.label:SetText(label)
+        frame.stats[index] = row
+    end
+
+    frame.seal = CreateFrame("Frame", nil, frame.inner, "BackdropTemplate")
+    frame.seal:SetSize(96, 96)
+    frame.seal:SetPoint("BOTTOM", frame.inner, "BOTTOM", 0, 22)
+    frame.seal:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = false,
+        edgeSize = 18,
+        insets = { left = 8, right = 8, top = 8, bottom = 8 },
+    })
+    frame.seal:SetBackdropColor(0.46, 0.035, 0.025, 0.98)
+    frame.seal:SetBackdropBorderColor(0.78, 0.12, 0.08, 1)
+    frame.sealText = frame.seal:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    frame.sealText:SetPoint("CENTER", frame.seal, "CENTER", 0, 3)
+    frame.sealText:SetWidth(78)
+    frame.sealText:SetJustifyH("CENTER")
+    frame.sealText:SetTextColor(1.0, 0.78, 0.42)
+    frame.sealText:SetText("SOFTCORE")
+    frame.sealSub = frame.seal:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.sealSub:SetPoint("TOP", frame.sealText, "BOTTOM", 0, -2)
+    frame.sealSub:SetTextColor(1.0, 0.78, 0.42)
+    frame.sealSub:SetText("CERTIFIED")
+
+    frame.achievementsBtn = CreateButton(frame, "Achievements", 108, 24)
+    frame.achievementsBtn:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 28, 18)
+    frame.achievementsBtn:SetScript("OnClick", function()
+        frame:Hide()
+        if SC.OpenMasterWindow then
+            SC:OpenMasterWindow(TAB_ACHIEVEMENTS)
+        end
+    end)
+
+    frame:Hide()
+    completionAwardFrame = frame
+    return frame
+end
+
+function SC:ShowCompletionAward(award)
+    award = award or (self.GetCompletionAward and self:GetCompletionAward()) or nil
+    if not award then
+        Print("No completion award is available for this character.")
+        return
+    end
+
+    local frame = EnsureCompletionAwardFrame()
+    frame.subtitle:SetText(FormatAwardCharacter(award) .. "  |  " .. tostring(award.classLabel or award.class or "Adventurer"))
+    frame.body:SetText("Completed " .. tostring(award.runName or "Softcore Run") .. " at level " .. tostring(award.completedLevel or "?") .. " on " .. FormatTime(award.completedAt) .. ".")
+    SetAwardStat(frame.stats[1], "Observed Time", FormatDuration(award.activeTimeSeconds))
+    SetAwardStat(frame.stats[2], "Deaths", tostring(award.deaths or 0))
+    SetAwardStat(frame.stats[3], "Violations", tostring(award.totalViolations or 0) .. " total, " .. tostring(award.clearedViolations or 0) .. " cleared")
+    SetAwardStat(frame.stats[4], "Dungeons", tostring(award.dungeonCount or 0) .. " recorded")
+    SetAwardStat(frame.stats[5], "Party Ledger", tostring(award.partyMembers or 1) .. " participant" .. ((tonumber(award.partyMembers or 1) == 1) and "" or "s"))
+    SetAwardStat(frame.stats[6], "Rules", FormatAwardRules(award))
+    frame:Show()
 end
 
 local function SetRegionShown(region, shown)
@@ -1958,6 +2142,21 @@ local function RefreshOverviewPanel(frame)
         SetRegionShown(element, active)
     end
 
+    if not active then
+        local award = SC.GetCompletionAward and SC:GetCompletionAward() or nil
+        if run.completed or award then
+            frame.overview.inactiveTitle:SetText("Run Completed")
+            frame.overview.inactiveBody:SetText("Max level reached. Your completion award is available from the Achievements tab.")
+            frame.overview.goToRunBtn:SetText("View Award")
+            frame.overview.goToRunBtn.softcoreShowsAward = true
+        else
+            frame.overview.inactiveTitle:SetText("No Active Run")
+            frame.overview.inactiveBody:SetText("Start a Softcore run to begin tracking deaths, violations, and party status.")
+            frame.overview.goToRunBtn:SetText("Start a Run")
+            frame.overview.goToRunBtn.softcoreShowsAward = false
+        end
+    end
+
     if active then
         frame.overview.run:SetText("|cffffd100" .. FormatOverviewRunTitle(run) .. "|r")
         SetStatusPill(frame.overview.localStatusPill, status.participantStatus or "NOT_IN_RUN", "Player: ")
@@ -2899,7 +3098,7 @@ local function RefreshAchievementRow(row, achievement, categoryColor)
     row.progress:SetValue(achievement.earned and 1 or progressValue)
     if achievement.earned then
         row.progress:SetStatusBarColor(0.86, 0.62, 0.16, 1)
-        row.progressText:SetText("|cff4ade80Complete|r")
+        row.progressText:SetText(achievement.isCompletionAward and "|cff4ade80Click to view award|r" or "|cff4ade80Complete|r")
     elseif progressValue > 0 then
         row.progress:SetStatusBarColor(BLUE_TEXT.r, BLUE_TEXT.g, BLUE_TEXT.b, 1)
         row.progressText:SetText("|cffd6c29a" .. Trunc(achievement.progressText or "In progress", 42) .. "|r")
@@ -2909,6 +3108,16 @@ local function RefreshAchievementRow(row, achievement, categoryColor)
     end
 
     SetAchievementRowTone(row, achievement, categoryColor)
+    if achievement.isCompletionAward then
+        SetOverviewSmallBadge(row.statusBadge, "View", GOLD_TEXT)
+        row:SetScript("OnMouseUp", function()
+            if SC.ShowCompletionAward then
+                SC:ShowCompletionAward()
+            end
+        end)
+    else
+        row:SetScript("OnMouseUp", nil)
+    end
 
     local tooltipBody = tostring(achievement.description or "")
     local progressText = tostring(achievement.progressText or "")
@@ -3017,9 +3226,15 @@ local function RefreshAchievementsPanel(frame)
     local groups = BuildAchievementGroups(rows)
     local earnedCount = 0
     local inProgressCount = 0
+    local achievementTotal = 0
 
     for _, achievement in ipairs(rows) do
-        if achievement.earned then
+        if not achievement.isCompletionAward then
+            achievementTotal = achievementTotal + 1
+        end
+        if achievement.isCompletionAward then
+            -- Award rows are a revisitable character record, not an account achievement.
+        elseif achievement.earned then
             earnedCount = earnedCount + 1
         elseif (tonumber(achievement.progressValue or 0) or 0) > 0 then
             inProgressCount = inProgressCount + 1
@@ -3028,7 +3243,7 @@ local function RefreshAchievementsPanel(frame)
 
     SetCardValue(frame.achievements.earnedCard, tostring(earnedCount), "", earnedCount > 0 and GOLD_TEXT or MUTED_TEXT)
     SetCardValue(frame.achievements.progressCard, tostring(inProgressCount), "", inProgressCount > 0 and BLUE_TEXT or MUTED_TEXT)
-    SetCardValue(frame.achievements.remainingCard, tostring(math.max(#rows - earnedCount, 0)), "", earnedCount == #rows and GREEN_TEXT or BODY_TEXT)
+    SetCardValue(frame.achievements.remainingCard, tostring(math.max(achievementTotal - earnedCount, 0)), "", earnedCount == achievementTotal and GREEN_TEXT or BODY_TEXT)
 
     SetRegionShown(frame.achievements.empty, #rows == 0)
 
@@ -3183,6 +3398,10 @@ local function CreateOverviewTab(frame)
     frame.overview.goToRunBtn:SetPoint("TOP", inactiveCard, "BOTTOM", 0, -18)
     table.insert(frame.overview.inactiveElements, frame.overview.goToRunBtn)
     frame.overview.goToRunBtn:SetScript("OnClick", function()
+        if frame.overview.goToRunBtn.softcoreShowsAward and SC.ShowCompletionAward then
+            SC:ShowCompletionAward()
+            return
+        end
         frame.activeTab = TAB_RUN
         SC:MasterUI_Refresh()
     end)
