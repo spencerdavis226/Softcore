@@ -56,12 +56,12 @@ local AUDIT_LIST_LAYOUT = {
     SCROLL_RIGHT_INSET = 24,
 }
 AUDIT_LIST_LAYOUT.TYPE_X = 10
-AUDIT_LIST_LAYOUT.TYPE_WIDTH = 150
-AUDIT_LIST_LAYOUT.ACTOR_X = 176
-AUDIT_LIST_LAYOUT.ACTOR_WIDTH = 120
-AUDIT_LIST_LAYOUT.TIME_X = 318
-AUDIT_LIST_LAYOUT.TIME_WIDTH = 112
-AUDIT_LIST_LAYOUT.MESSAGE_X = 448
+AUDIT_LIST_LAYOUT.TYPE_WIDTH = 108
+AUDIT_LIST_LAYOUT.ACTOR_X = 136
+AUDIT_LIST_LAYOUT.ACTOR_WIDTH = 92
+AUDIT_LIST_LAYOUT.TIME_X = 246
+AUDIT_LIST_LAYOUT.TIME_WIDTH = 134
+AUDIT_LIST_LAYOUT.MESSAGE_X = 398
 AUDIT_LIST_LAYOUT.MESSAGE_WIDTH = AUDIT_LIST_LAYOUT.CONTENT_WIDTH - AUDIT_LIST_LAYOUT.MESSAGE_X - 28
 AUDIT_LIST_LAYOUT.ACTION_MESSAGE_WIDTH = AUDIT_LIST_LAYOUT.CONTENT_WIDTH - AUDIT_LIST_LAYOUT.MESSAGE_X - 96
 AUDIT_LIST_LAYOUT.VISIBLE_ROWS = math.floor((PANEL_HEIGHT + AUDIT_LIST_LAYOUT.ROW_TOP - AUDIT_LIST_LAYOUT.FOOTER_HEIGHT - 8) / AUDIT_LIST_LAYOUT.ROW_HEIGHT)
@@ -2303,11 +2303,11 @@ local function RefreshViolationsPanel(frame)
 
             row:Show()
             SetAuditRowAccent(row, tone)
-            row.time:SetText(Trunc(FormatTime(violation.createdAt), 18))
-            row.owner:SetText(Trunc(FormatPlayerLabel(violation.playerKey), 20))
-            row.type:SetText(Trunc(FormatViolationLogLabel(violation.type), 24))
+            row.time:SetText(FormatTime(violation.createdAt))
+            row.owner:SetText(Trunc(FormatPlayerLabel(violation.playerKey), 14))
+            row.type:SetText(Trunc(FormatViolationLogLabel(violation.type), 18))
             row.type:SetTextColor(tone.r, tone.g, tone.b)
-            SetCompactText(row.detail, FormatViolationDetail(violation), 54)
+            SetCompactText(row.detail, FormatViolationDetail(violation), 70)
             SetAuditRowTooltip(row, FormatViolationLogLabel(violation.type), FormatViolationDetail(violation))
 
             if SC:IsViolationClearable(violation) then
@@ -2382,11 +2382,11 @@ local function RefreshLogPanel(frame)
 
             row:Show()
             SetAuditRowAccent(row, eventColor)
-            row.time:SetText(Trunc(FormatTime(entry.time), 18))
-            row.actor:SetText(Trunc(FormatPlayerLabel(entry.actorKey or entry.playerKey), 20))
-            row.kind:SetText(Trunc(eventLabel, 24))
+            row.time:SetText(FormatTime(entry.time))
+            row.actor:SetText(Trunc(FormatPlayerLabel(entry.actorKey or entry.playerKey), 14))
+            row.kind:SetText(Trunc(eventLabel, 18))
             row.kind:SetTextColor(eventColor.r, eventColor.g, eventColor.b)
-            SetCompactText(row.message, message, 54)
+            SetCompactText(row.message, message, 76)
             SetAuditRowTooltip(row, eventLabel, message)
         else
             row:Hide()
