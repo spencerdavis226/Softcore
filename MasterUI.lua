@@ -1038,6 +1038,12 @@ local AWARD_LAYOUT = {
     dividerThickness  = 1,
     sectionRule       = 380,
     pageBorderSize    = 2,
+    cornerAccentInset  = 10,
+    cornerAccentLength = 36,
+    cornerAccentSize   = 1,
+    headerHaloSize     = 78,
+    titleAccentWidth   = 128,
+    titleAccentGap     = 8,
     stampDiameter     = 90,
     stampRingPx       = 1,
     stampBorderInset  = 26,
@@ -1050,6 +1056,8 @@ local AWARD_COLORS = {
     kicker   = { 0.42, 0.22, 0.06 },
     muted    = { 0.50, 0.32, 0.10 },
     border   = { 0.28, 0.15, 0.045, 0.76 },
+    accent   = { 0.76, 0.50, 0.16, 0.42 },
+    halo     = { 0.96, 0.72, 0.20, 0.18 },
     divider  = { 0.50, 0.24, 0.06, 0.45 },
     rule     = { 0.45, 0.22, 0.05, 0.18 },
     stamp    = { 0.65, 0.10, 0.08, 0.95 },
@@ -1108,6 +1116,46 @@ local function CreateAwardPageBorder(parent)
     parent.borderRight:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 0, 0)
     parent.borderRight:SetWidth(size)
     parent.borderRight:SetColorTexture(unpack(C))
+end
+
+local function CreateAwardCornerAccents(parent)
+    local L = AWARD_LAYOUT
+    local C = AWARD_COLORS.accent
+    local inset = L.cornerAccentInset
+    local len = L.cornerAccentLength
+    local size = L.cornerAccentSize
+
+    local function line(name, width, height, point, x, y)
+        parent[name] = parent:CreateTexture(nil, "ARTWORK")
+        parent[name]:SetSize(width, height)
+        parent[name]:SetPoint(point, parent, point, x, y)
+        parent[name]:SetColorTexture(unpack(C))
+    end
+
+    line("accentTopLeftH", len, size, "TOPLEFT", inset, -inset)
+    line("accentTopLeftV", size, len, "TOPLEFT", inset, -inset)
+    line("accentTopRightH", len, size, "TOPRIGHT", -inset, -inset)
+    line("accentTopRightV", size, len, "TOPRIGHT", -inset, -inset)
+    line("accentBottomLeftH", len, size, "BOTTOMLEFT", inset, inset)
+    line("accentBottomLeftV", size, len, "BOTTOMLEFT", inset, inset)
+    line("accentBottomRightH", len, size, "BOTTOMRIGHT", -inset, inset)
+    line("accentBottomRightV", size, len, "BOTTOMRIGHT", -inset, inset)
+end
+
+local function CreateAwardTitleAccent(parent, title)
+    local L = AWARD_LAYOUT
+    local C = AWARD_COLORS.accent
+    local y = -3
+
+    parent.titleAccentLeft = parent:CreateTexture(nil, "ARTWORK")
+    parent.titleAccentLeft:SetSize(L.titleAccentWidth, 1)
+    parent.titleAccentLeft:SetPoint("TOPRIGHT", title, "BOTTOM", -L.titleAccentGap, y)
+    parent.titleAccentLeft:SetColorTexture(unpack(C))
+
+    parent.titleAccentRight = parent:CreateTexture(nil, "ARTWORK")
+    parent.titleAccentRight:SetSize(L.titleAccentWidth, 1)
+    parent.titleAccentRight:SetPoint("TOPLEFT", title, "BOTTOM", L.titleAccentGap, y)
+    parent.titleAccentRight:SetColorTexture(unpack(C))
 end
 
 local function AnchorRowBelow(row, prev, gap)
@@ -1216,6 +1264,7 @@ local function EnsureCompletionAwardFrame()
     frame.inner:SetPoint("TOPLEFT", frame, "TOPLEFT", L.innerPad, -L.innerPad - 2)
     frame.inner:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -L.innerPad, L.innerPad + 2)
     CreateAwardPageBorder(frame.inner)
+    CreateAwardCornerAccents(frame.inner)
 
     frame.close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     frame.close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -10, -10)
@@ -1233,6 +1282,9 @@ local function EnsureCompletionAwardFrame()
     })
     frame.headerIconFrame:SetBackdropColor(0.30, 0.16, 0.04, 0.88)
     frame.headerIconFrame:SetBackdropBorderColor(0.78, 0.54, 0.18, 0.95)
+
+    frame.headerHalo = CreateAwardCircle(frame.headerIconFrame, L.headerHaloSize, C.halo, "BACKGROUND", 1)
+
     frame.headerIcon = frame.headerIconFrame:CreateTexture(nil, "ARTWORK")
     frame.headerIcon:SetSize(L.headerIconInner, L.headerIconInner)
     frame.headerIcon:SetPoint("CENTER", frame.headerIconFrame, "CENTER", 0, 0)
@@ -1248,6 +1300,7 @@ local function EnsureCompletionAwardFrame()
     frame.title:SetPoint("TOP", frame.kicker, "BOTTOM", 0, -L.kickerToTitle)
     frame.title:SetTextColor(unpack(C.title))
     frame.title:SetText("Max Level Reached")
+    CreateAwardTitleAccent(frame.inner, frame.title)
 
     frame.character = CreateAwardFont(frame.inner, "GameFontNormalLarge", L.contentWidth)
     frame.character:SetPoint("TOP", frame.title, "BOTTOM", 0, -L.titleToCharacter)

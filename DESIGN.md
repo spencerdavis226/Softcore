@@ -174,7 +174,7 @@ Avoid:
 
 ### Completion Award
 
-The max-level completion award should read as a clean parchment certificate: crisp text without heavy font shadows, concise run statistics, a simple page border, and one restrained stamp seated on the border rather than floating as decorative clutter.
+The max-level completion award should read as a clean parchment certificate: crisp text without heavy font shadows, concise run statistics, a simple page border, subtle corner/title accents, and one restrained stamp seated on the border rather than floating as decorative clutter.
 
 ## Charter Tab
 
