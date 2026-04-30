@@ -37,6 +37,27 @@ local CLEAN_LEVEL_NAMES = {
     [100] = "Spotless Century",
 }
 
+local CLASS_MAX_ACHIEVEMENTS = {
+    { class = "WARRIOR", name = "Max-Level Warrior", label = "Warrior" },
+    { class = "PALADIN", name = "Max-Level Paladin", label = "Paladin" },
+    { class = "HUNTER", name = "Max-Level Hunter", label = "Hunter" },
+    { class = "ROGUE", name = "Max-Level Rogue", label = "Rogue" },
+    { class = "PRIEST", name = "Max-Level Priest", label = "Priest" },
+    { class = "DEATHKNIGHT", name = "Max-Level Death Knight", label = "Death Knight" },
+    { class = "SHAMAN", name = "Max-Level Shaman", label = "Shaman" },
+    { class = "MAGE", name = "Max-Level Mage", label = "Mage" },
+    { class = "WARLOCK", name = "Max-Level Warlock", label = "Warlock" },
+    { class = "MONK", name = "Max-Level Monk", label = "Monk" },
+    { class = "DRUID", name = "Max-Level Druid", label = "Druid" },
+    { class = "DEMONHUNTER", name = "Max-Level Demon Hunter", label = "Demon Hunter" },
+    { class = "EVOKER", name = "Max-Level Evoker", label = "Evoker" },
+}
+
+local CLASS_MAX_BY_FILE = {}
+for _, spec in ipairs(CLASS_MAX_ACHIEVEMENTS) do
+    CLASS_MAX_BY_FILE[spec.class] = spec
+end
+
 local ACHIEVEMENT_NAME_MAX_LEN = 34
 local ACHIEVEMENT_DESC_MAX_LEN = 160
 
@@ -225,6 +246,10 @@ function SC:GetAchievementDefinitions()
     AddDefinition(result, "char_original_terms", "ACCOUNT", "Max Level", "Original Terms", "Reach max level on an eligible run with no rule amendments applied.", "RULE_UNCHANGED_MAX")
     AddDefinition(result, "char_party_survivor", "ACCOUNT", "Max Level", "Party Survivor", "Reach max level on an eligible run started in group mode.", "GROUPED_MAX")
 
+    for _, spec in ipairs(CLASS_MAX_ACHIEVEMENTS) do
+        AddDefinition(result, "char_max_class_" .. string.lower(spec.class), "ACCOUNT", "Classes", spec.name, "Reach max level as a " .. spec.label .. " after starting the run at level 10 or below.", "CLASS_MAX", nil, spec.class)
+    end
+
     for _, spec in ipairs(RESTRICTION_RULES) do
         AddDefinition(result, "char_max_" .. spec.id, "ACCOUNT", "Rules", spec.name, spec.description or ("Reach max level with " .. spec.label .. " disallowed from run start through max level."), "RULE_MAX", nil, spec.rule)
     end
@@ -379,6 +404,21 @@ local function BuildProgress(definition, earned)
             return 0, "Not started in group mode"
         end
         return math.min(currentLevel / maxLevel, 1), "Group run: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
+    end
+
+    if definition.progressKind == "CLASS_MAX" then
+        if not eligibility.startedAtOrBelow10 then
+            return 0, "Started above level 10"
+        end
+
+        local currentClass = tostring(db and db.character and db.character.class or "")
+        if currentClass ~= tostring(definition.ruleName or "") then
+            local spec = CLASS_MAX_BY_FILE[definition.ruleName]
+            return 0, spec and ("Play a " .. spec.label) or "Different class active"
+        end
+
+        local spec = CLASS_MAX_BY_FILE[currentClass]
+        return math.min(currentLevel / maxLevel, 1), tostring(spec and spec.label or "Class") .. ": " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
     end
 
     if definition.progressKind == "GEAR_QUALITY_MAX" then
@@ -557,6 +597,12 @@ function SC:Achievements_OnLevelChanged(level)
     end
 
     Earn("char_max_level", "CHARACTER", "Softcore Champion")
+
+    local currentClass = tostring(db.character and db.character.class or "")
+    local classSpec = CLASS_MAX_BY_FILE[currentClass]
+    if classSpec then
+        Earn("char_max_class_" .. string.lower(currentClass), "CHARACTER", classSpec.name)
+    end
 
     if not eligibility.hadViolation then
         Earn("char_clean_max_level", "CHARACTER", "Clean Finish")
