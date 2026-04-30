@@ -483,6 +483,311 @@ local PRESET_AWARD_LABELS = {
     CUSTOM = "Custom",
 }
 
+local RUN_NAME_ECONOMY_RULES = { "auctionHouse", "mailbox", "trade", "bank", "warbandBank", "guildBank" }
+local RUN_NAME_BANK_RULES = { "bank", "warbandBank", "guildBank" }
+local RUN_NAME_TRAVEL_RULES = { "mounts", "flying", "flightPaths" }
+local RUN_NAME_BOOST_RULES = { "heirlooms", "enchants", "consumables" }
+
+local function RunNameRuleAllowed(value)
+    return value == "ALLOWED" or value == "LOG_ONLY"
+end
+
+local function RunNameRuleRestricted(value)
+    return value ~= nil and value ~= false and not RunNameRuleAllowed(value)
+end
+
+local function RunNameRulesAllAllowed(ruleset, keys)
+    for _, key in ipairs(keys) do
+        if not RunNameRuleAllowed(ruleset and ruleset[key]) then
+            return false
+        end
+    end
+    return true
+end
+
+local function RunNameRulesAllRestricted(ruleset, keys)
+    for _, key in ipairs(keys) do
+        if not RunNameRuleRestricted(ruleset and ruleset[key]) then
+            return false
+        end
+    end
+    return true
+end
+
+local function RunNameGrouped(ruleset)
+    return (ruleset and ruleset.groupingMode) ~= "SOLO_SELF_FOUND"
+end
+
+local function RunNameSolo(ruleset)
+    return ruleset and ruleset.groupingMode == "SOLO_SELF_FOUND"
+end
+
+local function RunNameGearAllowed(ruleset)
+    return ruleset and (ruleset.gearQuality == nil or ruleset.gearQuality == "ALLOWED")
+end
+
+local function RunNameGearRestricted(ruleset)
+    return ruleset and ruleset.gearQuality ~= nil and ruleset.gearQuality ~= "ALLOWED"
+end
+
+local function RunNameLevelGapOff(ruleset)
+    return not RunNameRuleRestricted(ruleset and ruleset.maxLevelGap)
+end
+
+local function RunNameCameraOff(ruleset)
+    return not RunNameRuleRestricted(ruleset and ruleset.actionCam)
+end
+
+local function RunNameCommonEasyRules(ruleset)
+    return RunNameRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
+        and RunNameRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
+        and RunNameGearAllowed(ruleset)
+        and RunNameRulesAllAllowed(ruleset, RUN_NAME_BOOST_RULES)
+        and RunNameRuleAllowed(ruleset and ruleset.dungeonRepeat)
+        and RunNameLevelGapOff(ruleset)
+        and RunNameCameraOff(ruleset)
+end
+
+local function RunNameIronmanBase(ruleset)
+    return RunNameSolo(ruleset)
+        and ruleset.gearQuality == "WHITE_GRAY_ONLY"
+        and ruleset.selfCraftedGearAllowed ~= true
+        and RunNameRulesAllRestricted(ruleset, RUN_NAME_ECONOMY_RULES)
+        and RunNameRuleRestricted(ruleset.mounts)
+        and RunNameRuleRestricted(ruleset.flying)
+        and RunNameRulesAllRestricted(ruleset, RUN_NAME_BOOST_RULES)
+        and RunNameRuleRestricted(ruleset.dungeonRepeat)
+        and RunNameRuleRestricted(ruleset.instancedPvP)
+end
+
+local HIDDEN_RUN_NAMES = {
+    {
+        name = "Oops! All Restrictions",
+        matches = function(ruleset)
+            return RunNameGrouped(ruleset)
+                and RunNameRulesAllRestricted(ruleset, RUN_NAME_ECONOMY_RULES)
+                and RunNameRulesAllRestricted(ruleset, RUN_NAME_TRAVEL_RULES)
+                and ruleset.gearQuality == "WHITE_GRAY_ONLY"
+                and ruleset.selfCraftedGearAllowed ~= true
+                and RunNameRulesAllRestricted(ruleset, RUN_NAME_BOOST_RULES)
+                and RunNameRuleRestricted(ruleset.maxLevelGap)
+                and RunNameRuleRestricted(ruleset.dungeonRepeat)
+                and RunNameRuleRestricted(ruleset.instancedPvP)
+                and RunNameRuleRestricted(ruleset.actionCam)
+        end,
+    },
+    {
+        name = "Iron Vigilante",
+        matches = function(ruleset)
+            return RunNameIronmanBase(ruleset)
+                and RunNameRuleRestricted(ruleset.flightPaths)
+                and RunNameRuleRestricted(ruleset.actionCam)
+        end,
+    },
+    {
+        name = "Irony Maiden",
+        matches = function(ruleset)
+            return RunNameIronmanBase(ruleset)
+                and RunNameRuleAllowed(ruleset.flightPaths)
+                and RunNameCameraOff(ruleset)
+        end,
+    },
+    {
+        name = "Gordon Ramps",
+        matches = function(ruleset)
+            return RunNameGrouped(ruleset)
+                and ruleset.gearQuality == "WHITE_GRAY_ONLY"
+                and ruleset.selfCraftedGearAllowed == true
+                and RunNameRuleRestricted(ruleset.auctionHouse)
+                and RunNameRuleAllowed(ruleset.mailbox)
+                and RunNameRuleAllowed(ruleset.trade)
+                and RunNameRuleAllowed(ruleset.bank)
+                and RunNameRuleRestricted(ruleset.warbandBank)
+                and RunNameRuleRestricted(ruleset.guildBank)
+                and RunNameRuleAllowed(ruleset.mounts)
+                and RunNameRuleRestricted(ruleset.flying)
+                and RunNameRuleAllowed(ruleset.flightPaths)
+                and RunNameRuleRestricted(ruleset.heirlooms)
+                and RunNameRuleAllowed(ruleset.enchants)
+                and RunNameRuleAllowed(ruleset.consumables)
+                and RunNameRuleAllowed(ruleset.dungeonRepeat)
+                and RunNameRuleRestricted(ruleset.instancedPvP)
+                and RunNameRuleRestricted(ruleset.actionCam)
+        end,
+    },
+    {
+        name = "Chicken Run",
+        matches = function(ruleset)
+            return RunNameGrouped(ruleset)
+                and RunNameCommonEasyRules(ruleset)
+                and RunNameRuleAllowed(ruleset.instancedPvP)
+        end,
+    },
+    {
+        name = "Casual Friday Night Wipes",
+        matches = function(ruleset)
+            return RunNameGrouped(ruleset)
+                and RunNameCommonEasyRules(ruleset)
+                and RunNameRuleRestricted(ruleset.instancedPvP)
+        end,
+    },
+    {
+        name = "Solo Yolo",
+        matches = function(ruleset)
+            return RunNameSolo(ruleset)
+                and RunNameCommonEasyRules(ruleset)
+                and RunNameRuleAllowed(ruleset.instancedPvP)
+        end,
+    },
+    {
+        name = "Alone Ranger",
+        matches = function(ruleset)
+            return RunNameSolo(ruleset)
+                and RunNameGearAllowed(ruleset)
+                and RunNameRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
+                and RunNameRulesAllAllowed(ruleset, RUN_NAME_BOOST_RULES)
+        end,
+    },
+    {
+        name = "Mind the Gap",
+        matches = function(ruleset)
+            return RunNameGrouped(ruleset)
+                and RunNameRuleRestricted(ruleset.maxLevelGap)
+                and RunNameGearAllowed(ruleset)
+                and RunNameRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
+        end,
+    },
+    {
+        name = "Fifty Grades of Gray",
+        matches = function(ruleset)
+            return ruleset.gearQuality == "WHITE_GRAY_ONLY"
+                and ruleset.selfCraftedGearAllowed ~= true
+        end,
+    },
+    {
+        name = "Made You Loot",
+        matches = function(ruleset)
+            return RunNameGearRestricted(ruleset)
+                and ruleset.selfCraftedGearAllowed == true
+        end,
+    },
+    {
+        name = "Green With Envy",
+        matches = function(ruleset)
+            return ruleset.gearQuality == "GREEN_OR_LOWER"
+        end,
+    },
+    {
+        name = "Blue Yourself",
+        matches = function(ruleset)
+            return ruleset.gearQuality == "BLUE_OR_LOWER"
+        end,
+    },
+    {
+        name = "No Heir Today",
+        matches = function(ruleset)
+            return RunNameRuleRestricted(ruleset.heirlooms)
+                and RunNameRuleAllowed(ruleset.enchants)
+                and RunNameRuleAllowed(ruleset.consumables)
+        end,
+    },
+    {
+        name = "No Enchant Intended",
+        matches = function(ruleset)
+            return RunNameRuleRestricted(ruleset.enchants)
+                and RunNameRuleAllowed(ruleset.heirlooms)
+        end,
+    },
+    {
+        name = "Flaskless Gordon",
+        matches = function(ruleset)
+            return RunNameRuleRestricted(ruleset.consumables)
+                and RunNameRuleAllowed(ruleset.heirlooms)
+                and RunNameRuleAllowed(ruleset.enchants)
+        end,
+    },
+    {
+        name = "Deadminesweeper",
+        matches = function(ruleset)
+            return RunNameRuleRestricted(ruleset.dungeonRepeat)
+                and not RunNameIronmanBase(ruleset)
+        end,
+    },
+    {
+        name = "Camera Shy",
+        matches = function(ruleset)
+            return RunNameRuleRestricted(ruleset.actionCam)
+                and RunNameRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
+                and RunNameGearAllowed(ruleset)
+        end,
+    },
+    {
+        name = "Walk Hard",
+        matches = function(ruleset)
+            return RunNameRulesAllRestricted(ruleset, RUN_NAME_TRAVEL_RULES)
+        end,
+    },
+    {
+        name = "No Fly Zone",
+        matches = function(ruleset)
+            return RunNameRuleAllowed(ruleset.mounts)
+                and RunNameRuleRestricted(ruleset.flying)
+                and RunNameRuleAllowed(ruleset.flightPaths)
+        end,
+    },
+    {
+        name = "Flight Pathological",
+        matches = function(ruleset)
+            return RunNameRuleAllowed(ruleset.mounts)
+                and RunNameRuleAllowed(ruleset.flying)
+                and RunNameRuleRestricted(ruleset.flightPaths)
+        end,
+    },
+    {
+        name = "Mount Rushless",
+        matches = function(ruleset)
+            return RunNameRuleRestricted(ruleset.mounts)
+                and (RunNameRuleAllowed(ruleset.flying) or RunNameRuleAllowed(ruleset.flightPaths))
+        end,
+    },
+    {
+        name = "Wallet of Warcraft",
+        matches = function(ruleset)
+            return RunNameRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
+                and (RunNameGearRestricted(ruleset) or not RunNameRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES))
+        end,
+    },
+    {
+        name = "Auction House Arrest",
+        matches = function(ruleset)
+            return RunNameRuleRestricted(ruleset.auctionHouse)
+                and RunNameRuleAllowed(ruleset.mailbox)
+                and RunNameRuleAllowed(ruleset.trade)
+                and RunNameRuleAllowed(ruleset.bank)
+        end,
+    },
+    {
+        name = "Bank Error in Your Favor",
+        matches = function(ruleset)
+            return RunNameRulesAllRestricted(ruleset, RUN_NAME_BANK_RULES)
+                and (RunNameRuleAllowed(ruleset.auctionHouse) or RunNameRuleAllowed(ruleset.mailbox) or RunNameRuleAllowed(ruleset.trade))
+        end,
+    },
+}
+
+function SC:GetHiddenRunName(ruleset)
+    if type(ruleset) ~= "table" then
+        return nil
+    end
+
+    for _, spec in ipairs(HIDDEN_RUN_NAMES) do
+        if spec.matches(ruleset) then
+            return spec.name
+        end
+    end
+    return nil
+end
+
 local CLASS_AWARD_LABELS = {
     DEATHKNIGHT = "Death Knight",
     DEMONHUNTER = "Demon Hunter",
@@ -539,11 +844,12 @@ function SC:BuildCompletionAwardSnapshot(maxLevel)
     local character = db.character or GetPlayerSnapshot()
     local totalViolations, activeViolations, clearedViolations = CountAwardViolations(db.violations)
     local preset = run.ruleset and run.ruleset.achievementPreset or "CUSTOM"
+    local runName = (self.GetHiddenRunName and self:GetHiddenRunName(run.ruleset)) or run.runName or "Softcore Run"
 
     return {
         id = run.runId or ("SC-COMPLETION-" .. tostring(time())),
         runId = run.runId,
-        runName = run.runName or "Softcore Run",
+        runName = runName,
         characterName = character.name,
         realm = character.realm,
         class = character.class,
@@ -1003,7 +1309,7 @@ function SC:GetLocalPlayerStatus()
 
     return {
         runId = db.run.runId,
-        runName = db.run.runName,
+        runName = (self.GetHiddenRunName and self:GetHiddenRunName(db.run.ruleset)) or db.run.runName,
         playerKey = playerKey,
         name = db.character.name,
         realm = db.character.realm,
@@ -1724,6 +2030,9 @@ function SC:StartRun(runOptions)
     db.run.ruleset = startingRuleset
     db.run.ruleset.achievementPreset = runOptions.preset or db.run.ruleset.achievementPreset or "CUSTOM"
     ApplyGroupingModeRules(db.run.ruleset)
+    if (not runOptions.runName or runOptions.runName == "Softcore Run") and self.GetHiddenRunName then
+        db.run.runName = self:GetHiddenRunName(db.run.ruleset) or db.run.runName
+    end
     db.run.cameraMode = runOptions.cameraMode or DefaultCameraModeForRules(db.run.ruleset)
     db.run.governance = CreateDefaultGovernance()
     db.run.participants = {}
@@ -1909,7 +2218,8 @@ function SC:PrintRun()
         end
     end
 
-    Print("run: " .. tostring(db.run.runName or "none"))
+    local runName = (self.GetHiddenRunName and self:GetHiddenRunName(db.run.ruleset)) or db.run.runName or "none"
+    Print("run: " .. tostring(runName))
     Print("runId: " .. tostring(db.run.runId or "none"))
     Print("active: " .. tostring(db.run.active) .. ", party: " .. self:GetPartyStatus())
     Print("activeTime: " .. FormatDuration(self:GetActiveRunTimeSeconds()) .. " (addon-observed)")
@@ -2017,8 +2327,9 @@ function SC:AnnounceLocalDeath(detail)
         .. " level " .. tostring(character.level or UnitLevel("player") or "?")
         .. " in " .. tostring(character.zone or GetRealZoneText() or "Unknown")
         .. " - " .. tostring(detail or "character died.")
-    if run.runName then
-        message = message .. " (" .. tostring(run.runName) .. ")"
+    local runName = (self.GetHiddenRunName and self:GetHiddenRunName(run.ruleset)) or run.runName
+    if runName then
+        message = message .. " (" .. tostring(runName) .. ")"
     end
 
     if channels.CHAT then
@@ -2215,7 +2526,7 @@ local function BuildRunExportText()
     AddCsvLine(lines, "Character", "Class", character.class or "?")
     AddCsvLine(lines, "Character", "Level", character.level or "?")
     AddCsvLine(lines, "Character", "Zone", character.zone or "?")
-    AddCsvLine(lines, "Run", "Name", run.runName or "none")
+    AddCsvLine(lines, "Run", "Name", (SC.GetHiddenRunName and SC:GetHiddenRunName(run.ruleset)) or run.runName or "none")
     AddCsvLine(lines, "Run", "Run ID", run.runId or "none")
     AddCsvLine(lines, "Run", "Status", SC:GetStatusText())
     AddCsvLine(lines, "Run", "Active", run.active == true)
