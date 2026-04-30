@@ -51,6 +51,18 @@ local VIOLATION_ROWS = LOG_ROWS
 local VIOLATION_ROW_TOP = LOG_ROW_TOP
 local VIOLATION_ROW_HEIGHT = LOG_ROW_HEIGHT
 local OVERVIEW_PARTY_ROWS = 5
+local OVERVIEW_LAYOUT = {
+    CONTENT_WIDTH = 690,
+    HERO_HEIGHT = 78,
+    HERO_GAP = 10,
+    METRIC_HEIGHT = 74,
+    METRIC_GAP = 10,
+    LEDGER_TOP_GAP = 18,
+    LEDGER_INSET = 12,
+    LEDGER_HEADER_HEIGHT = 38,
+    LEDGER_ROW_HEIGHT = 44,
+    LEDGER_ROW_GAP = 6,
+}
 local ACHIEVEMENT_SCROLL_HEIGHT = PANEL_HEIGHT - 82
 local BODY_TEXT = { r = 0.94, g = 0.86, b = 0.68 }
 local MUTED_TEXT = { r = 0.68, g = 0.56, b = 0.38 }
@@ -547,7 +559,8 @@ function RUN_LAYOUT:PlaceInlineField(anchor, label, box)
     box:SetPoint("LEFT", label, "RIGHT", 4, 0)
 end
 
-local function CreateOverviewCard(parent, title, x, y, width, height)
+local function CreateOverviewCard(parent, title, x, y, width, height, options)
+    options = options or {}
     local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     card:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     card:SetSize(width or 160, height or 86)
@@ -565,23 +578,64 @@ local function CreateOverviewCard(parent, title, x, y, width, height)
     end
 
     card.title = card:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    card.title:SetPoint("TOPLEFT", card, "TOPLEFT", 12, -10)
+    card.title:SetPoint("TOPLEFT", card, "TOPLEFT", 12, -9)
     card.title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
     card.title:SetText(title)
 
     card.value = card:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    card.value:SetPoint("TOPLEFT", card.title, "BOTTOMLEFT", 0, -10)
+    card.value:SetPoint("TOPLEFT", card.title, "BOTTOMLEFT", 0, -8)
     card.value:SetWidth((width or 160) - 24)
     card.value:SetJustifyH("LEFT")
     card.value:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+    if options.valueFont and _G[options.valueFont] then
+        card.value:SetFontObject(_G[options.valueFont])
+    end
+    if options.centerValue then
+        card.value:ClearAllPoints()
+        card.value:SetPoint("LEFT", card, "LEFT", 12, -8)
+        card.value:SetPoint("RIGHT", card, "RIGHT", -12, -8)
+        card.value:SetJustifyH("CENTER")
+    end
 
     card.detail = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     card.detail:SetPoint("TOPLEFT", card.value, "BOTTOMLEFT", 0, -8)
     card.detail:SetWidth((width or 160) - 24)
     card.detail:SetJustifyH("LEFT")
     card.detail:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
+    if options.hideDetail then
+        card.detail:Hide()
+    end
 
     return card
+end
+
+local function SetOverviewCardTone(card, color)
+    if not card or not color then return end
+    if card.SetBackdropColor then
+        card:SetBackdropColor(color.r * 0.10, color.g * 0.075, color.b * 0.045, 0.86)
+        card:SetBackdropBorderColor(color.r, color.g, color.b, 0.88)
+    end
+end
+
+local function CreateOverviewMetricGrid(parent, specs, x, y, width, height, gap)
+    local cards = {}
+    local order = {}
+    local count = #specs
+    local cardWidth = math.floor(((width or OVERVIEW_LAYOUT.CONTENT_WIDTH) - ((count - 1) * (gap or 0))) / count)
+
+    for index, spec in ipairs(specs) do
+        local left = x + ((index - 1) * (cardWidth + (gap or 0)))
+        local card = CreateOverviewCard(parent, spec.title, left, y, cardWidth, height, {
+            centerValue = true,
+            hideDetail = true,
+            valueFont = "GameFontNormalLarge",
+        })
+        card.metricKey = spec.key
+        cards[spec.key] = card
+        table.insert(order, card)
+    end
+
+    return cards, order
 end
 
 local function CreateRunSection(parent, title, x, y, width, height)
@@ -666,9 +720,17 @@ end
 local function SetCardValue(card, value, detail, color)
     if not card then return end
     card.value:SetText(tostring(value or ""))
-    card.detail:SetText(tostring(detail or ""))
+    if card.detail then
+        card.detail:SetText(tostring(detail or ""))
+        if detail and detail ~= "" then
+            card.detail:Show()
+        else
+            card.detail:Hide()
+        end
+    end
     color = color or BODY_TEXT
     card.value:SetTextColor(color.r, color.g, color.b)
+    SetOverviewCardTone(card, color)
 end
 
 local function SetRegionShown(region, shown)
@@ -721,20 +783,6 @@ local function SetDropdownSelected(dropdown, options, value)
     UIDropDownMenu_SetText(dropdown, GetOptionText(options, value))
 end
 
-local STATUS_COLORS = {
-    VALID   = "|cff4ade80",
-    ACTIVE  = "|cff4ade80",
-    FAILED  = "|cffff4444",
-    BLOCKED = "|cfffbbf24",
-    CONFLICT = "|cfffbbf24",
-    VIOLATION = "|cfffbbf24",
-    RAID_UNSUPPORTED = "|cfffbbf24",
-    UNSYNCED = "|cff9ca3af",
-    INACTIVE = "|cff9ca3af",
-    NOT_IN_RUN = "|cff9ca3af",
-}
-local COLOR_RESET = "|r"
-
 local STATUS_RGB = {
     VALID = GREEN_TEXT,
     ACTIVE = GREEN_TEXT,
@@ -780,17 +828,6 @@ local function FriendlyStatus(statusStr)
     local label = STATUS_LABELS[base] or raw
     if detail and detail ~= "" then
         return label .. " (" .. detail .. ")"
-    end
-    return label
-end
-
-local function ColorStatus(statusStr)
-    if not statusStr then return "" end
-    local base = string.match(statusStr, "^(%u+)")
-    local color = base and STATUS_COLORS[base]
-    local label = FriendlyStatus(statusStr)
-    if color then
-        return color .. label .. COLOR_RESET
     end
     return label
 end
@@ -1148,35 +1185,6 @@ local function CountActiveConflicts(run)
     return count
 end
 
-local function FormatSyncTime(timestamp)
-    if not timestamp then
-        return "none"
-    end
-    return FormatElapsed(timestamp) .. " ago"
-end
-
-local function BuildRunIntegritySummary(run, activeViolations)
-    local db = SC.db or SoftcoreDB
-    local rulesHash = SC.GetRulesetHash and SC:GetRulesetHash() or "unknown"
-    local conflicts = CountActiveConflicts(run)
-    local version = SC.version or "?"
-    local sync = db and db.sync or {}
-    local lastSync = sync.lastReceivedAt or sync.lastSentAt
-    local activeTime = SC.GetActiveRunTimeSeconds and SC:GetActiveRunTimeSeconds() or (run and run.activeTimeSeconds) or 0
-
-    local summary = "Integrity: addon " .. tostring(version)
-        .. "  /  rules " .. tostring(rulesHash)
-        .. "  /  observed " .. FormatDuration(activeTime)
-        .. "  /  conflicts " .. tostring(conflicts)
-        .. "  /  active violations " .. tostring(activeViolations or 0)
-
-    if IsInGroup() and not IsInRaid() then
-        summary = summary .. "  /  sync " .. FormatSyncTime(lastSync)
-    end
-
-    return summary
-end
-
 local function GetPartyDisplayRows()
     local db = SC.db or SoftcoreDB
     local syncRows = SC.Sync_GetGroupRows and SC:Sync_GetGroupRows() or {}
@@ -1195,6 +1203,7 @@ local function GetPartyDisplayRows()
         startLevel = localParticipant and localParticipant.levelAtJoin,
         status = localStatus.participantStatus or "NOT_IN_RUN",
         totalViolations = CountAllViolations(localKey),
+        isLocal = true,
     })
     seen[localKey] = true
 
@@ -1248,22 +1257,203 @@ local function GetPartyDisplayRows()
     return displayRows
 end
 
-local function CreateOverviewPartyRow(parent, index)
-    local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(690, 26)
-    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -302 - ((index - 1) * 28))
-    local rowBg = row:CreateTexture(nil, "BACKGROUND")
-    rowBg:SetAllPoints(row)
-    if index % 2 == 0 then
-        rowBg:SetColorTexture(0.82, 0.58, 0.22, 0.08)
-    else
-        rowBg:SetColorTexture(0.02, 0.01, 0.00, 0.14)
+local function GetOverviewStatusColor(status)
+    local base = GetStatusBase(status)
+    return STATUS_RGB[base] or BODY_TEXT
+end
+
+local function CalculateOverviewLedgerHeight(rowCount)
+    rowCount = math.max(tonumber(rowCount or 1) or 1, 1)
+    return OVERVIEW_LAYOUT.LEDGER_INSET
+        + OVERVIEW_LAYOUT.LEDGER_HEADER_HEIGHT
+        + (rowCount * OVERVIEW_LAYOUT.LEDGER_ROW_HEIGHT)
+        + ((rowCount - 1) * OVERVIEW_LAYOUT.LEDGER_ROW_GAP)
+        + OVERVIEW_LAYOUT.LEDGER_INSET
+end
+
+local function CreateOverviewSmallBadge(parent, width, height)
+    local badge = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    badge:SetSize(width or 72, height or 24)
+    if badge.SetBackdrop then
+        badge:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true,
+            tileSize = 12,
+            edgeSize = 10,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        badge:SetBackdropColor(0.08, 0.045, 0.018, 0.88)
+        badge:SetBackdropBorderColor(0.68, 0.48, 0.18, 0.75)
     end
-    row.name = CreateField(row, 10, -5, 200)
-    row.level = CreateField(row, 224, -5, 90)
-    row.status = CreateField(row, 336, -5, 180)
-    row.total = CreateField(row, 560, -5, 110)
+
+    badge.text = badge:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    badge.text:SetPoint("CENTER", badge, "CENTER", 0, 0)
+    badge.text:SetWidth((width or 72) - 12)
+    badge.text:SetJustifyH("CENTER")
+    return badge
+end
+
+local function SetOverviewSmallBadge(badge, text, color)
+    if not badge then return end
+    color = color or BODY_TEXT
+    badge.text:SetText(tostring(text or ""))
+    badge.text:SetTextColor(color.r, color.g, color.b)
+    if badge.SetBackdropColor then
+        badge:SetBackdropColor(color.r * 0.12, color.g * 0.09, color.b * 0.06, 0.9)
+        badge:SetBackdropBorderColor(color.r, color.g, color.b, 0.82)
+    end
+end
+
+local function CreateOverviewPartyRow(parent, index, width)
+    local row = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    row:SetSize(width, OVERVIEW_LAYOUT.LEDGER_ROW_HEIGHT)
+    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -((index - 1) * (OVERVIEW_LAYOUT.LEDGER_ROW_HEIGHT + OVERVIEW_LAYOUT.LEDGER_ROW_GAP)))
+    if row.SetBackdrop then
+        row:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true,
+            tileSize = 12,
+            edgeSize = 10,
+            insets = { left = 2, right = 2, top = 2, bottom = 2 },
+        })
+        row:SetBackdropColor(0.07, 0.045, 0.022, 0.82)
+        row:SetBackdropBorderColor(0.45, 0.34, 0.16, 0.7)
+    end
+
+    row.accent = row:CreateTexture(nil, "ARTWORK")
+    row.accent:SetPoint("TOPLEFT", row, "TOPLEFT", 3, -3)
+    row.accent:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 3, 3)
+    row.accent:SetWidth(3)
+    row.accent:SetColorTexture(GREEN_TEXT.r, GREEN_TEXT.g, GREEN_TEXT.b, 0.9)
+
+    row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 16, -7)
+    row.name:SetWidth(302)
+    row.name:SetJustifyH("LEFT")
+    row.name:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+    row.name:SetWordWrap(false)
+
+    row.meta = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.meta:SetPoint("TOPLEFT", row, "TOPLEFT", 16, -26)
+    row.meta:SetWidth(302)
+    row.meta:SetJustifyH("LEFT")
+    row.meta:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
+    row.meta:SetWordWrap(false)
+
+    row.statusPill = CreateStatusPill(row, 332, -9, 176)
+    row.totalBadge = CreateOverviewSmallBadge(row, 84, 24)
+    row.totalBadge:SetPoint("TOPRIGHT", row, "TOPRIGHT", -14, -10)
+    row:Hide()
     return row
+end
+
+local function CreateOverviewPartyLedger(parent, x, y, width, maxRows)
+    local ledger = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    ledger:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    ledger:SetSize(width, CalculateOverviewLedgerHeight(maxRows))
+    if ledger.SetBackdrop then
+        ledger:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        ledger:SetBackdropColor(0.07, 0.042, 0.018, 0.9)
+        ledger:SetBackdropBorderColor(0.72, 0.56, 0.22, 0.88)
+    end
+
+    ledger.title = ledger:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    ledger.title:SetPoint("TOPLEFT", ledger, "TOPLEFT", OVERVIEW_LAYOUT.LEDGER_INSET, -10)
+    ledger.title:SetWidth(240)
+    ledger.title:SetJustifyH("LEFT")
+    ledger.title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
+    ledger.title:SetText("Party Ledger")
+
+    ledger.mode = ledger:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ledger.mode:SetPoint("LEFT", ledger.title, "RIGHT", 8, 0)
+    ledger.mode:SetWidth(120)
+    ledger.mode:SetJustifyH("LEFT")
+    ledger.mode:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
+
+    ledger.count = CreateOverviewSmallBadge(ledger, 54, 22)
+    ledger.count:SetPoint("TOPRIGHT", ledger, "TOPRIGHT", -OVERVIEW_LAYOUT.LEDGER_INSET, -8)
+
+    ledger.divider = ledger:CreateTexture(nil, "ARTWORK")
+    ledger.divider:SetHeight(1)
+    ledger.divider:SetPoint("TOPLEFT", ledger, "TOPLEFT", OVERVIEW_LAYOUT.LEDGER_INSET, -OVERVIEW_LAYOUT.LEDGER_HEADER_HEIGHT)
+    ledger.divider:SetPoint("TOPRIGHT", ledger, "TOPRIGHT", -OVERVIEW_LAYOUT.LEDGER_INSET, -OVERVIEW_LAYOUT.LEDGER_HEADER_HEIGHT)
+    ledger.divider:SetColorTexture(0.72, 0.49, 0.18, 0.38)
+
+    ledger.rowsFrame = CreateFrame("Frame", nil, ledger)
+    ledger.rowsFrame:SetPoint("TOPLEFT", ledger, "TOPLEFT", OVERVIEW_LAYOUT.LEDGER_INSET, -(OVERVIEW_LAYOUT.LEDGER_HEADER_HEIGHT + OVERVIEW_LAYOUT.LEDGER_INSET))
+    ledger.rowsFrame:SetWidth(width - (OVERVIEW_LAYOUT.LEDGER_INSET * 2))
+
+    ledger.empty = ledger:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    ledger.empty:SetPoint("TOPLEFT", ledger.rowsFrame, "TOPLEFT", 4, -2)
+    ledger.empty:SetWidth(width - (OVERVIEW_LAYOUT.LEDGER_INSET * 2) - 8)
+    ledger.empty:SetJustifyH("LEFT")
+    ledger.empty:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
+    ledger.empty:SetText("Waiting for party members to sync.")
+    ledger.empty:Hide()
+
+    ledger.rows = {}
+    for index = 1, maxRows do
+        ledger.rows[index] = CreateOverviewPartyRow(ledger.rowsFrame, index, width - (OVERVIEW_LAYOUT.LEDGER_INSET * 2))
+    end
+
+    return ledger
+end
+
+local function FormatOverviewLevelText(level, startLevel)
+    local current = level and tostring(level) or "?"
+    local text = "Level " .. current
+    if tonumber(startLevel) and tonumber(startLevel) > 0 then
+        text = text .. "  |cffad8f61Started " .. tostring(startLevel) .. "|r"
+    end
+    return text
+end
+
+local function RefreshOverviewLedger(ledger, rows, grouped, inRaid)
+    if not ledger then return end
+
+    local visibleRows = math.min(#rows, OVERVIEW_PARTY_ROWS)
+    local modeText = "Solo"
+    if inRaid then
+        modeText = "Raid local"
+    elseif grouped then
+        modeText = "Party"
+    end
+
+    ledger.mode:SetText("|cffad8f61" .. modeText .. "|r")
+    SetOverviewSmallBadge(ledger.count, tostring(visibleRows) .. "/" .. tostring(OVERVIEW_PARTY_ROWS), GOLD_TEXT)
+    SetRegionShown(ledger.empty, visibleRows == 0)
+    ledger:SetHeight(CalculateOverviewLedgerHeight(visibleRows > 0 and visibleRows or 1))
+
+    for index, row in ipairs(ledger.rows) do
+        local display = rows[index]
+        if display then
+            local statusColor = GetOverviewStatusColor(display.status)
+            local total = tonumber(display.totalViolations or 0) or 0
+            local accentColor = total > 0 and GOLD_TEXT or statusColor
+
+            row:Show()
+            row.name:SetText((display.isLocal and "|cffffd100" or "") .. Trunc(display.name, 30) .. (display.isLocal and "|r" or ""))
+            row.meta:SetText(FormatOverviewLevelText(display.level, display.startLevel))
+            SetStatusPill(row.statusPill, display.status)
+            SetOverviewSmallBadge(row.totalBadge, tostring(total) .. " viol", total > 0 and GOLD_TEXT or MUTED_TEXT)
+            row.accent:SetColorTexture(accentColor.r, accentColor.g, accentColor.b, 0.95)
+            if row.SetBackdropColor then
+                row:SetBackdropColor(accentColor.r * 0.055, accentColor.g * 0.04, accentColor.b * 0.028, 0.86)
+                row:SetBackdropBorderColor(accentColor.r, accentColor.g, accentColor.b, 0.46)
+            end
+        else
+            row:Hide()
+        end
+    end
 end
 
 local function RefreshOverviewPanel(frame)
@@ -1300,21 +1490,11 @@ local function RefreshOverviewPanel(frame)
         frame.overview.runId:SetText("|cffad8f61Run ID: " .. tostring(run.runId or "none") .. "|r")
         frame.overview.identity:SetText("Level " .. tostring(currentLevel) .. "  |cffad8f61Started " .. tostring(startLevel) .. "|r")
 
-        local deathDetail = "permanent"
-        if run.ruleset and run.ruleset.maxDeaths and tonumber(run.ruleset.maxDeathsValue or 0) and tonumber(run.ruleset.maxDeathsValue or 0) > 1 then
-            deathDetail = "limit " .. tostring(run.ruleset.maxDeathsValue)
-        end
-        SetCardValue(frame.overview.deathCard, tostring(run.deathCount or 0), deathDetail, (run.deathCount or 0) > 0 and RED_TEXT or GREEN_TEXT)
-
-        local latestViolation = activeViolationRows[1]
-        local latestText = "none active"
-        if latestViolation then
-            latestText = Trunc(FormatViolationLogLabel(latestViolation.type), 22)
-        end
-        SetCardValue(frame.overview.violationCard, tostring(activeViolations), latestText, activeViolations > 0 and GOLD_TEXT or GREEN_TEXT)
+        SetCardValue(frame.overview.deathCard, tostring(run.deathCount or 0), "", (run.deathCount or 0) > 0 and RED_TEXT or GREEN_TEXT)
+        SetCardValue(frame.overview.violationCard, tostring(activeViolations), "", activeViolations > 0 and GOLD_TEXT or GREEN_TEXT)
 
         local activeTime = SC.GetActiveRunTimeSeconds and SC:GetActiveRunTimeSeconds() or run.activeTimeSeconds
-        SetCardValue(frame.overview.timeCard, FormatDuration(activeTime), "started " .. FormatClock(run.startTime), BLUE_TEXT)
+        SetCardValue(frame.overview.timeCard, FormatDuration(activeTime), "", BLUE_TEXT)
 
         local conflicts = CountActiveConflicts(run)
         local integrityColor = (conflicts > 0 or activeViolations > 0) and GOLD_TEXT or GREEN_TEXT
@@ -1324,34 +1504,12 @@ local function RefreshOverviewPanel(frame)
         elseif activeViolations > 0 then
             integrityValue = tostring(activeViolations) .. (activeViolations == 1 and " issue" or " issues")
         end
-        SetCardValue(frame.overview.integrityCard, integrityValue, "rules " .. tostring(SC.GetRulesetHash and SC:GetRulesetHash() or "unknown"), integrityColor)
-        frame.overview.detailLine:SetText("|cffad8f61" .. BuildRunIntegritySummary(run, activeViolations) .. "|r")
+        SetCardValue(frame.overview.integrityCard, integrityValue, "", integrityColor)
     end
 
-    SetRegionShown(frame.overview.partyEmpty, active and grouped and #partyRows == 0)
     SetRegionShown(frame.overview.raidNote, active and inRaid)
 
-    for index = #frame.overview.partyRows + 1, math.min(#partyRows, OVERVIEW_PARTY_ROWS) do
-        frame.overview.partyRows[index] = CreateOverviewPartyRow(frame.overview.panel, index)
-    end
-
-    for index, row in ipairs(frame.overview.partyRows) do
-        local display = partyRows[index]
-        if active and display then
-            row:Show()
-            row.name:SetText(Trunc(display.name, 24))
-            local levelText = display.level and tostring(display.level) or ""
-            if tonumber(display.startLevel) and tonumber(display.startLevel) > 0 then
-                levelText = levelText .. " |cffad8f61(" .. tostring(display.startLevel) .. ")|r"
-            end
-            row.level:SetText(levelText)
-            row.status:SetText(ColorStatus(display.status))
-            local total = display.totalViolations or 0
-            row.total:SetText(total > 0 and "|cfffbbf24" .. total .. "|r" or "0")
-        else
-            row:Hide()
-        end
-    end
+    RefreshOverviewLedger(frame.overview.partyLedger, active and partyRows or {}, grouped, inRaid)
 end
 
 local function SetRunSetupEnabled(frame, enabled)
@@ -2067,6 +2225,87 @@ function SC:ToggleMasterWindow(focusTab)
     end
 end
 
+local function CreateOverviewTab(frame)
+    local overviewPanel = CreatePanel(frame)
+    frame.panels[TAB_OVERVIEW] = overviewPanel
+
+    local inactiveCard = CreateOverviewCard(overviewPanel, "Character Record", 110, -86, 490, 170)
+    inactiveCard.value:SetFontObject(GameFontNormalLarge)
+    inactiveCard.detail:SetWidth(450)
+    inactiveCard.detail:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+
+    local hero = CreateFrame("Frame", nil, overviewPanel, "BackdropTemplate")
+    hero:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", 0, 0)
+    hero:SetSize(OVERVIEW_LAYOUT.CONTENT_WIDTH, OVERVIEW_LAYOUT.HERO_HEIGHT)
+    if hero.SetBackdrop then
+        hero:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        hero:SetBackdropColor(0.08, 0.045, 0.018, 0.86)
+        hero:SetBackdropBorderColor(0.72, 0.56, 0.22, 0.95)
+    end
+
+    frame.overview = {
+        panel = overviewPanel,
+        inactiveElements = { inactiveCard },
+        activeElements = { hero },
+        inactiveCard = inactiveCard,
+        hero = hero,
+    }
+
+    frame.overview.inactiveTitle = inactiveCard.value
+    frame.overview.inactiveBody = inactiveCard.detail
+    frame.overview.inactiveTitle:SetText("No Active Run")
+    frame.overview.inactiveBody:SetText("Start a Softcore run to begin tracking deaths, violations, and party status.")
+    frame.overview.goToRunBtn = CreateButton(overviewPanel, "Start a Run", 110, 24)
+    frame.overview.goToRunBtn:SetPoint("TOP", inactiveCard, "BOTTOM", 0, -18)
+    table.insert(frame.overview.inactiveElements, frame.overview.goToRunBtn)
+    frame.overview.goToRunBtn:SetScript("OnClick", function()
+        frame.activeTab = TAB_RUN
+        SC:MasterUI_Refresh()
+    end)
+
+    frame.overview.run = hero:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    frame.overview.run:SetPoint("TOPLEFT", hero, "TOPLEFT", 18, -14)
+    frame.overview.run:SetWidth(330)
+    frame.overview.run:SetJustifyH("LEFT")
+    frame.overview.run:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
+    frame.overview.runId = CreateField(hero, 18, -48, 330)
+    frame.overview.identity = CreateField(hero, 504, -48, 172)
+    frame.overview.identity:SetJustifyH("CENTER")
+    frame.overview.partyStatusPill = CreateStatusPill(hero, 344, -14, 156)
+    frame.overview.localStatusPill = CreateStatusPill(hero, 504, -14, 172)
+
+    local metricTop = -(OVERVIEW_LAYOUT.HERO_HEIGHT + OVERVIEW_LAYOUT.HERO_GAP)
+    local metricCards, metricOrder = CreateOverviewMetricGrid(overviewPanel, {
+        { key = "deathCard", title = "Deaths" },
+        { key = "violationCard", title = "Violations" },
+        { key = "timeCard", title = "Time" },
+        { key = "integrityCard", title = "Integrity" },
+    }, 0, metricTop, OVERVIEW_LAYOUT.CONTENT_WIDTH, OVERVIEW_LAYOUT.METRIC_HEIGHT, OVERVIEW_LAYOUT.METRIC_GAP)
+    frame.overview.deathCard = metricCards.deathCard
+    frame.overview.violationCard = metricCards.violationCard
+    frame.overview.timeCard = metricCards.timeCard
+    frame.overview.integrityCard = metricCards.integrityCard
+    for _, card in ipairs(metricOrder) do
+        table.insert(frame.overview.activeElements, card)
+    end
+
+    local ledgerTop = metricTop - OVERVIEW_LAYOUT.METRIC_HEIGHT - OVERVIEW_LAYOUT.LEDGER_TOP_GAP
+    frame.overview.partyLedger = CreateOverviewPartyLedger(overviewPanel, 0, ledgerTop, OVERVIEW_LAYOUT.CONTENT_WIDTH, OVERVIEW_PARTY_ROWS)
+    table.insert(frame.overview.activeElements, frame.overview.partyLedger)
+
+    frame.overview.raidNote = CreateField(frame.overview.partyLedger, OVERVIEW_LAYOUT.LEDGER_INSET, -CalculateOverviewLedgerHeight(1) - 8, 660)
+    frame.overview.raidNote:SetText("|cfffbbf24Raid groups are not supported. Softcore will show and track only your character.|r")
+    frame.overview.raidNote:Hide()
+    table.insert(frame.overview.activeElements, frame.overview.raidNote)
+end
+
 function SC:OpenMasterWindow(focusTab)
     if self.masterFrame then
         self.masterFrame:Show()
@@ -2675,93 +2914,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.proposalDeclineBtn:Hide()
     frame.start.proposalCancelBtn:Hide()
 
-    local overviewPanel = CreatePanel(frame)
-    frame.panels[TAB_OVERVIEW] = overviewPanel
-    local inactiveCard = CreateOverviewCard(overviewPanel, "Character Record", 110, -86, 490, 170)
-    inactiveCard.value:SetFontObject(GameFontNormalLarge)
-    inactiveCard.detail:SetWidth(450)
-    inactiveCard.detail:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
-    local hero = CreateFrame("Frame", nil, overviewPanel, "BackdropTemplate")
-    hero:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", 0, 0)
-    hero:SetSize(690, 78)
-    if hero.SetBackdrop then
-        hero:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            tile = true,
-            tileSize = 16,
-            edgeSize = 12,
-            insets = { left = 3, right = 3, top = 3, bottom = 3 },
-        })
-        hero:SetBackdropColor(0.08, 0.045, 0.018, 0.86)
-        hero:SetBackdropBorderColor(0.72, 0.56, 0.22, 0.95)
-    end
-    frame.overview = {
-        panel = overviewPanel,
-        inactiveElements = { inactiveCard },
-        activeElements = { hero },
-        inactiveCard = inactiveCard,
-        hero = hero,
-        partyRows = {},
-    }
-    frame.overview.inactiveTitle = inactiveCard.value
-    frame.overview.inactiveBody = inactiveCard.detail
-    frame.overview.inactiveTitle:SetText("No Active Run")
-    frame.overview.inactiveBody:SetText("Start a Softcore run to begin tracking deaths, violations, and party status.")
-    frame.overview.goToRunBtn = CreateButton(overviewPanel, "Start a Run", 110, 24)
-    frame.overview.goToRunBtn:SetPoint("TOP", inactiveCard, "BOTTOM", 0, -18)
-    table.insert(frame.overview.inactiveElements, frame.overview.goToRunBtn)
-    frame.overview.goToRunBtn:SetScript("OnClick", function()
-        frame.activeTab = TAB_RUN
-        SC:MasterUI_Refresh()
-    end)
-    frame.overview.run = hero:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    frame.overview.run:SetPoint("TOPLEFT", hero, "TOPLEFT", 18, -14)
-    frame.overview.run:SetWidth(330)
-    frame.overview.run:SetJustifyH("LEFT")
-    frame.overview.run:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
-    frame.overview.runId = CreateField(hero, 18, -48, 330)
-    frame.overview.identity = CreateField(hero, 504, -48, 172)
-    frame.overview.identity:SetJustifyH("CENTER")
-    frame.overview.partyStatusPill = CreateStatusPill(hero, 344, -14, 156)
-    frame.overview.localStatusPill = CreateStatusPill(hero, 504, -14, 172)
-
-    frame.overview.deathCard = CreateOverviewCard(overviewPanel, "Deaths", 0, -94, 166, 88)
-    frame.overview.violationCard = CreateOverviewCard(overviewPanel, "Violations", 176, -94, 166, 88)
-    frame.overview.timeCard = CreateOverviewCard(overviewPanel, "Time", 352, -94, 166, 88)
-    frame.overview.integrityCard = CreateOverviewCard(overviewPanel, "Integrity", 528, -94, 166, 88)
-    table.insert(frame.overview.activeElements, frame.overview.deathCard)
-    table.insert(frame.overview.activeElements, frame.overview.violationCard)
-    table.insert(frame.overview.activeElements, frame.overview.timeCard)
-    table.insert(frame.overview.activeElements, frame.overview.integrityCard)
-
-    frame.overview.detailLine = CreateField(overviewPanel, 0, -194, 690)
-    table.insert(frame.overview.activeElements, frame.overview.detailLine)
-
-    frame.overview.partyHeader = CreateSectionHeader(overviewPanel, "Party Ledger", 0, -230, 690)
-    table.insert(frame.overview.activeElements, frame.overview.partyHeader)
-    frame.overview.raidNote = CreateField(overviewPanel, 10, -254, 660)
-    frame.overview.raidNote:SetText("|cfffbbf24Raid groups are not supported. Softcore will show and track only your character.|r")
-    frame.overview.raidNote:Hide()
-    frame.overview.nameLabel = CreateLabel(overviewPanel, "Name", 10, -264, "GameFontNormalSmall", 190)
-    frame.overview.levelLabel = CreateLabel(overviewPanel, "Level |cffad8f61(Start)|r", 224, -264, "GameFontNormalSmall", 100)
-    frame.overview.statusLabel = CreateLabel(overviewPanel, "Status", 336, -264, "GameFontNormalSmall", 180)
-    frame.overview.totalLabel = CreateLabel(overviewPanel, "Total Violations", 560, -264, "GameFontNormalSmall", 140)
-    table.insert(frame.overview.activeElements, frame.overview.nameLabel)
-    table.insert(frame.overview.activeElements, frame.overview.levelLabel)
-    table.insert(frame.overview.activeElements, frame.overview.statusLabel)
-    table.insert(frame.overview.activeElements, frame.overview.totalLabel)
-
-    local columnSep = overviewPanel:CreateTexture(nil, "ARTWORK")
-    columnSep:SetHeight(1)
-    columnSep:SetPoint("TOPLEFT",  overviewPanel, "TOPLEFT",  0, -286)
-    columnSep:SetWidth(690)
-    columnSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
-    frame.overview.columnSep = columnSep
-    table.insert(frame.overview.activeElements, columnSep)
-
-    frame.overview.partyEmpty = CreateField(overviewPanel, 10, -302, 620)
-    frame.overview.partyEmpty:SetText("No synced party members.")
+    CreateOverviewTab(frame)
 
     local violationsPanel = CreatePanel(frame)
     frame.panels[TAB_VIOLATIONS] = violationsPanel
