@@ -80,8 +80,8 @@ local OVERVIEW_LAYOUT = {
     METRIC_HEIGHT = 74,
     METRIC_GAP = 10,
     LEDGER_TOP_GAP = 18,
-    ACTIVITY_HEIGHT = 68,
-    ACTIVITY_GAP = 10,
+    ACTIVITY_HEIGHT = 84,
+    ACTIVITY_GAP = 14,
     ACTIVITY_ROWS = 3,
     LEDGER_INSET = 12,
     LEDGER_HEADER_HEIGHT = 38,
@@ -1692,7 +1692,7 @@ local function CreateOverviewActivityPanel(parent, x, y, width, height)
     panel.divider:SetColorTexture(0.72, 0.49, 0.18, 0.30)
 
     panel.rows = {}
-    local rowTop = -24
+    local rowTop = -27
     local rowLeft = 12
     local rowWidth = width - 24
     local showActorColumn = rowWidth >= 620
@@ -1704,7 +1704,7 @@ local function CreateOverviewActivityPanel(parent, x, y, width, height)
     local actorWidth = 84
     local messageLeft = showActorColumn and 266 or 168
     local messageWidth = rowWidth - messageLeft - 8
-    local rowHeight = math.floor((height - 26) / OVERVIEW_LAYOUT.ACTIVITY_ROWS)
+    local rowHeight = math.floor((height - 36) / OVERVIEW_LAYOUT.ACTIVITY_ROWS)
     for index = 1, OVERVIEW_LAYOUT.ACTIVITY_ROWS do
         local row = CreateFrame("Frame", nil, panel)
         row:SetSize(rowWidth, rowHeight)
