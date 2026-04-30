@@ -186,6 +186,8 @@ Warband bank violations use `ACCOUNT_BANK_PANEL_OPENED` as an unconditional open
 
 Keep the addon compact and readable.
 
+Follow [`DESIGN.md`](DESIGN.md) for the current Overview/Charter design system: modular layout constants, helper-driven rows/cards/badges, useful-not-bloaty content decisions, party ledger structure, Recent Activity behavior, preset button consistency, color/status semantics, and future UI refactor checklists.
+
 Prefer simple controls:
 
 - checkboxes for allowed/disallowed rules

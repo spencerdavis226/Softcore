@@ -112,6 +112,8 @@ Party state is display and compatibility data. Remote state should not reset, fa
 
 Contributor- and agent-oriented notes (module map, queue/stale-send behavior, what `/sc dc` resets) live in [`AGENTS.md`](AGENTS.md) under **Sync implementation map**. Anyone changing sync, UI, or commands should follow **Rolling documentation updates** there in the same commit.
 
+UI layout and visual design guidance lives in [`DESIGN.md`](DESIGN.md). Use it when changing the Overview, Charter, HUD-adjacent menu behavior, or shared UI helpers.
+
 Softcore sync is built around current WoW addon-message limits:
 
 - The `SOFTCORE` prefix is registered after login/reload and must fit the 16-byte prefix limit.
