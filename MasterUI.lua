@@ -2509,7 +2509,7 @@ function SC:OpenMasterWindow(focusTab)
         if self.selfCraftedCheck.label then
             if highlightingRuleChanges and tostring(self.draftBaseRules.selfCraftedGearAllowed) ~= tostring(self.selectedRules.selfCraftedGearAllowed) then
                 SetFontStringRGB(self.selfCraftedCheck.label, selfCraftedActive and GREEN_TEXT or RED_TEXT)
-            elseif canEdit and gearRestricted and not ironmanSelected then
+            elseif gearRestricted and not ironmanSelected then
                 SetFontStringRGB(self.selfCraftedCheck.label, BODY_TEXT)
             else
                 SetFontStringRGB(self.selfCraftedCheck.label, MUTED_TEXT)
