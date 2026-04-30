@@ -40,7 +40,9 @@
     "FauxScrollFrame_Update",
     "FauxScrollFrame_GetOffset",
     "FauxScrollFrame_OnVerticalScroll",
-    "WorldFrame"
+    "WorldFrame",
+    "RAID_CLASS_COLORS",
+    "LOCALIZED_CLASS_NAMES_MALE"
   ],
   "Lua.type.weakUnionCheck": true
 }
