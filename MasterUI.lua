@@ -55,6 +55,15 @@ local AUDIT_LIST_LAYOUT = {
     ROW_TEXT_INSET = 10,
     SCROLL_RIGHT_INSET = 24,
 }
+AUDIT_LIST_LAYOUT.TYPE_X = 10
+AUDIT_LIST_LAYOUT.TYPE_WIDTH = 150
+AUDIT_LIST_LAYOUT.ACTOR_X = 176
+AUDIT_LIST_LAYOUT.ACTOR_WIDTH = 120
+AUDIT_LIST_LAYOUT.TIME_X = 318
+AUDIT_LIST_LAYOUT.TIME_WIDTH = 112
+AUDIT_LIST_LAYOUT.MESSAGE_X = 448
+AUDIT_LIST_LAYOUT.MESSAGE_WIDTH = AUDIT_LIST_LAYOUT.CONTENT_WIDTH - AUDIT_LIST_LAYOUT.MESSAGE_X - 28
+AUDIT_LIST_LAYOUT.ACTION_MESSAGE_WIDTH = AUDIT_LIST_LAYOUT.CONTENT_WIDTH - AUDIT_LIST_LAYOUT.MESSAGE_X - 96
 AUDIT_LIST_LAYOUT.VISIBLE_ROWS = math.floor((PANEL_HEIGHT + AUDIT_LIST_LAYOUT.ROW_TOP - AUDIT_LIST_LAYOUT.FOOTER_HEIGHT - 8) / AUDIT_LIST_LAYOUT.ROW_HEIGHT)
 local LOG_UI_MAX_ENTRIES = 1000
 local LOG_ROWS = AUDIT_LIST_LAYOUT.VISIBLE_ROWS
@@ -2294,11 +2303,11 @@ local function RefreshViolationsPanel(frame)
 
             row:Show()
             SetAuditRowAccent(row, tone)
-            row.time:SetText(Trunc(FormatTime(violation.createdAt), 16))
-            row.owner:SetText(Trunc(FormatPlayerLabel(violation.playerKey), 18))
-            row.type:SetText(Trunc(FormatViolationLogLabel(violation.type), 20))
+            row.time:SetText(Trunc(FormatTime(violation.createdAt), 18))
+            row.owner:SetText(Trunc(FormatPlayerLabel(violation.playerKey), 20))
+            row.type:SetText(Trunc(FormatViolationLogLabel(violation.type), 24))
             row.type:SetTextColor(tone.r, tone.g, tone.b)
-            SetCompactText(row.detail, FormatViolationDetail(violation), 74)
+            SetCompactText(row.detail, FormatViolationDetail(violation), 54)
             SetAuditRowTooltip(row, FormatViolationLogLabel(violation.type), FormatViolationDetail(violation))
 
             if SC:IsViolationClearable(violation) then
@@ -2373,11 +2382,11 @@ local function RefreshLogPanel(frame)
 
             row:Show()
             SetAuditRowAccent(row, eventColor)
-            row.time:SetText(Trunc(FormatTime(entry.time), 16))
-            row.actor:SetText(Trunc(FormatPlayerLabel(entry.actorKey or entry.playerKey), 18))
-            row.kind:SetText(Trunc(eventLabel, 20))
+            row.time:SetText(Trunc(FormatTime(entry.time), 18))
+            row.actor:SetText(Trunc(FormatPlayerLabel(entry.actorKey or entry.playerKey), 20))
+            row.kind:SetText(Trunc(eventLabel, 24))
             row.kind:SetTextColor(eventColor.r, eventColor.g, eventColor.b)
-            SetCompactText(row.message, message, 92)
+            SetCompactText(row.message, message, 54)
             SetAuditRowTooltip(row, eventLabel, message)
         else
             row:Hide()
@@ -2394,9 +2403,10 @@ local function CreateViolationsTab(frame)
     CreateSectionHeader(violationsPanel, "Active Violations", 0, 0, AUDIT_LIST_LAYOUT.CONTENT_WIDTH)
     frame.violations.summary = CreateField(violationsPanel, 0, AUDIT_LIST_LAYOUT.SUMMARY_TOP, 420)
     frame.violations.summary:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
-    CreateAuditColumn(violationsPanel, "Issue", 10, 142)
-    CreateAuditColumn(violationsPanel, "Character", 164, 110)
-    CreateAuditColumn(violationsPanel, "Time", 286, 116)
+    CreateAuditColumn(violationsPanel, "Issue", AUDIT_LIST_LAYOUT.TYPE_X, AUDIT_LIST_LAYOUT.TYPE_WIDTH)
+    CreateAuditColumn(violationsPanel, "Character", AUDIT_LIST_LAYOUT.ACTOR_X, AUDIT_LIST_LAYOUT.ACTOR_WIDTH)
+    CreateAuditColumn(violationsPanel, "Time", AUDIT_LIST_LAYOUT.TIME_X, AUDIT_LIST_LAYOUT.TIME_WIDTH)
+    CreateAuditColumn(violationsPanel, "Details", AUDIT_LIST_LAYOUT.MESSAGE_X, AUDIT_LIST_LAYOUT.ACTION_MESSAGE_WIDTH)
     local violColSep = CreateDivider(violationsPanel, 0, AUDIT_LIST_LAYOUT.DIVIDER_TOP, AUDIT_LIST_LAYOUT.CONTENT_WIDTH - AUDIT_LIST_LAYOUT.SCROLL_RIGHT_INSET)
     violColSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
 
@@ -2413,10 +2423,10 @@ local function CreateViolationsTab(frame)
 
     for index = 1, VIOLATION_ROWS do
         local row = CreateAuditRow(violationsPanel, index)
-        row.type = CreateField(row, AUDIT_LIST_LAYOUT.ROW_TEXT_INSET, -4, 142)
-        row.owner = CreateField(row, 164, -4, 110)
-        row.time = CreateField(row, 286, -4, 116)
-        row.detail = CreateField(row, AUDIT_LIST_LAYOUT.ROW_TEXT_INSET, -19, 566)
+        row.type = CreateField(row, AUDIT_LIST_LAYOUT.TYPE_X, -10, AUDIT_LIST_LAYOUT.TYPE_WIDTH)
+        row.owner = CreateField(row, AUDIT_LIST_LAYOUT.ACTOR_X, -10, AUDIT_LIST_LAYOUT.ACTOR_WIDTH)
+        row.time = CreateField(row, AUDIT_LIST_LAYOUT.TIME_X, -10, AUDIT_LIST_LAYOUT.TIME_WIDTH)
+        row.detail = CreateField(row, AUDIT_LIST_LAYOUT.MESSAGE_X, -10, AUDIT_LIST_LAYOUT.ACTION_MESSAGE_WIDTH)
         row.time:SetWordWrap(false)
         row.owner:SetWordWrap(false)
         row.type:SetWordWrap(false)
@@ -2437,9 +2447,10 @@ local function CreateLogTab(frame)
     CreateSectionHeader(logPanel, "Audit Log", 0, 0, AUDIT_LIST_LAYOUT.CONTENT_WIDTH)
     frame.log.summary = CreateField(logPanel, 0, AUDIT_LIST_LAYOUT.SUMMARY_TOP, 440)
     frame.log.summary:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
-    CreateAuditColumn(logPanel, "Event", 10, 132)
-    CreateAuditColumn(logPanel, "Character", 154, 120)
-    CreateAuditColumn(logPanel, "Time", 286, 116)
+    CreateAuditColumn(logPanel, "Event", AUDIT_LIST_LAYOUT.TYPE_X, AUDIT_LIST_LAYOUT.TYPE_WIDTH)
+    CreateAuditColumn(logPanel, "Character", AUDIT_LIST_LAYOUT.ACTOR_X, AUDIT_LIST_LAYOUT.ACTOR_WIDTH)
+    CreateAuditColumn(logPanel, "Time", AUDIT_LIST_LAYOUT.TIME_X, AUDIT_LIST_LAYOUT.TIME_WIDTH)
+    CreateAuditColumn(logPanel, "Message", AUDIT_LIST_LAYOUT.MESSAGE_X, AUDIT_LIST_LAYOUT.MESSAGE_WIDTH)
     local logColSep = CreateDivider(logPanel, 0, AUDIT_LIST_LAYOUT.DIVIDER_TOP, AUDIT_LIST_LAYOUT.CONTENT_WIDTH - AUDIT_LIST_LAYOUT.SCROLL_RIGHT_INSET)
     logColSep:SetColorTexture(0.72, 0.49, 0.18, 0.42)
 
@@ -2456,10 +2467,10 @@ local function CreateLogTab(frame)
 
     for index = 1, LOG_ROWS do
         local row = CreateAuditRow(logPanel, index)
-        row.kind = CreateField(row, AUDIT_LIST_LAYOUT.ROW_TEXT_INSET, -4, 132)
-        row.actor = CreateField(row, 154, -4, 120)
-        row.time = CreateField(row, 286, -4, 116)
-        row.message = CreateField(row, AUDIT_LIST_LAYOUT.ROW_TEXT_INSET, -19, 650)
+        row.kind = CreateField(row, AUDIT_LIST_LAYOUT.TYPE_X, -10, AUDIT_LIST_LAYOUT.TYPE_WIDTH)
+        row.actor = CreateField(row, AUDIT_LIST_LAYOUT.ACTOR_X, -10, AUDIT_LIST_LAYOUT.ACTOR_WIDTH)
+        row.time = CreateField(row, AUDIT_LIST_LAYOUT.TIME_X, -10, AUDIT_LIST_LAYOUT.TIME_WIDTH)
+        row.message = CreateField(row, AUDIT_LIST_LAYOUT.MESSAGE_X, -10, AUDIT_LIST_LAYOUT.MESSAGE_WIDTH)
         row.time:SetWordWrap(false)
         row.actor:SetWordWrap(false)
         row.kind:SetWordWrap(false)
