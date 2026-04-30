@@ -1562,6 +1562,8 @@ function SC:StartRun(runOptions)
     db.run.startLevel = db.character.level
     db.run.deathCount = 0
     db.run.warningCount = 0
+    db.run.rulesetModified = false
+    db.run.rulesetModifiedAtLevel = nil
     db.run.ruleset = startingRuleset
     db.run.ruleset.achievementPreset = runOptions.preset or db.run.ruleset.achievementPreset or "CUSTOM"
     ApplyGroupingModeRules(db.run.ruleset)

@@ -752,6 +752,13 @@ function SC:ApplyRuleAmendment(amendmentId)
                     end
 
                     db.run.ruleset.version = (tonumber(db.run.ruleset.version) or 1) + 1
+                    db.run.rulesetModified = true
+                    if self.RefreshCharacter then
+                        self:RefreshCharacter()
+                    end
+                    db.run.rulesetModifiedAtLevel = tonumber(db.character and db.character.level)
+                        or tonumber(UnitLevel and UnitLevel("player"))
+                        or db.run.rulesetModifiedAtLevel
 
                     amendment.status = "APPLIED"
                     amendment.appliedAt = time()

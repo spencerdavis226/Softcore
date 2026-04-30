@@ -218,6 +218,7 @@ local PRESET_DISPLAY = {
     IRONMAN = "Ironman Run",
     IRON_VIGIL = "Iron Vigil Run",
 }
+local PRESET_ORDER = { "CASUAL", "CHEF_SPECIAL", "IRONMAN", "IRON_VIGIL" }
 
 local GROUPING_OPTIONS = {
     { text = "Group", value = "SYNCED_GROUP_ALLOWED" },
@@ -1176,13 +1177,11 @@ local function CreateDeathAnnounceCheckbox(parent, channel, label, x, y)
     return checkbox
 end
 
-local function ApplyStartPreset(frame, preset)
-    local rules = frame.start.selectedRules
-    frame.start.selectedPreset = preset
-
+local function ConfigureRulesForPreset(rules, preset)
     local ironman = preset == "IRONMAN" or preset == "IRON_VIGIL"
     local ironVigil = preset == "IRON_VIGIL"
     local chef = preset == "CHEF_SPECIAL"
+    local selectedCameraMode = nil
 
     rules.groupingMode = ironman and "SOLO_SELF_FOUND" or "SYNCED_GROUP_ALLOWED"
     rules.gearQuality = (ironman or chef) and "WHITE_GRAY_ONLY" or "ALLOWED"
@@ -1212,7 +1211,6 @@ local function ApplyStartPreset(frame, preset)
     SetDisallowedRule(rules, "consumables", not ironman)
     SetDisallowedRule(rules, "instancedPvP", false)
     rules.actionCam = "ALLOWED"
-    frame.start.selectedCameraMode = nil
 
     if chef then
         rules.auctionHouse = DISALLOWED_OUTCOME
@@ -1229,8 +1227,8 @@ local function ApplyStartPreset(frame, preset)
         rules.consumables = "ALLOWED"
         rules.dungeonRepeat = "ALLOWED"
         rules.instancedPvP = DISALLOWED_OUTCOME
-        frame.start.selectedCameraMode = "CINEMATIC"
-        SetCameraRules(rules, frame.start.selectedCameraMode)
+        selectedCameraMode = "CINEMATIC"
+        SetCameraRules(rules, selectedCameraMode)
     elseif not ironman then
         -- Casual: minimal restrictions for a lightweight baseline run.
         rules.auctionHouse = "ALLOWED"
@@ -1244,8 +1242,8 @@ local function ApplyStartPreset(frame, preset)
     end
 
     if ironVigil then
-        frame.start.selectedCameraMode = "CINEMATIC"
-        SetCameraRules(rules, frame.start.selectedCameraMode)
+        selectedCameraMode = "CINEMATIC"
+        SetCameraRules(rules, selectedCameraMode)
     end
 
     rules.maxDeaths = false
@@ -1255,6 +1253,14 @@ local function ApplyStartPreset(frame, preset)
     if SC.ApplyGroupingMode then
         SC:ApplyGroupingMode(rules)
     end
+
+    return selectedCameraMode
+end
+
+local function ApplyStartPreset(frame, preset)
+    local rules = frame.start.selectedRules
+    frame.start.selectedPreset = preset
+    frame.start.selectedCameraMode = ConfigureRulesForPreset(rules, preset)
 
     if frame.start.RefreshControls then
         frame.start:RefreshControls()
@@ -1504,9 +1510,51 @@ local function FormatTotalViolations(count)
     return tostring(count) .. (count == 1 and " total violation" or " total violations")
 end
 
+local function BuildPresetRuleset(preset)
+    local rules = SC.GetDefaultRuleset and SC:GetDefaultRuleset() or {}
+    ConfigureRulesForPreset(rules, preset)
+    return rules
+end
+
+local function RulesMatchPreset(rules, preset)
+    if not rules then return false end
+
+    local presetRules = BuildPresetRuleset(preset)
+    if SC.DescribeRulesetDifferences then
+        return #SC:DescribeRulesetDifferences(presetRules, rules) == 0
+    end
+
+    return rules.achievementPreset == preset
+end
+
+local function DetectRulesetPreset(rules)
+    for _, preset in ipairs(PRESET_ORDER) do
+        if RulesMatchPreset(rules, preset) then
+            return preset
+        end
+    end
+    return nil
+end
+
 local function FormatOverviewRunTitle(run)
-    local preset = run and run.ruleset and run.ruleset.achievementPreset
+    local preset = DetectRulesetPreset(run and run.ruleset)
     return PRESET_DISPLAY[preset] or "Custom Run"
+end
+
+local function FormatOverviewRunDetail(run)
+    if run and run.rulesetModified == false then
+        return "Unmodified"
+    end
+
+    local version = tonumber(run and run.ruleset and run.ruleset.version) or 1
+    local level = tonumber(run and run.rulesetModifiedAtLevel)
+    if run and run.rulesetModified ~= true and version <= 1 and not level then
+        return "Unmodified"
+    end
+    if level and level > 0 then
+        return "Modified at level " .. tostring(level)
+    end
+    return "Modified"
 end
 
 local function GetClassColor(classFile)
@@ -1908,7 +1956,7 @@ local function RefreshOverviewPanel(frame)
             startLevel = "?"
         end
         local currentLevel = db and db.character and db.character.level or "?"
-        frame.overview.runId:SetText("|cffad8f61Run ID: " .. tostring(run.runId or "none") .. "|r")
+        frame.overview.runId:SetText("|cffad8f61" .. FormatOverviewRunDetail(run) .. "|r")
         frame.overview.identity:SetText("Level " .. tostring(currentLevel) .. "  |cffad8f61Started " .. tostring(startLevel) .. "|r")
 
         SetCardValue(frame.overview.deathCard, tostring(run.deathCount or 0), "", (run.deathCount or 0) > 0 and RED_TEXT or GREEN_TEXT)
