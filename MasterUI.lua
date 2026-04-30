@@ -58,6 +58,9 @@ local OVERVIEW_LAYOUT = {
     METRIC_HEIGHT = 74,
     METRIC_GAP = 10,
     LEDGER_TOP_GAP = 18,
+    ACTIVITY_HEIGHT = 68,
+    ACTIVITY_GAP = 10,
+    ACTIVITY_ROWS = 3,
     LEDGER_INSET = 12,
     LEDGER_HEADER_HEIGHT = 38,
     LEDGER_ROW_HEIGHT = 44,
@@ -75,6 +78,27 @@ local BLUE_TEXT = { r = 0.38, g = 0.66, b = 1.00 }
 local PURPLE_TEXT = { r = 0.78, g = 0.58, b = 1.00 }
 local ORANGE_TEXT = { r = 1.00, g = 0.58, b = 0.22 }
 local MENU_LOGO_TEXTURE = "Interface\\AddOns\\Softcore\\Assets\\SoftcoreLogoMenu"
+
+local CLASS_COLORS = {
+    DEATHKNIGHT = { r = 0.77, g = 0.12, b = 0.23 },
+    DEMONHUNTER = { r = 0.64, g = 0.19, b = 0.79 },
+    DRUID = { r = 1.00, g = 0.49, b = 0.04 },
+    EVOKER = { r = 0.20, g = 0.58, b = 0.50 },
+    HUNTER = { r = 0.67, g = 0.83, b = 0.45 },
+    MAGE = { r = 0.25, g = 0.78, b = 0.92 },
+    MONK = { r = 0.00, g = 1.00, b = 0.60 },
+    PALADIN = { r = 0.96, g = 0.55, b = 0.73 },
+    PRIEST = { r = 1.00, g = 1.00, b = 1.00 },
+    ROGUE = { r = 1.00, g = 0.96, b = 0.41 },
+    SHAMAN = { r = 0.00, g = 0.44, b = 0.87 },
+    WARLOCK = { r = 0.53, g = 0.53, b = 0.93 },
+    WARRIOR = { r = 0.78, g = 0.61, b = 0.43 },
+}
+
+local CLASS_LABELS = {
+    DEATHKNIGHT = "Death Knight",
+    DEMONHUNTER = "Demon Hunter",
+}
 
 local PRESET_DISPLAY = {
     CASUAL = "Casual Run",
@@ -1223,6 +1247,7 @@ local function GetPartyDisplayRows()
         name = localName or "You",
         level = db and db.character and db.character.level,
         startLevel = localParticipant and localParticipant.levelAtJoin,
+        class = db and db.character and db.character.class,
         status = localStatus.participantStatus or "NOT_IN_RUN",
         totalViolations = CountAllViolations(localKey),
         isLocal = true,
@@ -1253,6 +1278,7 @@ local function GetPartyDisplayRows()
                 name = peer.name or peer.playerKey or "Unknown",
                 level = peer.level,
                 startLevel = startLevel,
+                class = peer.class or (pRow and pRow.class),
                 status = displayStatus,
                 totalViolations = CountAllViolations(peer.playerKey or ""),
             })
@@ -1268,6 +1294,7 @@ local function GetPartyDisplayRows()
                     name = participant.playerKey,
                     level = participant.currentLevel,
                     startLevel = participant.levelAtJoin,
+                    class = participant.class,
                     status = tostring(participant.status or "UNKNOWN"),
                     totalViolations = CountAllViolations(participantKey),
                 })
@@ -1292,6 +1319,46 @@ end
 local function FormatOverviewRunTitle(run)
     local preset = run and run.ruleset and run.ruleset.achievementPreset
     return PRESET_DISPLAY[preset] or "Custom Run"
+end
+
+local function GetClassColor(classFile)
+    classFile = tostring(classFile or "")
+    local colors = (_G and _G.RAID_CLASS_COLORS) or RAID_CLASS_COLORS
+    local color = colors and colors[classFile] or CLASS_COLORS[classFile]
+    if color then
+        return { r = color.r or 0.68, g = color.g or 0.56, b = color.b or 0.38 }
+    end
+    return MUTED_TEXT
+end
+
+local function FormatClassName(classFile)
+    classFile = tostring(classFile or "")
+    if classFile == "" or classFile == "UNKNOWN" then
+        return "Class"
+    end
+    local localized = LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[classFile]
+    if localized and localized ~= "" then
+        return localized
+    end
+    if CLASS_LABELS[classFile] then
+        return CLASS_LABELS[classFile]
+    end
+    local text = string.lower(classFile)
+    text = string.gsub(text, "(%a)([%w']*)", function(first, rest)
+        return string.upper(first) .. rest
+    end)
+    return text
+end
+
+local function SetOverviewBadgeTone(badge, text, color)
+    if not badge then return end
+    color = color or BODY_TEXT
+    badge.text:SetText(tostring(text or ""))
+    badge.text:SetTextColor(color.r, color.g, color.b)
+    if badge.SetBackdropColor then
+        badge:SetBackdropColor(color.r * 0.12, color.g * 0.09, color.b * 0.06, 0.9)
+        badge:SetBackdropBorderColor(color.r, color.g, color.b, 0.82)
+    end
 end
 
 local function CalculateOverviewLedgerHeight(rowCount)
@@ -1327,14 +1394,7 @@ local function CreateOverviewSmallBadge(parent, width, height)
 end
 
 local function SetOverviewSmallBadge(badge, text, color)
-    if not badge then return end
-    color = color or BODY_TEXT
-    badge.text:SetText(tostring(text or ""))
-    badge.text:SetTextColor(color.r, color.g, color.b)
-    if badge.SetBackdropColor then
-        badge:SetBackdropColor(color.r * 0.12, color.g * 0.09, color.b * 0.06, 0.9)
-        badge:SetBackdropBorderColor(color.r, color.g, color.b, 0.82)
-    end
+    SetOverviewBadgeTone(badge, text, color)
 end
 
 local function CreateOverviewPartyRow(parent, index, width)
@@ -1362,20 +1422,22 @@ local function CreateOverviewPartyRow(parent, index, width)
 
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 16, -7)
-    row.name:SetWidth(244)
+    row.name:SetWidth(220)
     row.name:SetJustifyH("LEFT")
     row.name:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
     row.name:SetWordWrap(false)
 
     row.meta = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.meta:SetPoint("TOPLEFT", row, "TOPLEFT", 16, -26)
-    row.meta:SetWidth(244)
+    row.meta:SetWidth(220)
     row.meta:SetJustifyH("LEFT")
     row.meta:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
     row.meta:SetWordWrap(false)
 
-    row.statusPill = CreateStatusPill(row, 272, -9, 168)
-    row.totalBadge = CreateOverviewSmallBadge(row, 176, 24)
+    row.statusPill = CreateStatusPill(row, 252, -9, 128)
+    row.classBadge = CreateOverviewSmallBadge(row, 104, 24)
+    row.classBadge:SetPoint("TOPLEFT", row, "TOPLEFT", 388, -10)
+    row.totalBadge = CreateOverviewSmallBadge(row, 150, 24)
     row.totalBadge:SetPoint("TOPRIGHT", row, "TOPRIGHT", -14, -10)
     row:Hide()
     return row
@@ -1461,6 +1523,7 @@ local function RefreshOverviewLedger(ledger, rows, grouped, inRaid)
             row.name:SetText((display.isLocal and "|cffffd100" or "") .. Trunc(display.name, 30) .. (display.isLocal and "|r" or ""))
             row.meta:SetText(FormatOverviewLevelText(display.level, display.startLevel))
             SetStatusPill(row.statusPill, display.status)
+            SetOverviewBadgeTone(row.classBadge, Trunc(FormatClassName(display.class), 14), GetClassColor(display.class))
             SetOverviewSmallBadge(row.totalBadge, FormatTotalViolations(total), total > 0 and GOLD_TEXT or MUTED_TEXT)
             row.accent:SetColorTexture(statusColor.r, statusColor.g, statusColor.b, 0.95)
             if row.SetBackdropColor then
@@ -1471,6 +1534,104 @@ local function RefreshOverviewLedger(ledger, rows, grouped, inRaid)
             row:Hide()
         end
     end
+end
+
+local function CreateOverviewActivityPanel(parent, x, y, width, height)
+    local panel = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    panel:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    panel:SetSize(width, height)
+    if panel.SetBackdrop then
+        panel:SetBackdrop({
+            bgFile = "Interface\\Buttons\\WHITE8X8",
+            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+            tile = true,
+            tileSize = 16,
+            edgeSize = 12,
+            insets = { left = 3, right = 3, top = 3, bottom = 3 },
+        })
+        panel:SetBackdropColor(0.07, 0.042, 0.018, 0.86)
+        panel:SetBackdropBorderColor(0.62, 0.45, 0.18, 0.76)
+    end
+
+    panel.title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    panel.title:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -8)
+    panel.title:SetWidth(132)
+    panel.title:SetJustifyH("LEFT")
+    panel.title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
+    panel.title:SetText("Recent Activity")
+
+    panel.rows = {}
+    local rowTop = -9
+    local rowLeft = 150
+    local rowWidth = width - rowLeft - 12
+    local rowHeight = math.floor((height - 16) / OVERVIEW_LAYOUT.ACTIVITY_ROWS)
+    for index = 1, OVERVIEW_LAYOUT.ACTIVITY_ROWS do
+        local row = CreateFrame("Frame", nil, panel)
+        row:SetSize(rowWidth, rowHeight)
+        row:SetPoint("TOPLEFT", panel, "TOPLEFT", rowLeft, rowTop - ((index - 1) * rowHeight))
+
+        row.time = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        row.time:SetPoint("LEFT", row, "LEFT", 0, 0)
+        row.time:SetWidth(44)
+        row.time:SetJustifyH("LEFT")
+        row.time:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
+
+        row.kind = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        row.kind:SetPoint("LEFT", row, "LEFT", 50, 0)
+        row.kind:SetWidth(110)
+        row.kind:SetJustifyH("LEFT")
+        row.kind:SetWordWrap(false)
+
+        row.message = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        row.message:SetPoint("LEFT", row, "LEFT", 166, 0)
+        row.message:SetWidth(rowWidth - 166)
+        row.message:SetJustifyH("LEFT")
+        row.message:SetWordWrap(false)
+        row.message:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+
+        panel.rows[index] = row
+    end
+
+    panel.empty = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    panel.empty:SetPoint("LEFT", panel, "LEFT", rowLeft, -1)
+    panel.empty:SetWidth(rowWidth)
+    panel.empty:SetJustifyH("LEFT")
+    panel.empty:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
+    panel.empty:SetText("No recent activity.")
+    panel.empty:Hide()
+
+    return panel
+end
+
+local function RefreshOverviewActivity(panel)
+    if not panel then return end
+
+    local db = SC.db or SoftcoreDB
+    local entries = GetVisibleLogEntries((db and db.eventLog) or {})
+    local shown = 0
+
+    for _, entry in ipairs(entries) do
+        if shown >= OVERVIEW_LAYOUT.ACTIVITY_ROWS then
+            break
+        end
+
+        local label, color = FormatLogEvent(entry)
+        local message = FormatLogMessage(entry)
+        if message and message ~= "" then
+            shown = shown + 1
+            local row = panel.rows[shown]
+            row:Show()
+            row.time:SetText(FormatClock(entry.time))
+            row.kind:SetText(Trunc(label, 16))
+            row.kind:SetTextColor(color.r, color.g, color.b)
+            row.message:SetText(Trunc(message, 48))
+        end
+    end
+
+    for index = shown + 1, #panel.rows do
+        panel.rows[index]:Hide()
+    end
+    SetRegionShown(panel.empty, shown == 0)
 end
 
 local function RefreshOverviewPanel(frame)
@@ -1526,6 +1687,7 @@ local function RefreshOverviewPanel(frame)
 
     SetRegionShown(frame.overview.raidNote, active and inRaid)
 
+    RefreshOverviewActivity(frame.overview.activityPanel)
     RefreshOverviewLedger(frame.overview.partyLedger, active and partyRows or {}, grouped, inRaid)
 end
 
@@ -2320,7 +2482,11 @@ local function CreateOverviewTab(frame)
         table.insert(frame.overview.activeElements, card)
     end
 
-    local ledgerTop = metricTop - OVERVIEW_LAYOUT.METRIC_HEIGHT - OVERVIEW_LAYOUT.LEDGER_TOP_GAP
+    local activityTop = metricTop - OVERVIEW_LAYOUT.METRIC_HEIGHT - OVERVIEW_LAYOUT.LEDGER_TOP_GAP
+    frame.overview.activityPanel = CreateOverviewActivityPanel(overviewPanel, contentX, activityTop, OVERVIEW_LAYOUT.CONTENT_WIDTH, OVERVIEW_LAYOUT.ACTIVITY_HEIGHT)
+    table.insert(frame.overview.activeElements, frame.overview.activityPanel)
+
+    local ledgerTop = activityTop - OVERVIEW_LAYOUT.ACTIVITY_HEIGHT - OVERVIEW_LAYOUT.ACTIVITY_GAP
     frame.overview.partyLedger = CreateOverviewPartyLedger(overviewPanel, contentX, ledgerTop, OVERVIEW_LAYOUT.CONTENT_WIDTH, OVERVIEW_PARTY_ROWS)
     table.insert(frame.overview.activeElements, frame.overview.partyLedger)
 
