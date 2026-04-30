@@ -1002,10 +1002,45 @@ local function FormatAwardRules(award)
     return label .. ", original terms"
 end
 
-local function SetAwardStat(row, label, value)
-    if not row then return end
-    row.label:SetText(label or "")
-    row.value:SetText(value or "")
+local function CreateAwardStatCard(parent, x, y, width, height, title)
+    local card = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    card:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    card:SetSize(width, height)
+    card:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = false,
+        edgeSize = 10,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    card:SetBackdropColor(0.64, 0.43, 0.18, 0.16)
+    card:SetBackdropBorderColor(0.42, 0.21, 0.06, 0.55)
+
+    card.title = card:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    card.title:SetPoint("TOPLEFT", card, "TOPLEFT", 12, -9)
+    card.title:SetWidth(width - 24)
+    card.title:SetJustifyH("LEFT")
+    card.title:SetTextColor(0.45, 0.23, 0.06)
+    card.title:SetText(title)
+
+    card.value = card:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    card.value:SetPoint("TOPLEFT", card.title, "BOTTOMLEFT", 0, -7)
+    card.value:SetWidth(width - 24)
+    card.value:SetJustifyH("LEFT")
+    card.value:SetTextColor(0.16, 0.08, 0.02)
+
+    card.detail = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    card.detail:SetPoint("TOPLEFT", card.value, "BOTTOMLEFT", 0, -5)
+    card.detail:SetWidth(width - 24)
+    card.detail:SetJustifyH("LEFT")
+    card.detail:SetTextColor(0.38, 0.20, 0.06)
+    return card
+end
+
+local function SetAwardStat(card, value, detail)
+    if not card then return end
+    card.value:SetText(tostring(value or ""))
+    card.detail:SetText(tostring(detail or ""))
 end
 
 local function EnsureCompletionAwardFrame()
@@ -1014,7 +1049,7 @@ local function EnsureCompletionAwardFrame()
     end
 
     local frame = CreateFrame("Frame", "SoftcoreCompletionAwardFrame", UIParent, "BackdropTemplate")
-    frame:SetSize(560, 520)
+    frame:SetSize(620, 560)
     frame:SetPoint("CENTER", UIParent, "CENTER", 0, 28)
     frame:SetFrameStrata("DIALOG")
     frame:SetMovable(true)
@@ -1032,9 +1067,14 @@ local function EnsureCompletionAwardFrame()
     frame:SetBackdropColor(0.78, 0.62, 0.36, 0.98)
     frame:SetBackdropBorderColor(0.72, 0.43, 0.12, 1)
 
+    frame.pageShadow = frame:CreateTexture(nil, "BACKGROUND")
+    frame.pageShadow:SetPoint("TOPLEFT", frame, "TOPLEFT", 36, -38)
+    frame.pageShadow:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, 32)
+    frame.pageShadow:SetColorTexture(0.11, 0.055, 0.02, 0.32)
+
     frame.inner = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-    frame.inner:SetPoint("TOPLEFT", frame, "TOPLEFT", 26, -28)
-    frame.inner:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -26, 28)
+    frame.inner:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -32)
+    frame.inner:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -30, 32)
     frame.inner:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -1042,90 +1082,122 @@ local function EnsureCompletionAwardFrame()
         edgeSize = 14,
         insets = { left = 4, right = 4, top = 4, bottom = 4 },
     })
-    frame.inner:SetBackdropColor(0.92, 0.78, 0.50, 0.98)
+    frame.inner:SetBackdropColor(0.93, 0.78, 0.50, 0.98)
     frame.inner:SetBackdropBorderColor(0.45, 0.25, 0.07, 0.92)
 
     frame.close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     frame.close:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -10, -10)
 
-    frame.kicker = CreateAwardFont(frame.inner, "GameFontNormalSmall", 440)
-    frame.kicker:SetPoint("TOP", frame.inner, "TOP", 0, -28)
-    frame.kicker:SetTextColor(0.42, 0.22, 0.06)
-    frame.kicker:SetText("SOFTCORE RUN LEDGER")
-
-    frame.title = CreateAwardFont(frame.inner, "GameFontNormalLarge", 440)
-    frame.title:SetPoint("TOP", frame.kicker, "BOTTOM", 0, -8)
-    frame.title:SetTextColor(0.30, 0.12, 0.025)
-    frame.title:SetText("Max Level Reached")
-
-    frame.subtitle = CreateAwardFont(frame.inner, "GameFontHighlight", 430)
-    frame.subtitle:SetPoint("TOP", frame.title, "BOTTOM", 0, -10)
-
-    frame.ribbon = frame.inner:CreateTexture(nil, "ARTWORK")
-    frame.ribbon:SetPoint("TOP", frame.subtitle, "BOTTOM", 0, -14)
-    frame.ribbon:SetSize(360, 2)
-    frame.ribbon:SetColorTexture(0.50, 0.24, 0.06, 0.70)
-
-    frame.body = CreateAwardFont(frame.inner, "GameFontHighlightSmall", 430)
-    frame.body:SetPoint("TOP", frame.ribbon, "BOTTOM", 0, -18)
-    frame.body:SetTextColor(0.24, 0.13, 0.04)
-
-    frame.stats = {}
-    local labels = { "Observed Time", "Deaths", "Violations", "Dungeons", "Party Ledger", "Rules" }
-    for index, label in ipairs(labels) do
-        local row = CreateFrame("Frame", nil, frame.inner)
-        row:SetSize(420, 26)
-        row:SetPoint("TOP", frame.body, "BOTTOM", 0, -22 - ((index - 1) * 29))
-        row.line = row:CreateTexture(nil, "BACKGROUND")
-        row.line:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 0)
-        row.line:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, 0)
-        row.line:SetHeight(1)
-        row.line:SetColorTexture(0.45, 0.25, 0.08, 0.18)
-        row.label = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.label:SetPoint("LEFT", row, "LEFT", 0, 0)
-        row.label:SetWidth(150)
-        row.label:SetJustifyH("LEFT")
-        row.label:SetTextColor(0.38, 0.19, 0.05)
-        row.value = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        row.value:SetPoint("RIGHT", row, "RIGHT", 0, 0)
-        row.value:SetWidth(260)
-        row.value:SetJustifyH("RIGHT")
-        row.value:SetTextColor(0.18, 0.10, 0.035)
-        row.label:SetText(label)
-        frame.stats[index] = row
-    end
-
-    frame.seal = CreateFrame("Frame", nil, frame.inner, "BackdropTemplate")
-    frame.seal:SetSize(96, 96)
-    frame.seal:SetPoint("BOTTOM", frame.inner, "BOTTOM", 0, 22)
-    frame.seal:SetBackdrop({
+    frame.headerIconFrame = CreateFrame("Frame", nil, frame.inner, "BackdropTemplate")
+    frame.headerIconFrame:SetSize(52, 52)
+    frame.headerIconFrame:SetPoint("TOP", frame.inner, "TOP", 0, -22)
+    frame.headerIconFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
         tile = false,
-        edgeSize = 18,
-        insets = { left = 8, right = 8, top = 8, bottom = 8 },
+        edgeSize = 10,
+        insets = { left = 2, right = 2, top = 2, bottom = 2 },
     })
-    frame.seal:SetBackdropColor(0.46, 0.035, 0.025, 0.98)
-    frame.seal:SetBackdropBorderColor(0.78, 0.12, 0.08, 1)
-    frame.sealText = frame.seal:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    frame.sealText:SetPoint("CENTER", frame.seal, "CENTER", 0, 3)
-    frame.sealText:SetWidth(78)
-    frame.sealText:SetJustifyH("CENTER")
-    frame.sealText:SetTextColor(1.0, 0.78, 0.42)
-    frame.sealText:SetText("SOFTCORE")
-    frame.sealSub = frame.seal:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.sealSub:SetPoint("TOP", frame.sealText, "BOTTOM", 0, -2)
-    frame.sealSub:SetTextColor(1.0, 0.78, 0.42)
-    frame.sealSub:SetText("CERTIFIED")
+    frame.headerIconFrame:SetBackdropColor(0.30, 0.16, 0.04, 0.88)
+    frame.headerIconFrame:SetBackdropBorderColor(0.78, 0.54, 0.18, 0.95)
+    frame.headerIcon = frame.headerIconFrame:CreateTexture(nil, "ARTWORK")
+    frame.headerIcon:SetSize(42, 42)
+    frame.headerIcon:SetPoint("CENTER", frame.headerIconFrame, "CENTER", 0, 0)
+    frame.headerIcon:SetTexture("Interface\\Icons\\INV_Misc_Trophy_Argent")
+    frame.headerIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
 
-    frame.achievementsBtn = CreateButton(frame, "Achievements", 108, 24)
-    frame.achievementsBtn:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 28, 18)
-    frame.achievementsBtn:SetScript("OnClick", function()
-        frame:Hide()
-        if SC.OpenMasterWindow then
-            SC:OpenMasterWindow(TAB_ACHIEVEMENTS)
-        end
-    end)
+    frame.kicker = CreateAwardFont(frame.inner, "GameFontNormalSmall", 480)
+    frame.kicker:SetPoint("TOP", frame.headerIconFrame, "BOTTOM", 0, -8)
+    frame.kicker:SetTextColor(0.42, 0.22, 0.06)
+    frame.kicker:SetText("SOFTCORE CERTIFICATE")
+
+    frame.title = CreateAwardFont(frame.inner, "GameFontNormalLarge", 500)
+    frame.title:SetPoint("TOP", frame.kicker, "BOTTOM", 0, -7)
+    frame.title:SetTextColor(0.30, 0.12, 0.025)
+    frame.title:SetText("Max Level Reached")
+
+    frame.character = CreateAwardFont(frame.inner, "GameFontNormal", 500)
+    frame.character:SetPoint("TOP", frame.title, "BOTTOM", 0, -9)
+    frame.character:SetTextColor(0.16, 0.08, 0.02)
+
+    frame.subtitle = CreateAwardFont(frame.inner, "GameFontHighlightSmall", 500)
+    frame.subtitle:SetPoint("TOP", frame.character, "BOTTOM", 0, -7)
+    frame.subtitle:SetTextColor(0.39, 0.20, 0.06)
+
+    frame.ribbon = frame.inner:CreateTexture(nil, "ARTWORK")
+    frame.ribbon:SetPoint("TOP", frame.subtitle, "BOTTOM", 0, -14)
+    frame.ribbon:SetSize(430, 2)
+    frame.ribbon:SetColorTexture(0.50, 0.24, 0.06, 0.70)
+
+    frame.body = CreateAwardFont(frame.inner, "GameFontHighlightSmall", 500)
+    frame.body:SetPoint("TOP", frame.ribbon, "BOTTOM", 0, -14)
+    frame.body:SetTextColor(0.24, 0.13, 0.04)
+
+    frame.stats = {
+        time = CreateAwardStatCard(frame.inner, 42, -190, 238, 78, "Observed Time"),
+        startLevel = CreateAwardStatCard(frame.inner, 294, -190, 238, 78, "Starting Level"),
+        violations = CreateAwardStatCard(frame.inner, 42, -280, 238, 78, "Violations"),
+        dungeons = CreateAwardStatCard(frame.inner, 294, -280, 238, 78, "Dungeons"),
+    }
+
+    frame.charter = CreateFrame("Frame", nil, frame.inner, "BackdropTemplate")
+    frame.charter:SetPoint("BOTTOMLEFT", frame.inner, "BOTTOMLEFT", 42, 34)
+    frame.charter:SetSize(294, 84)
+    frame.charter:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = false,
+        edgeSize = 10,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    frame.charter:SetBackdropColor(0.55, 0.35, 0.13, 0.12)
+    frame.charter:SetBackdropBorderColor(0.42, 0.21, 0.06, 0.45)
+    frame.charterTitle = frame.charter:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    frame.charterTitle:SetPoint("TOPLEFT", frame.charter, "TOPLEFT", 12, -10)
+    frame.charterTitle:SetTextColor(0.45, 0.23, 0.06)
+    frame.charterTitle:SetText("Run Charter")
+    frame.charterRules = frame.charter:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.charterRules:SetPoint("TOPLEFT", frame.charterTitle, "BOTTOMLEFT", 0, -8)
+    frame.charterRules:SetWidth(266)
+    frame.charterRules:SetJustifyH("LEFT")
+    frame.charterRules:SetTextColor(0.17, 0.09, 0.025)
+
+    frame.stamp = CreateFrame("Frame", nil, frame.inner, "BackdropTemplate")
+    frame.stamp:SetSize(160, 92)
+    frame.stamp:SetPoint("BOTTOMRIGHT", frame.inner, "BOTTOMRIGHT", -46, 40)
+    frame.stamp:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        tile = false,
+        edgeSize = 3,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    frame.stamp:SetBackdropColor(0.72, 0.10, 0.08, 0.06)
+    frame.stamp:SetBackdropBorderColor(0.62, 0.09, 0.08, 0.85)
+    frame.stampInner = CreateFrame("Frame", nil, frame.stamp, "BackdropTemplate")
+    frame.stampInner:SetPoint("TOPLEFT", frame.stamp, "TOPLEFT", 6, -6)
+    frame.stampInner:SetPoint("BOTTOMRIGHT", frame.stamp, "BOTTOMRIGHT", -6, 6)
+    frame.stampInner:SetBackdrop({
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    frame.stampInner:SetBackdropBorderColor(0.62, 0.09, 0.08, 0.65)
+    frame.stampText = frame.stamp:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+    frame.stampText:SetPoint("CENTER", frame.stamp, "CENTER", 0, 6)
+    frame.stampText:SetTextColor(0.68, 0.09, 0.07, 0.92)
+    frame.stampText:SetText("SOFTCORE")
+    frame.stampText:SetJustifyH("CENTER")
+    if frame.stampText.SetRotation then
+        frame.stampText:SetRotation(math.rad(-10))
+    end
+    frame.stampSubText = frame.stamp:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    frame.stampSubText:SetPoint("CENTER", frame.stamp, "CENTER", 0, -16)
+    frame.stampSubText:SetTextColor(0.68, 0.09, 0.07, 0.92)
+    frame.stampSubText:SetText("CERTIFIED")
+    frame.stampSubText:SetJustifyH("CENTER")
+    if frame.stampSubText.SetRotation then
+        frame.stampSubText:SetRotation(math.rad(-10))
+    end
 
     frame:Hide()
     completionAwardFrame = frame
@@ -1140,14 +1212,14 @@ function SC:ShowCompletionAward(award)
     end
 
     local frame = EnsureCompletionAwardFrame()
-    frame.subtitle:SetText(FormatAwardCharacter(award) .. "  |  " .. tostring(award.classLabel or award.class or "Adventurer"))
-    frame.body:SetText("Completed " .. tostring(award.runName or "Softcore Run") .. " at level " .. tostring(award.completedLevel or "?") .. " on " .. FormatTime(award.completedAt) .. ".")
-    SetAwardStat(frame.stats[1], "Observed Time", FormatDuration(award.activeTimeSeconds))
-    SetAwardStat(frame.stats[2], "Deaths", tostring(award.deaths or 0))
-    SetAwardStat(frame.stats[3], "Violations", tostring(award.totalViolations or 0) .. " total, " .. tostring(award.clearedViolations or 0) .. " cleared")
-    SetAwardStat(frame.stats[4], "Dungeons", tostring(award.dungeonCount or 0) .. " recorded")
-    SetAwardStat(frame.stats[5], "Party Ledger", tostring(award.partyMembers or 1) .. " participant" .. ((tonumber(award.partyMembers or 1) == 1) and "" or "s"))
-    SetAwardStat(frame.stats[6], "Rules", FormatAwardRules(award))
+    frame.character:SetText(FormatAwardCharacter(award))
+    frame.subtitle:SetText(tostring(award.classLabel or award.class or "Adventurer") .. "  |  Level " .. tostring(award.completedLevel or "?") .. "  |  " .. FormatTime(award.completedAt))
+    frame.body:SetText("Completed " .. tostring(award.runName or "Softcore Run") .. " and sealed the ledger at max level.")
+    SetAwardStat(frame.stats.time, FormatDuration(award.activeTimeSeconds), "addon-observed active time")
+    SetAwardStat(frame.stats.startLevel, tostring(award.startLevel or "?"), "level when run started")
+    SetAwardStat(frame.stats.violations, tostring(award.totalViolations or 0), tostring(award.clearedViolations or 0) .. " cleared")
+    SetAwardStat(frame.stats.dungeons, tostring(award.dungeonCount or 0), "instances recorded")
+    frame.charterRules:SetText(FormatAwardRules(award))
     frame:Show()
 end
 
