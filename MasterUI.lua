@@ -80,11 +80,15 @@ local OVERVIEW_LAYOUT = {
     METRIC_HEIGHT = 74,
     METRIC_GAP = 10,
     LEDGER_TOP_GAP = 18,
-    ACTIVITY_HEIGHT = 84,
+    ACTIVITY_HEIGHT = 90,
     ACTIVITY_GAP = 14,
     ACTIVITY_ROWS = 3,
+    SECTION_INSET = 12,
+    SECTION_TITLE_TOP = -9,
+    SECTION_DIVIDER_TOP = -30,
+    SECTION_HEADER_HEIGHT = 36,
     LEDGER_INSET = 12,
-    LEDGER_HEADER_HEIGHT = 38,
+    LEDGER_HEADER_HEIGHT = 36,
     LEDGER_ROW_HEIGHT = 44,
     LEDGER_ROW_GAP = 6,
     LEDGER_BADGE_WIDTH = 136,
@@ -1471,6 +1475,38 @@ local function CalculateOverviewLedgerHeight(rowCount)
         + OVERVIEW_LAYOUT.LEDGER_INSET
 end
 
+local function ApplyOverviewSectionBackdrop(section, borderAlpha)
+    if not section or not section.SetBackdrop then return end
+
+    section:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 16,
+        edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    section:SetBackdropColor(0.07, 0.042, 0.018, 0.88)
+    section:SetBackdropBorderColor(0.68, 0.50, 0.20, borderAlpha or 0.82)
+end
+
+local function CreateOverviewSectionHeader(section, titleText)
+    local inset = OVERVIEW_LAYOUT.SECTION_INSET
+
+    section.title = section:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    section.title:SetPoint("TOPLEFT", section, "TOPLEFT", inset, OVERVIEW_LAYOUT.SECTION_TITLE_TOP)
+    section.title:SetWidth(240)
+    section.title:SetJustifyH("LEFT")
+    section.title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
+    section.title:SetText(titleText)
+
+    section.divider = section:CreateTexture(nil, "ARTWORK")
+    section.divider:SetHeight(1)
+    section.divider:SetPoint("TOPLEFT", section, "TOPLEFT", inset, OVERVIEW_LAYOUT.SECTION_DIVIDER_TOP)
+    section.divider:SetPoint("TOPRIGHT", section, "TOPRIGHT", -inset, OVERVIEW_LAYOUT.SECTION_DIVIDER_TOP)
+    section.divider:SetColorTexture(0.72, 0.49, 0.18, 0.34)
+end
+
 local function CreateOverviewSmallBadge(parent, width, height)
     local badge = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     badge:SetSize(width or 72, height or 24)
@@ -1557,34 +1593,11 @@ local function CreateOverviewPartyLedger(parent, x, y, width, maxRows)
     local ledger = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     ledger:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     ledger:SetSize(width, CalculateOverviewLedgerHeight(maxRows))
-    if ledger.SetBackdrop then
-        ledger:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            tile = true,
-            tileSize = 16,
-            edgeSize = 12,
-            insets = { left = 3, right = 3, top = 3, bottom = 3 },
-        })
-        ledger:SetBackdropColor(0.07, 0.042, 0.018, 0.9)
-        ledger:SetBackdropBorderColor(0.72, 0.56, 0.22, 0.88)
-    end
+    ApplyOverviewSectionBackdrop(ledger, 0.86)
+    CreateOverviewSectionHeader(ledger, "Party Ledger")
 
-    ledger.title = ledger:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    ledger.title:SetPoint("TOPLEFT", ledger, "TOPLEFT", OVERVIEW_LAYOUT.LEDGER_INSET, -10)
-    ledger.title:SetWidth(240)
-    ledger.title:SetJustifyH("LEFT")
-    ledger.title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
-    ledger.title:SetText("Party Ledger")
-
-    ledger.count = CreateOverviewSmallBadge(ledger, 54, 22)
-    ledger.count:SetPoint("TOPRIGHT", ledger, "TOPRIGHT", -OVERVIEW_LAYOUT.LEDGER_INSET, -8)
-
-    ledger.divider = ledger:CreateTexture(nil, "ARTWORK")
-    ledger.divider:SetHeight(1)
-    ledger.divider:SetPoint("TOPLEFT", ledger, "TOPLEFT", OVERVIEW_LAYOUT.LEDGER_INSET, -OVERVIEW_LAYOUT.LEDGER_HEADER_HEIGHT)
-    ledger.divider:SetPoint("TOPRIGHT", ledger, "TOPRIGHT", -OVERVIEW_LAYOUT.LEDGER_INSET, -OVERVIEW_LAYOUT.LEDGER_HEADER_HEIGHT)
-    ledger.divider:SetColorTexture(0.72, 0.49, 0.18, 0.38)
+    ledger.count = CreateOverviewSmallBadge(ledger, 54, 20)
+    ledger.count:SetPoint("TOPRIGHT", ledger, "TOPRIGHT", -OVERVIEW_LAYOUT.SECTION_INSET, -7)
 
     ledger.rowsFrame = CreateFrame("Frame", nil, ledger)
     ledger.rowsFrame:SetPoint("TOPLEFT", ledger, "TOPLEFT", OVERVIEW_LAYOUT.LEDGER_INSET, -(OVERVIEW_LAYOUT.LEDGER_HEADER_HEIGHT + OVERVIEW_LAYOUT.LEDGER_INSET))
@@ -1665,35 +1678,12 @@ local function CreateOverviewActivityPanel(parent, x, y, width, height)
     local panel = CreateFrame("Frame", nil, parent, "BackdropTemplate")
     panel:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
     panel:SetSize(width, height)
-    if panel.SetBackdrop then
-        panel:SetBackdrop({
-            bgFile = "Interface\\Buttons\\WHITE8X8",
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            tile = true,
-            tileSize = 16,
-            edgeSize = 12,
-            insets = { left = 3, right = 3, top = 3, bottom = 3 },
-        })
-        panel:SetBackdropColor(0.07, 0.042, 0.018, 0.86)
-        panel:SetBackdropBorderColor(0.62, 0.45, 0.18, 0.76)
-    end
-
-    panel.title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    panel.title:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -8)
-    panel.title:SetWidth(160)
-    panel.title:SetJustifyH("LEFT")
-    panel.title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
-    panel.title:SetText("Recent Activity")
-
-    panel.divider = panel:CreateTexture(nil, "ARTWORK")
-    panel.divider:SetHeight(1)
-    panel.divider:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -22)
-    panel.divider:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -12, -22)
-    panel.divider:SetColorTexture(0.72, 0.49, 0.18, 0.30)
+    ApplyOverviewSectionBackdrop(panel, 0.76)
+    CreateOverviewSectionHeader(panel, "Recent Activity")
 
     panel.rows = {}
-    local rowTop = -27
-    local rowLeft = 12
+    local rowTop = OVERVIEW_LAYOUT.SECTION_DIVIDER_TOP - 4
+    local rowLeft = OVERVIEW_LAYOUT.SECTION_INSET
     local rowWidth = width - 24
     local showActorColumn = rowWidth >= 620
     local timeLeft = 12
@@ -1704,7 +1694,7 @@ local function CreateOverviewActivityPanel(parent, x, y, width, height)
     local actorWidth = 84
     local messageLeft = showActorColumn and 266 or 168
     local messageWidth = rowWidth - messageLeft - 8
-    local rowHeight = math.floor((height - 36) / OVERVIEW_LAYOUT.ACTIVITY_ROWS)
+    local rowHeight = math.floor((height - math.abs(rowTop) - 8) / OVERVIEW_LAYOUT.ACTIVITY_ROWS)
     for index = 1, OVERVIEW_LAYOUT.ACTIVITY_ROWS do
         local row = CreateFrame("Frame", nil, panel)
         row:SetSize(rowWidth, rowHeight)

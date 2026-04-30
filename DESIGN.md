@@ -94,6 +94,8 @@ Current Overview structure:
 3. Recent Activity panel with the latest meaningful filtered log events.
 4. Party Ledger with up to five members.
 
+Overview section panels such as Recent Activity and Party Ledger should share one header language: same title font, inset, divider placement, and muted framed backdrop. The body layout can differ by content density.
+
 ### Overview Stat Cards
 
 Keep these minimal:
