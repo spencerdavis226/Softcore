@@ -1419,6 +1419,10 @@ local function CreateOverviewPartyRow(parent, index, width)
     row.accent:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 3, 3)
     row.accent:SetWidth(3)
     row.accent:SetColorTexture(GREEN_TEXT.r, GREEN_TEXT.g, GREEN_TEXT.b, 0.9)
+    row.accentWarning = row:CreateTexture(nil, "ARTWORK")
+    row.accentWarning:SetWidth(3)
+    row.accentWarning:SetColorTexture(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b, 0.95)
+    row.accentWarning:Hide()
 
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 16, -7)
@@ -1434,9 +1438,9 @@ local function CreateOverviewPartyRow(parent, index, width)
     row.meta:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
     row.meta:SetWordWrap(false)
 
-    row.statusPill = CreateStatusPill(row, 252, -9, 128)
     row.classBadge = CreateOverviewSmallBadge(row, 104, 24)
-    row.classBadge:SetPoint("TOPLEFT", row, "TOPLEFT", 388, -10)
+    row.classBadge:SetPoint("TOPLEFT", row, "TOPLEFT", 252, -10)
+    row.statusPill = CreateStatusPill(row, 384, -9, 112)
     row.totalBadge = CreateOverviewSmallBadge(row, 150, 24)
     row.totalBadge:SetPoint("TOPRIGHT", row, "TOPRIGHT", -14, -10)
     row:Hide()
@@ -1517,14 +1521,29 @@ local function RefreshOverviewLedger(ledger, rows, grouped, inRaid)
         local display = rows[index]
         if display then
             local statusColor = GetOverviewStatusColor(display.status)
+            local statusBase = GetStatusBase(display.status)
             local total = tonumber(display.totalViolations or 0) or 0
+            local splitAccent = total > 0 and (statusBase == "VALID" or statusBase == "ACTIVE")
 
             row:Show()
             row.name:SetText((display.isLocal and "|cffffd100" or "") .. Trunc(display.name, 30) .. (display.isLocal and "|r" or ""))
             row.meta:SetText(FormatOverviewLevelText(display.level, display.startLevel))
-            SetStatusPill(row.statusPill, display.status)
             SetOverviewBadgeTone(row.classBadge, Trunc(FormatClassName(display.class), 14), GetClassColor(display.class))
+            SetStatusPill(row.statusPill, display.status)
             SetOverviewSmallBadge(row.totalBadge, FormatTotalViolations(total), total > 0 and GOLD_TEXT or MUTED_TEXT)
+            row.accent:ClearAllPoints()
+            if splitAccent then
+                row.accent:SetPoint("TOPLEFT", row, "TOPLEFT", 3, -3)
+                row.accent:SetPoint("BOTTOMLEFT", row, "LEFT", 3, 0)
+                row.accentWarning:ClearAllPoints()
+                row.accentWarning:SetPoint("TOPLEFT", row, "LEFT", 3, 0)
+                row.accentWarning:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 3, 3)
+                row.accentWarning:Show()
+            else
+                row.accent:SetPoint("TOPLEFT", row, "TOPLEFT", 3, -3)
+                row.accent:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 3, 3)
+                row.accentWarning:Hide()
+            end
             row.accent:SetColorTexture(statusColor.r, statusColor.g, statusColor.b, 0.95)
             if row.SetBackdropColor then
                 row:SetBackdropColor(statusColor.r * 0.055, statusColor.g * 0.04, statusColor.b * 0.028, 0.86)
@@ -1624,7 +1643,7 @@ local function RefreshOverviewActivity(panel)
             row.time:SetText(FormatClock(entry.time))
             row.kind:SetText(Trunc(label, 16))
             row.kind:SetTextColor(color.r, color.g, color.b)
-            row.message:SetText(Trunc(message, 48))
+            SetCompactText(row.message, message, 48)
         end
     end
 
