@@ -32,6 +32,7 @@ local MOVEMENT_WARNING_THROTTLE = 30
 local ACCESS_WARNING_THROTTLE = 30
 local accessWarnedAt = {}
 local petBattleActive = false
+local DRUID_TRAVEL_FORM_ID = 3
 
 local function Broadcast(reason)
     if SC.Sync_BroadcastStatus then
@@ -339,6 +340,28 @@ local function FormatForcedMovementReason(reason)
     return "vehicle"
 end
 
+local function IsDruidGroundTravelFormActive(flying)
+    if not UnitClass or not GetShapeshiftFormID then
+        return false
+    end
+
+    local _, classFile = UnitClass("player")
+    if classFile ~= "DRUID" then
+        return false
+    end
+
+    local formId = GetShapeshiftFormID()
+    if formId ~= DRUID_TRAVEL_FORM_ID then
+        return false
+    end
+
+    if flying or SafeGlobalBoolean(IsSwimming) then
+        return false
+    end
+
+    return true
+end
+
 local function ApplyMovementRule(ruleName, detail, throttleField)
     if not IsRunActiveForLocalAudit() then
         return
@@ -392,16 +415,20 @@ local function CheckMovementRules()
     -- In-game verification note: IsFlying() should catch mounted flight and Druid flight form
     -- in modern clients, but shapeshift edge cases may need live testing.
     local flying = IsFlying and IsFlying()
+    local druidGroundTravelForm = IsDruidGroundTravelFormActive(flying)
 
-    if mounted and not movementState.mounted then
-        ApplyMovementRule("mounts", "Mounted while on a Softcore run.", "mountWarnedAt")
+    if (mounted or druidGroundTravelForm) and not movementState.mounted then
+        local detail = druidGroundTravelForm
+            and "Used Druid land Travel Form while on a Softcore run."
+            or "Mounted while on a Softcore run."
+        ApplyMovementRule("mounts", detail, "mountWarnedAt")
     end
 
     if flying and not movementState.flying then
         ApplyMovementRule("flying", "Flying while on a Softcore run.", "flyingWarnedAt")
     end
 
-    movementState.mounted = mounted and true or false
+    movementState.mounted = (mounted or druidGroundTravelForm) and true or false
     movementState.flying = flying and true or false
 end
 

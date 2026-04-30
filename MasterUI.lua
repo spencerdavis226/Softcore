@@ -241,8 +241,16 @@ local ECONOMY_RULES = {
 }
 
 local MOVEMENT_RULES = {
-    { label = "Allow Mounts", key = "mounts" },
-    { label = "Allow Flying Mounts", key = "flying" },
+    {
+        label = "Allow Mounts",
+        key = "mounts",
+        tooltip = "Allows ground mount-style travel. Worgen Running Wild and Druid land Travel/Mount Form count as ground mounts.",
+    },
+    {
+        label = "Allow Flying Mounts",
+        key = "flying",
+        tooltip = "Allows player-controlled flying. Druid Flight Form and Dracthyr Soar count as flying mounts.",
+    },
     { label = "Allow Flight Paths", key = "flightPaths" },
 }
 
@@ -1141,6 +1149,7 @@ end
 local function CreateAllowCheckbox(parent, rules, spec, x, y)
     local checkbox = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     checkbox:SetPoint("TOPLEFT", parent, "TOPLEFT", x, y)
+    checkbox:SetHitRectInsets(0, -250, 0, 0)
     checkbox.label = checkbox:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     checkbox.label:SetPoint("LEFT", checkbox, "RIGHT", RUN_LAYOUT.CHECKBOX_LABEL_GAP, 0)
     checkbox.label:SetWidth(0)
@@ -1155,6 +1164,9 @@ local function CreateAllowCheckbox(parent, rules, spec, x, y)
             SC:MasterUI_Refresh()
         end
     end)
+    if spec.tooltip then
+        SetAuditRowTooltip(checkbox, spec.label, spec.tooltip)
+    end
     return checkbox
 end
 
@@ -3404,13 +3416,6 @@ function SC:OpenMasterWindow(focusTab)
     for _, spec in ipairs(MOVEMENT_RULES) do
         local checkbox = CreateAllowCheckbox(frame.start.travelSection.content, frame.start.selectedRules, spec, 0, y)
         RegisterRunControl(frame.start, checkbox, frame.start.travelSection)
-        if spec.key == "flying" then
-            local hint = frame.start.travelSection.content:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-            hint:SetPoint("LEFT", checkbox.label, "LEFT", 124, 0)
-            hint:SetTextColor(MUTED_TEXT.r * 0.7, MUTED_TEXT.g * 0.7, MUTED_TEXT.b * 0.7)
-            hint:SetText("incl. druid flight form")
-            RegisterRunControl(frame.start, hint, frame.start.travelSection)
-        end
         y = y - runLayout.ROW_HEIGHT
     end
 
