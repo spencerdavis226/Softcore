@@ -28,15 +28,90 @@ local function GetTooltipScanner()
     return tooltipScanner
 end
 
-local function IsItemSelfCrafted(slotId)
+local function Trim(text)
+    return string.gsub(tostring(text or ""), "^%s*(.-)%s*$", "%1")
+end
+
+local function NormalizeTooltipText(text)
+    text = tostring(text or "")
+    text = string.gsub(text, "|c%x%x%x%x%x%x%x%x", "")
+    text = string.gsub(text, "|r", "")
+    return Trim(text)
+end
+
+local function AddCandidateName(names, value)
+    value = Trim(value)
+    if value ~= "" then
+        names[value] = true
+    end
+end
+
+local function GetPlayerCraftingNames()
+    local names = {}
     local playerName = UnitName("player")
-    if not playerName then return false end
-    local madeByPrefix = "Made by " .. playerName
+    local fullName, fullRealm = UnitFullName("player")
+    local realm = fullRealm
+    if not realm or realm == "" then
+        realm = GetRealmName and GetRealmName() or nil
+    end
+
+    AddCandidateName(names, playerName)
+    AddCandidateName(names, fullName)
+    if fullName and realm and realm ~= "" then
+        AddCandidateName(names, fullName .. "-" .. realm)
+        AddCandidateName(names, fullName .. " - " .. realm)
+    elseif playerName and realm and realm ~= "" then
+        AddCandidateName(names, playerName .. "-" .. realm)
+        AddCandidateName(names, playerName .. " - " .. realm)
+    end
+
+    return names
+end
+
+local function AddCraftedByMarker(markers, formatText, playerName)
+    if not formatText or formatText == "" or not playerName or playerName == "" then
+        return
+    end
+
+    local ok, marker = pcall(string.format, formatText, playerName)
+    if ok and marker and marker ~= "" then
+        markers[NormalizeTooltipText(marker)] = true
+    end
+end
+
+local function GetSelfCraftedTooltipMarkers()
+    local markers = {}
+    local formats = {
+        _G.ITEM_CREATED_BY,
+        "Made by %s",
+        "Crafted by %s",
+        "Created by %s",
+    }
+
+    for playerName in pairs(GetPlayerCraftingNames()) do
+        for _, formatText in ipairs(formats) do
+            AddCraftedByMarker(markers, formatText, playerName)
+        end
+    end
+
+    return markers
+end
+
+local function IsSelfCraftedTooltipLine(text)
+    local normalized = NormalizeTooltipText(text)
+    if normalized == "" then
+        return false
+    end
+
+    return GetSelfCraftedTooltipMarkers()[normalized] == true
+end
+
+local function IsItemSelfCrafted(slotId)
     if C_TooltipInfo and C_TooltipInfo.GetInventoryItem then
         local data = C_TooltipInfo.GetInventoryItem("player", slotId)
         if data and data.lines then
             for _, line in ipairs(data.lines) do
-                if line.leftText and string.find(line.leftText, madeByPrefix, 1, true) then
+                if line.leftText and IsSelfCraftedTooltipLine(line.leftText) then
                     return true
                 end
             end
@@ -48,7 +123,7 @@ local function IsItemSelfCrafted(slotId)
     scanner:SetInventoryItem("player", slotId)
     for i = 1, scanner:NumLines() do
         local line = _G["SoftcoreGearScannerTextLeft" .. i]
-        if line and string.find(line:GetText() or "", madeByPrefix, 1, true) then
+        if line and IsSelfCraftedTooltipLine(line:GetText() or "") then
             return true
         end
     end

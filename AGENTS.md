@@ -161,6 +161,7 @@ Examples of violations:
 - using disallowed mounts, Druid land Travel/Mount Form, or flying forms such as Druid Flight Form or Dracthyr Soar
 - equipping disallowed gear
 - equipping permanently enchanted gear when enchants are disallowed
+- successfully using a disallowed consumable; failed item clicks or cooldown/context failures should not create consumable violations when the client exposes item-spell success events
 
 Examples of group blockers/conflicts:
 

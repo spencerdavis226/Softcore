@@ -1748,6 +1748,9 @@ function SC:StartRun(runOptions)
     if self.ResetGearScanTracking then
         self:ResetGearScanTracking()
     end
+    if self.ResetEventTracking then
+        self:ResetEventTracking()
+    end
     if self.ScanEquippedGear then
         self:ScanEquippedGear(true)
     end

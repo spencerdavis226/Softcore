@@ -30,8 +30,10 @@ local movementState = {
 
 local MOVEMENT_WARNING_THROTTLE = 30
 local ACCESS_WARNING_THROTTLE = 30
+local CONSUMABLE_USE_CONFIRM_WINDOW = 4
 local accessWarnedAt = {}
 local petBattleActive = false
+local pendingConsumableUse = nil
 local DRUID_TRAVEL_FORM_ID = 3
 
 local function Broadcast(reason)
@@ -125,6 +127,21 @@ local pvpWarnedAt = 0
 local PVP_WARNING_THROTTLE = 60
 local PVP_ADVISORY_THROTTLE = 300
 local pvpAdvisoryWarnedAt = {}
+
+function SC:ResetEventTracking()
+    movementState.mounted = false
+    movementState.flying = false
+    movementState.vehicleActive = false
+    movementState.vehicleReason = nil
+    movementState.mountWarnedAt = 0
+    movementState.flyingWarnedAt = 0
+    movementState.flightPathWarnedAt = 0
+    accessWarnedAt = {}
+    pvpWarnedAt = 0
+    pvpAdvisoryWarnedAt = {}
+    pendingConsumableUse = nil
+    petBattleActive = false
+end
 
 local function IsRunActiveForPvpAdvisory()
     local db = SC.db or SoftcoreDB
@@ -436,6 +453,151 @@ local function ApplyFlightPathRule(detail)
     ApplyMovementRule("flightPaths", detail or "Used a flight path while on a Softcore run.", "flightPathWarnedAt")
 end
 
+local function GetMonotonicTime()
+    if GetTime then
+        return GetTime()
+    end
+
+    return time()
+end
+
+local function GetItemInfoCompat(itemRef)
+    if C_Item and C_Item.GetItemInfo then
+        local ok, itemName, link, quality, itemLevel, reqLevel, itemType, itemSubType = pcall(C_Item.GetItemInfo, itemRef)
+        if ok then
+            return itemName, link, quality, itemLevel, reqLevel, itemType, itemSubType
+        end
+    elseif GetItemInfo then
+        local ok, itemName, link, quality, itemLevel, reqLevel, itemType, itemSubType = pcall(GetItemInfo, itemRef)
+        if ok then
+            return itemName, link, quality, itemLevel, reqLevel, itemType, itemSubType
+        end
+    end
+
+    return nil
+end
+
+local function GetItemSpellCompat(itemRef)
+    if C_Item and C_Item.GetItemSpell then
+        local ok, spellName, spellID = pcall(C_Item.GetItemSpell, itemRef)
+        if ok then
+            return spellName, spellID
+        end
+    elseif GetItemSpell then
+        local ok, spellName, spellID = pcall(GetItemSpell, itemRef)
+        if ok then
+            return spellName, spellID
+        end
+    end
+
+    return nil
+end
+
+local function GetSpellNameCompat(spellID)
+    if not spellID then return nil end
+    if C_Spell and C_Spell.GetSpellInfo then
+        local ok, info = pcall(C_Spell.GetSpellInfo, spellID)
+        if ok then
+            return info and info.name
+        end
+    elseif GetSpellInfo then
+        local ok, spellName = pcall(GetSpellInfo, spellID)
+        if ok then
+            return spellName
+        end
+    end
+
+    return nil
+end
+
+local function IsPendingConsumableExpired()
+    return pendingConsumableUse
+        and GetMonotonicTime() - (pendingConsumableUse.queuedAt or 0) > CONSUMABLE_USE_CONFIRM_WINDOW
+end
+
+local function ClearExpiredConsumableUse()
+    if IsPendingConsumableExpired() then
+        pendingConsumableUse = nil
+    end
+end
+
+local function ApplyConfirmedConsumableRule(pending)
+    if not pending then return end
+    if not SC:IsRunActive() then return end
+    if SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed() then return end
+    local rule = SC:GetRule("consumables")
+    if not rule or rule == "ALLOWED" then return end
+
+    SC:ApplyRuleOutcome("consumables", {
+        playerKey = SC:GetPlayerKey(),
+        detail = pending.detail,
+    })
+end
+
+local function PendingConsumableMatchesSpell(spellID)
+    ClearExpiredConsumableUse()
+    local pending = pendingConsumableUse
+    if not pending then
+        return false
+    end
+
+    if pending.spellID and spellID then
+        return tonumber(pending.spellID) == tonumber(spellID)
+    end
+
+    if pending.spellName and spellID then
+        return pending.spellName == GetSpellNameCompat(spellID)
+    end
+
+    return not pending.spellID and not pending.spellName
+end
+
+local function QueueConsumableRule(itemRef)
+    if not SC:IsRunActive() then return end
+    if SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed() then return end
+    local rule = SC:GetRule("consumables")
+    if not rule or rule == "ALLOWED" then return end
+
+    ClearExpiredConsumableUse()
+
+    local itemName, link, _, _, _, itemType, itemSubType = GetItemInfoCompat(itemRef)
+    if itemType ~= "Consumable" or itemSubType == "Other" then return end
+
+    local spellName, spellID = GetItemSpellCompat(itemRef)
+    local pending = {
+        queuedAt = GetMonotonicTime(),
+        spellName = spellName,
+        spellID = spellID,
+        detail = "Used consumable: " .. tostring(link or itemName or itemRef or "?") .. " (" .. tostring(itemSubType or "?") .. ").",
+    }
+
+    if spellName or spellID then
+        pendingConsumableUse = pending
+    else
+        -- Some item-like consumables do not expose a spell. Keep the previous behavior for
+        -- those rare cases while confirming normal potion/food uses through spell success.
+        ApplyConfirmedConsumableRule(pending)
+    end
+end
+
+local function HandleConsumableSpellcastSucceeded(unit, _, spellID)
+    if unit ~= "player" or not PendingConsumableMatchesSpell(spellID) then
+        return
+    end
+
+    local pending = pendingConsumableUse
+    pendingConsumableUse = nil
+    ApplyConfirmedConsumableRule(pending)
+end
+
+local function HandleConsumableSpellcastFailed(unit, _, spellID)
+    if unit ~= "player" or not PendingConsumableMatchesSpell(spellID) then
+        return
+    end
+
+    pendingConsumableUse = nil
+end
+
 local function HandlePetBattleStarted()
     if petBattleActive then return end
 
@@ -500,6 +662,9 @@ function SC:Events_Register()
     SafeRegisterEvent(eventFrame, "PET_BATTLE_CLOSE")
     eventFrame:RegisterUnitEvent("UNIT_AURA", "player")
     eventFrame:RegisterUnitEvent("UNIT_FACTION", "player", "target")
+    eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
+    eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_FAILED", "player")
+    eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTED", "player")
 
     eventFrame:SetScript("OnEvent", function(_, event, ...)
         if event == "PLAYER_DEAD" then
@@ -542,6 +707,10 @@ function SC:Events_Register()
             HandlePetBattleStarted()
         elseif event == "PET_BATTLE_CLOSE" then
             HandlePetBattleEnded()
+        elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+            HandleConsumableSpellcastSucceeded(...)
+        elseif event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" then
+            HandleConsumableSpellcastFailed(...)
         elseif event == "PLAYER_TARGET_CHANGED" then
             CheckTargetPvpAdvisory()
         elseif event == "PLAYER_FLAGS_CHANGED" or event == "UNIT_FACTION" then
@@ -618,38 +787,16 @@ function SC:Events_Register()
         end
     end)
 
-    -- Consumable detection: hook bag item use, flag Consumable-type items.
-    -- Subtype "Other" is skipped because it includes toys and misc one-use items.
-    local function ApplyConsumableRule(itemRef)
-        if not SC:IsRunActive() then return end
-        if SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed() then return end
-        local rule = SC:GetRule("consumables")
-        if not rule or rule == "ALLOWED" then return end
-
-        local itemName, link, _, _, _, itemType, itemSubType
-        if C_Item and C_Item.GetItemInfo then
-            itemName, link, _, _, _, itemType, itemSubType = C_Item.GetItemInfo(itemRef)
-        elseif GetItemInfo then
-            itemName, link, _, _, _, itemType, itemSubType = GetItemInfo(itemRef)
-        end
-        if itemType ~= "Consumable" or itemSubType == "Other" then return end
-
-        SC:ApplyRuleOutcome("consumables", {
-            playerKey = SC:GetPlayerKey(),
-            detail = "Used consumable: " .. tostring(link or itemName or itemRef or "?") .. " (" .. tostring(itemSubType or "?") .. ").",
-        })
-    end
-
     local function OnUseContainerItem(bag, slot)
         if not (C_Container and C_Container.GetContainerItemLink) then return end
-        ApplyConsumableRule(C_Container.GetContainerItemLink(bag, slot))
+        QueueConsumableRule(C_Container.GetContainerItemLink(bag, slot))
     end
 
     local function OnUseAction(slot)
         if not GetActionInfo then return end
         local actionType, itemId = GetActionInfo(slot)
         if actionType == "item" and itemId then
-            ApplyConsumableRule(itemId)
+            QueueConsumableRule(itemId)
         end
     end
 

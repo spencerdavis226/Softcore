@@ -143,6 +143,8 @@ Pet battles are allowed by default and do not create a violation. They are still
 
 Quest vehicles, vehicle UI, override action bars, taxis, and forced movement are allowed by default. While those states are active, Softcore suppresses mount/flying rule outcomes so normal quest mechanics and forced flights do not create false violations. Player-selected flight paths are still detected through the taxi-node action when that rule is enabled. Druid land Travel/Mount Form follows the ground mount rule; Druid Flight Form and Dracthyr Soar follow the flying mount rule when the client reports flying.
 
+Consumable restrictions are recorded after the client confirms the item spell succeeded when that spell data is available, so failed clicks, cooldown attempts, and unusable-context attempts should not create accidental violations.
+
 Summons, portals, quest teleports, Chromie Time, Timewalking, level scaling, and similar world systems are treated as normal game context unless a future rule explicitly governs them.
 
 ## Separate Runs
