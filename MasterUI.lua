@@ -1385,8 +1385,8 @@ function SC:ShowCompletionAward(award)
     -- footer rows are smaller / muted
     for _, key in ipairs({ "runId", "hash", "addon" }) do
         local row = frame.rows[key]
-        row.label:SetTextColor(unpack(AWARD_FOOTER_COLOR))
-        row.value:SetTextColor(unpack(AWARD_FOOTER_COLOR))
+        row.label:SetTextColor(unpack(AWARD_COLORS.muted))
+        row.value:SetTextColor(unpack(AWARD_COLORS.muted))
     end
 
     frame:Show()
