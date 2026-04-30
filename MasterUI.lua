@@ -76,6 +76,13 @@ local PURPLE_TEXT = { r = 0.78, g = 0.58, b = 1.00 }
 local ORANGE_TEXT = { r = 1.00, g = 0.58, b = 0.22 }
 local MENU_LOGO_TEXTURE = "Interface\\AddOns\\Softcore\\Assets\\SoftcoreLogoMenu"
 
+local PRESET_DISPLAY = {
+    CASUAL = "Casual Run",
+    CHEF_SPECIAL = "Chef's Special Run",
+    IRONMAN = "Ironman Run",
+    IRON_VIGIL = "Iron Vigil Run",
+}
+
 local GROUPING_OPTIONS = {
     { text = "Group", value = "SYNCED_GROUP_ALLOWED" },
     { text = "Solo Only", value = "SOLO_SELF_FOUND" },
@@ -438,6 +445,10 @@ local function CreatePanel(parent)
     panel:SetSize(PANEL_WIDTH, PANEL_HEIGHT)
     panel:SetPoint("TOPLEFT", parent, "TOPLEFT", 24, -110)
     return panel
+end
+
+local function CenteredOffset(containerWidth, childWidth)
+    return math.floor(((containerWidth or 0) - (childWidth or 0)) / 2)
 end
 
 local function ApplyParchmentBackdrop(frame)
@@ -957,7 +968,8 @@ local function ApplyStartPreset(frame, preset)
     local rules = frame.start.selectedRules
     frame.start.selectedPreset = preset
 
-    local ironman = preset == "IRONMAN"
+    local ironman = preset == "IRONMAN" or preset == "IRON_VIGIL"
+    local ironVigil = preset == "IRON_VIGIL"
     local chef = preset == "CHEF_SPECIAL"
 
     rules.groupingMode = ironman and "SOLO_SELF_FOUND" or "SYNCED_GROUP_ALLOWED"
@@ -980,6 +992,9 @@ local function ApplyStartPreset(frame, preset)
     end
     if ironman then
         rules.flightPaths = "ALLOWED"
+    end
+    if ironVigil then
+        rules.flightPaths = DISALLOWED_OUTCOME
     end
 
     SetDisallowedRule(rules, "consumables", not ironman)
@@ -1014,6 +1029,11 @@ local function ApplyStartPreset(frame, preset)
         rules.guildBank = "ALLOWED"
         rules.heirlooms = "ALLOWED"
         rules.selfCraftedGearAllowed = false
+    end
+
+    if ironVigil then
+        frame.start.selectedCameraMode = "CINEMATIC"
+        SetCameraRules(rules, frame.start.selectedCameraMode)
     end
 
     rules.maxDeaths = false
@@ -1264,6 +1284,16 @@ local function GetOverviewStatusColor(status)
     return STATUS_RGB[base] or BODY_TEXT
 end
 
+local function FormatTotalViolations(count)
+    count = tonumber(count or 0) or 0
+    return tostring(count) .. (count == 1 and " total violation" or " total violations")
+end
+
+local function FormatOverviewRunTitle(run)
+    local preset = run and run.ruleset and run.ruleset.achievementPreset
+    return PRESET_DISPLAY[preset] or "Custom Run"
+end
+
 local function CalculateOverviewLedgerHeight(rowCount)
     rowCount = math.min(math.max(tonumber(rowCount or 1) or 1, 1), OVERVIEW_PARTY_ROWS)
     return OVERVIEW_LAYOUT.LEDGER_INSET
@@ -1332,20 +1362,20 @@ local function CreateOverviewPartyRow(parent, index, width)
 
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 16, -7)
-    row.name:SetWidth(302)
+    row.name:SetWidth(244)
     row.name:SetJustifyH("LEFT")
     row.name:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
     row.name:SetWordWrap(false)
 
     row.meta = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.meta:SetPoint("TOPLEFT", row, "TOPLEFT", 16, -26)
-    row.meta:SetWidth(302)
+    row.meta:SetWidth(244)
     row.meta:SetJustifyH("LEFT")
     row.meta:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
     row.meta:SetWordWrap(false)
 
-    row.statusPill = CreateStatusPill(row, 332, -9, 176)
-    row.totalBadge = CreateOverviewSmallBadge(row, 84, 24)
+    row.statusPill = CreateStatusPill(row, 272, -9, 168)
+    row.totalBadge = CreateOverviewSmallBadge(row, 176, 24)
     row.totalBadge:SetPoint("TOPRIGHT", row, "TOPRIGHT", -14, -10)
     row:Hide()
     return row
@@ -1374,12 +1404,6 @@ local function CreateOverviewPartyLedger(parent, x, y, width, maxRows)
     ledger.title:SetJustifyH("LEFT")
     ledger.title:SetTextColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b)
     ledger.title:SetText("Party Ledger")
-
-    ledger.mode = ledger:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    ledger.mode:SetPoint("LEFT", ledger.title, "RIGHT", 8, 0)
-    ledger.mode:SetWidth(120)
-    ledger.mode:SetJustifyH("LEFT")
-    ledger.mode:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
 
     ledger.count = CreateOverviewSmallBadge(ledger, 54, 22)
     ledger.count:SetPoint("TOPRIGHT", ledger, "TOPRIGHT", -OVERVIEW_LAYOUT.LEDGER_INSET, -8)
@@ -1423,14 +1447,6 @@ local function RefreshOverviewLedger(ledger, rows, grouped, inRaid)
     if not ledger then return end
 
     local visibleRows = math.min(#rows, OVERVIEW_PARTY_ROWS)
-    local modeText = "Solo"
-    if inRaid then
-        modeText = "Raid local"
-    elseif grouped then
-        modeText = "Party"
-    end
-
-    ledger.mode:SetText("|cffad8f61" .. modeText .. "|r")
     SetOverviewSmallBadge(ledger.count, tostring(visibleRows) .. "/" .. tostring(OVERVIEW_PARTY_ROWS), GOLD_TEXT)
     SetRegionShown(ledger.empty, visibleRows == 0)
     ledger:SetHeight(CalculateOverviewLedgerHeight(OVERVIEW_PARTY_ROWS))
@@ -1440,17 +1456,16 @@ local function RefreshOverviewLedger(ledger, rows, grouped, inRaid)
         if display then
             local statusColor = GetOverviewStatusColor(display.status)
             local total = tonumber(display.totalViolations or 0) or 0
-            local accentColor = total > 0 and GOLD_TEXT or statusColor
 
             row:Show()
             row.name:SetText((display.isLocal and "|cffffd100" or "") .. Trunc(display.name, 30) .. (display.isLocal and "|r" or ""))
             row.meta:SetText(FormatOverviewLevelText(display.level, display.startLevel))
             SetStatusPill(row.statusPill, display.status)
-            SetOverviewSmallBadge(row.totalBadge, tostring(total) .. " viol", total > 0 and GOLD_TEXT or MUTED_TEXT)
-            row.accent:SetColorTexture(accentColor.r, accentColor.g, accentColor.b, 0.95)
+            SetOverviewSmallBadge(row.totalBadge, FormatTotalViolations(total), total > 0 and GOLD_TEXT or MUTED_TEXT)
+            row.accent:SetColorTexture(statusColor.r, statusColor.g, statusColor.b, 0.95)
             if row.SetBackdropColor then
-                row:SetBackdropColor(accentColor.r * 0.055, accentColor.g * 0.04, accentColor.b * 0.028, 0.86)
-                row:SetBackdropBorderColor(accentColor.r, accentColor.g, accentColor.b, 0.46)
+                row:SetBackdropColor(statusColor.r * 0.055, statusColor.g * 0.04, statusColor.b * 0.028, 0.86)
+                row:SetBackdropBorderColor(statusColor.r, statusColor.g, statusColor.b, 0.46)
             end
         else
             row:Hide()
@@ -1480,7 +1495,7 @@ local function RefreshOverviewPanel(frame)
     end
 
     if active then
-        frame.overview.run:SetText("|cffffd100" .. tostring(run.runName or "Softcore Run") .. "|r")
+        frame.overview.run:SetText("|cffffd100" .. FormatOverviewRunTitle(run) .. "|r")
         SetStatusPill(frame.overview.localStatusPill, status.participantStatus or "NOT_IN_RUN", "Player: ")
         SetStatusPill(frame.overview.partyStatusPill, status.partyStatus or "INACTIVE", "Party: ")
         SetRegionShown(frame.overview.partyStatusPill, grouped)
@@ -1521,6 +1536,7 @@ local function SetRunSetupEnabled(frame, enabled)
     start.casualBtn:SetEnabled(enabled)
     start.ironmanBtn:SetEnabled(enabled)
     if start.chefBtn then start.chefBtn:SetEnabled(enabled) end
+    if start.ironVigilBtn then start.ironVigilBtn:SetEnabled(enabled) end
 
     for _, control in ipairs(start.controls) do
         if control.Enable and control.Disable then
@@ -2230,14 +2246,16 @@ end
 local function CreateOverviewTab(frame)
     local overviewPanel = CreatePanel(frame)
     frame.panels[TAB_OVERVIEW] = overviewPanel
+    local contentX = CenteredOffset(PANEL_WIDTH, OVERVIEW_LAYOUT.CONTENT_WIDTH)
 
-    local inactiveCard = CreateOverviewCard(overviewPanel, "Character Record", 110, -86, 490, 170)
+    local inactiveWidth = 490
+    local inactiveCard = CreateOverviewCard(overviewPanel, "Character Record", CenteredOffset(PANEL_WIDTH, inactiveWidth), -86, inactiveWidth, 170)
     inactiveCard.value:SetFontObject(GameFontNormalLarge)
     inactiveCard.detail:SetWidth(450)
     inactiveCard.detail:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
 
     local hero = CreateFrame("Frame", nil, overviewPanel, "BackdropTemplate")
-    hero:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", 0, 0)
+    hero:SetPoint("TOPLEFT", overviewPanel, "TOPLEFT", contentX, 0)
     hero:SetSize(OVERVIEW_LAYOUT.CONTENT_WIDTH, OVERVIEW_LAYOUT.HERO_HEIGHT)
     if hero.SetBackdrop then
         hero:SetBackdrop({
@@ -2289,7 +2307,7 @@ local function CreateOverviewTab(frame)
         { key = "violationCard", title = "Violations" },
         { key = "timeCard", title = "Time" },
         { key = "integrityCard", title = "Integrity" },
-    }, 0, metricTop, OVERVIEW_LAYOUT.CONTENT_WIDTH, OVERVIEW_LAYOUT.METRIC_HEIGHT, OVERVIEW_LAYOUT.METRIC_GAP)
+    }, contentX, metricTop, OVERVIEW_LAYOUT.CONTENT_WIDTH, OVERVIEW_LAYOUT.METRIC_HEIGHT, OVERVIEW_LAYOUT.METRIC_GAP)
     frame.overview.deathCard = metricCards.deathCard
     frame.overview.violationCard = metricCards.violationCard
     frame.overview.timeCard = metricCards.timeCard
@@ -2299,7 +2317,7 @@ local function CreateOverviewTab(frame)
     end
 
     local ledgerTop = metricTop - OVERVIEW_LAYOUT.METRIC_HEIGHT - OVERVIEW_LAYOUT.LEDGER_TOP_GAP
-    frame.overview.partyLedger = CreateOverviewPartyLedger(overviewPanel, 0, ledgerTop, OVERVIEW_LAYOUT.CONTENT_WIDTH, OVERVIEW_PARTY_ROWS)
+    frame.overview.partyLedger = CreateOverviewPartyLedger(overviewPanel, contentX, ledgerTop, OVERVIEW_LAYOUT.CONTENT_WIDTH, OVERVIEW_PARTY_ROWS)
     table.insert(frame.overview.activeElements, frame.overview.partyLedger)
 
     frame.overview.raidNote = CreateField(frame.overview.partyLedger, OVERVIEW_LAYOUT.LEDGER_INSET, -CalculateOverviewLedgerHeight(1) - 8, 660)
@@ -2445,10 +2463,16 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.ironmanBtn:SetScript("OnClick", function()
         ApplyStartPreset(frame, "IRONMAN")
     end)
+    frame.start.ironVigilBtn = CreateButton(frame.start.charterSection.content, "Iron Vigil", 96, 22)
+    frame.start.ironVigilBtn:SetPoint("LEFT", frame.start.ironmanBtn, "RIGHT", 6, 0)
+    frame.start.ironVigilBtn:SetScript("OnClick", function()
+        ApplyStartPreset(frame, "IRON_VIGIL")
+    end)
 
     RegisterRunControl(frame.start, frame.start.casualBtn, frame.start.charterSection)
     RegisterRunControl(frame.start, frame.start.chefBtn, frame.start.charterSection)
     RegisterRunControl(frame.start, frame.start.ironmanBtn, frame.start.charterSection)
+    RegisterRunControl(frame.start, frame.start.ironVigilBtn, frame.start.charterSection)
     frame.start.groupingLabel = CreateLabel(frame.start.charterSection.content, "Mode", 0, 0, "GameFontNormalSmall", 90)
     runLayout:PlaceRowLabel(charterModeRow, frame.start.groupingLabel, 0, 120)
     RegisterRunControl(frame.start, frame.start.groupingLabel, frame.start.charterSection)
@@ -2556,7 +2580,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.selfCraftedCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
     frame.start.selfCraftedCheck.label:SetText("Allow any self-crafted gear")
     frame.start.selfCraftedCheck:SetScript("OnClick", function(btn)
-        local ironmanSelected = frame.start.selectedPreset == "IRONMAN"
+        local ironmanSelected = frame.start.selectedPreset == "IRONMAN" or frame.start.selectedPreset == "IRON_VIGIL"
         if ironmanSelected then
             frame.start.selectedRules.selfCraftedGearAllowed = false
             btn:SetChecked(false)
@@ -2740,7 +2764,7 @@ function SC:OpenMasterWindow(focusTab)
         self.dungeonRepeatCheck:SetChecked(not IsDisallowed(self.selectedRules.dungeonRepeat))
         self.consumablesCheck:SetChecked(not IsDisallowed(self.selectedRules.consumables))
         self.instancedPvPCheck:SetChecked(not IsDisallowed(self.selectedRules.instancedPvP))
-        local ironmanSelected = self.selectedPreset == "IRONMAN"
+        local ironmanSelected = self.selectedPreset == "IRONMAN" or self.selectedPreset == "IRON_VIGIL"
         if ironmanSelected then
             self.selectedRules.selfCraftedGearAllowed = false
         end

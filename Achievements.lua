@@ -171,6 +171,10 @@ local function IsIronmanRules(rules)
     return true
 end
 
+local function IsIronmanPreset(preset)
+    return preset == "IRONMAN" or preset == "IRON_VIGIL"
+end
+
 local function IsCameraEnforcedRules(rules)
     if not rules then return false end
     return IsDisallowed(rules.actionCam)
@@ -215,9 +219,9 @@ function SC:GetAchievementDefinitions()
 
     AddDefinition(result, "char_max_level", "ACCOUNT", "Max Level", "Softcore Champion", "Reach max level after starting the run at level 10 or below.", "MAX_LEVEL")
     AddDefinition(result, "char_clean_max_level", "ACCOUNT", "Max Level", "Clean Finish", "Reach max level on an eligible run without any local violations.", "CLEAN_MAX")
-    AddDefinition(result, "char_ironman_max_level", "ACCOUNT", "Max Level", "Iron Will", "Reach max level on an eligible run that started with the Ironman preset and kept the self-crafted gear exemption disabled.", "IRONMAN_MAX")
+    AddDefinition(result, "char_ironman_max_level", "ACCOUNT", "Max Level", "Iron Will", "Reach max level using an Ironman preset.", "IRONMAN_MAX")
     AddDefinition(result, "char_camera_max_level", "ACCOUNT", "Max Level", "Locked Perspective", "Reach max level on an eligible run with Cinematic Camera enforced from run start.", "CAMERA_MAX")
-    AddDefinition(result, "char_camera_ironman_no_flight_paths_max_level", "ACCOUNT", "Max Level", "Through Iron Eyes", "Reach max level on an eligible Ironman run with no Flight Paths, camera mode enforced, and the self-crafted gear exemption disabled from run start.", "CAMERA_IRONMAN_NO_FLIGHT_PATHS_MAX")
+    AddDefinition(result, "char_camera_ironman_no_flight_paths_max_level", "ACCOUNT", "Max Level", "Iron Vigil", "Reach max level using the Iron Vigil preset.", "CAMERA_IRONMAN_NO_FLIGHT_PATHS_MAX")
     AddDefinition(result, "char_original_terms", "ACCOUNT", "Max Level", "Original Terms", "Reach max level on an eligible run with no rule amendments applied.", "RULE_UNCHANGED_MAX")
     AddDefinition(result, "char_party_survivor", "ACCOUNT", "Max Level", "Party Survivor", "Reach max level on an eligible run started in group mode.", "GROUPED_MAX")
 
@@ -313,7 +317,7 @@ local function BuildProgress(definition, earned)
         if not eligibility.startedAtOrBelow10 then
             return 0, "Started above level 10"
         end
-        if eligibility.initialPreset ~= "IRONMAN" or not IsIronmanRules(eligibility.initialRules) then
+        if not IsIronmanPreset(eligibility.initialPreset) or not IsIronmanRules(eligibility.initialRules) then
             return 0, "Not an Ironman start"
         end
         if eligibility.anyRuleChanged then
@@ -339,8 +343,8 @@ local function BuildProgress(definition, earned)
         if not eligibility.startedAtOrBelow10 then
             return 0, "Started above level 10"
         end
-        if eligibility.initialPreset ~= "IRONMAN" or not IsIronmanRules(eligibility.initialRules) then
-            return 0, "Not an Ironman start"
+        if eligibility.initialPreset ~= "IRON_VIGIL" or not IsIronmanRules(eligibility.initialRules) then
+            return 0, "Not an Iron Vigil start"
         end
         if not IsCameraEnforcedRules(eligibility.initialRules) then
             return 0, "No camera mode enforced at start"
@@ -354,7 +358,7 @@ local function BuildProgress(definition, earned)
         if not IsCameraEnforcedRules(db and db.run and db.run.ruleset) then
             return 0, "Camera enforcement removed"
         end
-        return math.min(currentLevel / maxLevel, 1), "No-flight camera Ironman: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
+        return math.min(currentLevel / maxLevel, 1), "Iron Vigil: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
     end
 
     if definition.progressKind == "RULE_UNCHANGED_MAX" then
@@ -558,7 +562,7 @@ function SC:Achievements_OnLevelChanged(level)
         Earn("char_clean_max_level", "CHARACTER", "Clean Finish")
     end
 
-    if eligibility.initialPreset == "IRONMAN" and IsIronmanRules(eligibility.initialRules) and not eligibility.anyRuleChanged then
+    if IsIronmanPreset(eligibility.initialPreset) and IsIronmanRules(eligibility.initialRules) and not eligibility.anyRuleChanged then
         Earn("char_ironman_max_level", "CHARACTER", "Iron Will")
     end
 
@@ -566,13 +570,13 @@ function SC:Achievements_OnLevelChanged(level)
         Earn("char_camera_max_level", "CHARACTER", "Locked Perspective")
     end
 
-    if eligibility.initialPreset == "IRONMAN"
+    if eligibility.initialPreset == "IRON_VIGIL"
        and IsIronmanRules(eligibility.initialRules)
        and IsCameraEnforcedRules(eligibility.initialRules)
        and IsCameraEnforcedRules(db.run.ruleset)
        and RequirementStayedLocked(eligibility, db.run.ruleset, "flightPaths")
        and not eligibility.anyRuleChanged then
-        Earn("char_camera_ironman_no_flight_paths_max_level", "CHARACTER", "Through Iron Eyes")
+        Earn("char_camera_ironman_no_flight_paths_max_level", "CHARACTER", "Iron Vigil")
     end
 
     if not eligibility.anyRuleChanged then
