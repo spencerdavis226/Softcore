@@ -97,7 +97,26 @@ local OVERVIEW_LAYOUT = {
 }
 OVERVIEW_LAYOUT.LEDGER_MAX_ROWS_HEIGHT = (OVERVIEW_PARTY_ROWS * OVERVIEW_LAYOUT.LEDGER_ROW_HEIGHT)
     + ((OVERVIEW_PARTY_ROWS - 1) * OVERVIEW_LAYOUT.LEDGER_ROW_GAP)
-local ACHIEVEMENT_SCROLL_HEIGHT = PANEL_HEIGHT - 82
+local ACHIEVEMENT_LAYOUT = {
+    CONTENT_WIDTH = 690,
+    SUMMARY_TOP = -34,
+    SUMMARY_HEIGHT = 62,
+    SUMMARY_GAP = 10,
+    SCROLL_TOP = -112,
+    SCROLL_HEIGHT = PANEL_HEIGHT - 128,
+    SCROLL_WIDTH = 714,
+    SECTION_GAP = 8,
+    SECTION_HEADER_HEIGHT = 38,
+    SECTION_ROW_TOP_GAP = 6,
+    SECTION_BOTTOM_INSET = 8,
+    ROW_HEIGHT = 72,
+    ROW_GAP = 6,
+    ROW_INSET = 10,
+    ICON_SIZE = 42,
+    BADGE_WIDTH = 74,
+    BADGE_HEIGHT = 20,
+    PROGRESS_WIDTH = 170,
+}
 local BODY_TEXT = { r = 0.94, g = 0.86, b = 0.68 }
 local MUTED_TEXT = { r = 0.68, g = 0.56, b = 0.38 }
 local GOLD_TEXT = { r = 1.00, g = 0.82, b = 0.20 }
@@ -127,6 +146,72 @@ local CLASS_COLORS = {
 local CLASS_LABELS = {
     DEATHKNIGHT = "Death Knight",
     DEMONHUNTER = "Demon Hunter",
+}
+
+local ACHIEVEMENT_CATEGORY_ORDER = {
+    "Account",
+    "Leveling",
+    "Max Level",
+    "Classes",
+    "Rules",
+}
+
+local ACHIEVEMENT_CATEGORY_META = {
+    Account = { label = "Account", icon = "Interface\\Icons\\Achievement_General", color = BLUE_TEXT },
+    Leveling = { label = "Leveling", icon = "Interface\\Icons\\Achievement_Level_10", color = GREEN_TEXT },
+    ["Max Level"] = { label = "Max Level", icon = "Interface\\Icons\\INV_Misc_Trophy_Argent", color = GOLD_TEXT },
+    Classes = { label = "Classes", icon = "Interface\\Icons\\Achievement_Character_Human_Male", color = PURPLE_TEXT },
+    Rules = { label = "Rules", icon = "Interface\\Icons\\INV_Misc_Note_03", color = ORANGE_TEXT },
+}
+
+local ACHIEVEMENT_CLASS_ICONS = {
+    DEATHKNIGHT = "Interface\\Icons\\Spell_Deathknight_ClassIcon",
+    DEMONHUNTER = "Interface\\Icons\\Ability_DemonHunter_SpectralSight",
+    DRUID = "Interface\\Icons\\Ability_Druid_Maul",
+    EVOKER = "Interface\\Icons\\ClassIcon_Evoker",
+    HUNTER = "Interface\\Icons\\INV_Weapon_Bow_07",
+    MAGE = "Interface\\Icons\\Spell_Frost_FrostBolt02",
+    MONK = "Interface\\Icons\\Class_Monk",
+    PALADIN = "Interface\\Icons\\Ability_Paladin_BeaconofLight",
+    PRIEST = "Interface\\Icons\\Spell_Holy_PowerWordShield",
+    ROGUE = "Interface\\Icons\\Ability_Stealth",
+    SHAMAN = "Interface\\Icons\\Spell_Nature_BloodLust",
+    WARLOCK = "Interface\\Icons\\Spell_Shadow_CurseOfTounges",
+    WARRIOR = "Interface\\Icons\\Ability_Warrior_InnerRage",
+}
+
+local ACHIEVEMENT_RULE_ICONS = {
+    actionCam = "Interface\\Icons\\INV_Misc_Spyglass_02",
+    auctionHouse = "Interface\\Icons\\INV_Misc_Coin_02",
+    bank = "Interface\\Icons\\INV_Misc_Bag_08",
+    consumables = "Interface\\Icons\\INV_Potion_54",
+    dungeonRepeat = "Interface\\Icons\\Achievement_Dungeon_GloryoftheRaider",
+    enchants = "Interface\\Icons\\Trade_Engraving",
+    flightPaths = "Interface\\Icons\\Ability_Mount_Gryphon_01",
+    flying = "Interface\\Icons\\Ability_Mount_Wyvern_01",
+    gearQuality = "Interface\\Icons\\INV_Chest_Cloth_17",
+    guildBank = "Interface\\Icons\\INV_Misc_Gem_Variety_01",
+    heirlooms = "Interface\\Icons\\INV_Misc_Cape_18",
+    instancedPvP = "Interface\\Icons\\Achievement_BG_winWSG",
+    mailbox = "Interface\\Icons\\INV_Letter_15",
+    maxLevelGap = "Interface\\Icons\\Achievement_GuildPerk_WorkingOvertime_Rank2",
+    mounts = "Interface\\Icons\\Ability_Mount_RidingHorse",
+    trade = "Interface\\Icons\\INV_Misc_Bag_10",
+    warbandBank = "Interface\\Icons\\INV_Misc_EngGizmos_17",
+    WHITE_GRAY_ONLY = "Interface\\Icons\\INV_Chest_Cloth_17",
+}
+
+local ACHIEVEMENT_KIND_ICONS = {
+    BINARY = "Interface\\Icons\\Achievement_General",
+    CAMERA_IRONMAN_NO_FLIGHT_PATHS_MAX = "Interface\\Icons\\Ability_Mount_Gryphon_01",
+    CAMERA_MAX = "Interface\\Icons\\INV_Misc_Spyglass_02",
+    CLEAN_MAX = "Interface\\Icons\\INV_Misc_Rune_01",
+    GEAR_QUALITY_CRAFTED_MAX = "Interface\\Icons\\Trade_BlackSmithing",
+    GEAR_QUALITY_MAX = "Interface\\Icons\\INV_Chest_Cloth_17",
+    GROUPED_MAX = "Interface\\Icons\\Achievement_GuildPerk_EverybodysFriend",
+    IRONMAN_MAX = "Interface\\Icons\\INV_Sword_27",
+    MAX_LEVEL = "Interface\\Icons\\INV_Misc_Trophy_Argent",
+    RULE_UNCHANGED_MAX = "Interface\\Icons\\INV_Misc_Note_05",
 }
 
 local PRESET_DISPLAY = {
@@ -2509,136 +2594,405 @@ local function CreateLogTab(frame)
     end)
 end
 
-local function CreateAchievementRow(parent, index)
+local function GetAchievementCategoryRank(category)
+    for index, knownCategory in ipairs(ACHIEVEMENT_CATEGORY_ORDER) do
+        if knownCategory == category then
+            return index
+        end
+    end
+    return #ACHIEVEMENT_CATEGORY_ORDER + 1
+end
+
+local function GetAchievementCategoryMeta(category)
+    return ACHIEVEMENT_CATEGORY_META[category] or {
+        label = tostring(category or "Other"),
+        icon = "Interface\\Icons\\Achievement_General",
+        color = BODY_TEXT,
+    }
+end
+
+local function FormatAchievementDate(timestamp)
+    if not timestamp then return "" end
+    return date("%b %d, %Y", timestamp)
+end
+
+local function GetAchievementIcon(achievement)
+    if not achievement then
+        return "Interface\\Icons\\INV_Misc_QuestionMark"
+    end
+
+    local progressKind = tostring(achievement.progressKind or "")
+    local ruleName = achievement.ruleName
+
+    if progressKind == "CLASS_MAX" and ACHIEVEMENT_CLASS_ICONS[ruleName] then
+        return ACHIEVEMENT_CLASS_ICONS[ruleName]
+    end
+
+    if progressKind == "RULE_MAX" and ACHIEVEMENT_RULE_ICONS[ruleName] then
+        return ACHIEVEMENT_RULE_ICONS[ruleName]
+    end
+
+    if (progressKind == "GEAR_QUALITY_MAX" or progressKind == "GEAR_QUALITY_CRAFTED_MAX") and ACHIEVEMENT_RULE_ICONS[ruleName] then
+        return ACHIEVEMENT_RULE_ICONS[ruleName]
+    end
+
+    if progressKind == "LEVEL" or progressKind == "LEVEL_CLEAN" then
+        local target = tonumber(achievement.target or 0) or 0
+        if target > 0 then
+            return "Interface\\Icons\\Achievement_Level_" .. tostring(target)
+        end
+    end
+
+    return ACHIEVEMENT_KIND_ICONS[progressKind]
+        or (ACHIEVEMENT_CATEGORY_META[achievement.category] and ACHIEVEMENT_CATEGORY_META[achievement.category].icon)
+        or "Interface\\Icons\\Achievement_General"
+end
+
+local function CreateAchievementSummaryCard(parent, title, x, y, width)
+    local card = CreateOverviewCard(parent, title, x, y, width, ACHIEVEMENT_LAYOUT.SUMMARY_HEIGHT, {
+        centerValue = true,
+        hideDetail = true,
+        valueFont = "GameFontNormalLarge",
+    })
+    card.value:ClearAllPoints()
+    card.value:SetPoint("CENTER", card, "CENTER", 0, -6)
+    return card
+end
+
+local function CreateAchievementRow(parent)
     local row = CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    row:SetSize(628, 88)
-    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -((index - 1) * 96))
+    row:SetSize(ACHIEVEMENT_LAYOUT.CONTENT_WIDTH - (ACHIEVEMENT_LAYOUT.ROW_INSET * 2), ACHIEVEMENT_LAYOUT.ROW_HEIGHT)
+    row:EnableMouse(true)
     row:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = false, edgeSize = 12,
+        tile = false,
+        edgeSize = 10,
         insets = { left = 2, right = 2, top = 2, bottom = 2 },
     })
-    row:SetBackdropColor(0.11, 0.075, 0.035, 0.92)
-    row:SetBackdropBorderColor(0.58, 0.42, 0.18, 0.72)
 
-    row.medal = CreateFrame("Frame", nil, row, "BackdropTemplate")
-    row.medal:SetSize(46, 46)
-    row.medal:SetPoint("TOPLEFT", row, "TOPLEFT", 12, -12)
-    row.medal:SetBackdrop({
+    row.accent = row:CreateTexture(nil, "ARTWORK")
+    row.accent:SetPoint("TOPLEFT", row, "TOPLEFT", 3, -5)
+    row.accent:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 3, 5)
+    row.accent:SetWidth(3)
+
+    row.iconFrame = CreateFrame("Frame", nil, row, "BackdropTemplate")
+    row.iconFrame:SetSize(ACHIEVEMENT_LAYOUT.ICON_SIZE + 6, ACHIEVEMENT_LAYOUT.ICON_SIZE + 6)
+    row.iconFrame:SetPoint("TOPLEFT", row, "TOPLEFT", 12, -11)
+    row.iconFrame:SetBackdrop({
         bgFile = "Interface\\Buttons\\WHITE8X8",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = false, edgeSize = 10,
+        tile = false,
+        edgeSize = 10,
         insets = { left = 2, right = 2, top = 2, bottom = 2 },
     })
-    row.medal:SetBackdropColor(0.25, 0.18, 0.08, 1)
-    row.medal:SetBackdropBorderColor(0.76, 0.58, 0.18, 1)
-    row.icon = row.medal:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.icon:SetPoint("CENTER", row.medal, "CENTER", 0, 0)
-    row.icon:SetWidth(42)
-    row.icon:SetJustifyH("CENTER")
-    row.icon:SetText("?")
-    row.iconCheck = row.medal:CreateTexture(nil, "OVERLAY")
-    row.iconCheck:SetSize(32, 32)
-    row.iconCheck:SetPoint("CENTER", row.medal, "CENTER", 0, 0)
+    row.icon = row.iconFrame:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(ACHIEVEMENT_LAYOUT.ICON_SIZE, ACHIEVEMENT_LAYOUT.ICON_SIZE)
+    row.icon:SetPoint("CENTER", row.iconFrame, "CENTER", 0, 0)
+    row.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    row.iconShade = row.iconFrame:CreateTexture(nil, "OVERLAY")
+    row.iconShade:SetAllPoints(row.icon)
+    row.iconShade:SetColorTexture(0, 0, 0, 0.42)
+    row.iconCheck = row.iconFrame:CreateTexture(nil, "OVERLAY")
+    row.iconCheck:SetSize(24, 24)
+    row.iconCheck:SetPoint("BOTTOMRIGHT", row.iconFrame, "BOTTOMRIGHT", 3, -3)
     row.iconCheck:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready")
-    row.iconCheck:Hide()
 
-    row.name = CreateField(row, 70, -10, 340)
+    row.name = CreateField(row, 70, -9, 346)
     row.name:SetFontObject(GameFontNormal)
-    row.date = CreateField(row, 424, -12, 190)
+    row.name:SetWordWrap(false)
+    row.date = CreateField(row, 454, -10, 188)
     row.date:SetJustifyH("RIGHT")
-    row.description = CreateField(row, 70, -32, 530)
+    row.date:SetWordWrap(false)
+
+    row.description = CreateField(row, 70, -31, 560)
     row.description:SetFontObject(GameFontHighlightSmall)
-    row.description:SetWordWrap(true)
-    if row.description.SetMaxLines then
-        row.description:SetMaxLines(2)
-    end
+    row.description:SetWordWrap(false)
+
     row.progress = CreateFrame("StatusBar", nil, row)
-    row.progress:SetSize(300, 10)
-    row.progress:SetPoint("TOPLEFT", row, "TOPLEFT", 70, -68)
+    row.progress:SetSize(ACHIEVEMENT_LAYOUT.PROGRESS_WIDTH, 9)
+    row.progress:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 70, 12)
     row.progress:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
     row.progress:SetMinMaxValues(0, 1)
     row.progressBg = row.progress:CreateTexture(nil, "BACKGROUND")
     row.progressBg:SetAllPoints(row.progress)
     row.progressBg:SetColorTexture(0.05, 0.04, 0.025, 0.95)
-    row.progressText = CreateField(row, 378, -64, 234)
+
+    row.progressText = CreateField(row, 254, -53, 276)
     row.progressText:SetFontObject(GameFontHighlightSmall)
+    row.progressText:SetWordWrap(false)
+
+    row.statusBadge = CreateOverviewSmallBadge(row, ACHIEVEMENT_LAYOUT.BADGE_WIDTH, ACHIEVEMENT_LAYOUT.BADGE_HEIGHT)
+    row.statusBadge:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -12, 8)
 
     return row
+end
+
+local function CreateAchievementSection(parent)
+    local section = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    section:SetSize(ACHIEVEMENT_LAYOUT.CONTENT_WIDTH, ACHIEVEMENT_LAYOUT.SECTION_HEADER_HEIGHT)
+    section.rows = {}
+    section:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = true,
+        tileSize = 16,
+        edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+
+    section.headerButton = CreateFrame("Button", nil, section)
+    section.headerButton:SetPoint("TOPLEFT", section, "TOPLEFT", 0, 0)
+    section.headerButton:SetPoint("TOPRIGHT", section, "TOPRIGHT", 0, 0)
+    section.headerButton:SetHeight(ACHIEVEMENT_LAYOUT.SECTION_HEADER_HEIGHT)
+
+    section.icon = section.headerButton:CreateTexture(nil, "ARTWORK")
+    section.icon:SetSize(22, 22)
+    section.icon:SetPoint("LEFT", section.headerButton, "LEFT", 12, 0)
+    section.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+
+    section.title = section.headerButton:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    section.title:SetPoint("LEFT", section.icon, "RIGHT", 9, 0)
+    section.title:SetWidth(240)
+    section.title:SetJustifyH("LEFT")
+
+    section.count = CreateOverviewSmallBadge(section.headerButton, 74, 20)
+    section.count:SetPoint("RIGHT", section.headerButton, "RIGHT", -44, 0)
+
+    section.toggleGlyph = section.headerButton:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    section.toggleGlyph:SetPoint("RIGHT", section.headerButton, "RIGHT", -14, 0)
+    section.toggleGlyph:SetWidth(18)
+    section.toggleGlyph:SetJustifyH("CENTER")
+
+    section.divider = section:CreateTexture(nil, "ARTWORK")
+    section.divider:SetHeight(1)
+    section.divider:SetPoint("TOPLEFT", section, "TOPLEFT", 10, -ACHIEVEMENT_LAYOUT.SECTION_HEADER_HEIGHT)
+    section.divider:SetPoint("TOPRIGHT", section, "TOPRIGHT", -10, -ACHIEVEMENT_LAYOUT.SECTION_HEADER_HEIGHT)
+    section.divider:SetColorTexture(0.72, 0.49, 0.18, 0.30)
+
+    section.headerButton:SetScript("OnClick", function(button)
+        local owner = button:GetParent()
+        local master = SC.masterFrame
+        if not owner or not master or not master.achievements then return end
+        local category = owner.category or "Other"
+        master.achievements.collapsed = master.achievements.collapsed or {}
+        master.achievements.collapsed[category] = not master.achievements.collapsed[category]
+        SC:MasterUI_Refresh()
+    end)
+
+    return section
+end
+
+local function SetAchievementRowTone(row, achievement, categoryColor)
+    local progressValue = tonumber(achievement and achievement.progressValue or 0) or 0
+    local tone = categoryColor or BODY_TEXT
+
+    if achievement and achievement.earned then
+        row:SetBackdropColor(0.18, 0.12, 0.045, 0.96)
+        row:SetBackdropBorderColor(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b, 0.88)
+        row.iconFrame:SetBackdropColor(0.32, 0.22, 0.06, 1)
+        row.iconFrame:SetBackdropBorderColor(1.0, 0.82, 0.20, 1)
+        row.accent:SetColorTexture(GOLD_TEXT.r, GOLD_TEXT.g, GOLD_TEXT.b, 0.95)
+        row.icon:SetDesaturated(false)
+        row.icon:SetVertexColor(1, 1, 1, 1)
+        row.iconShade:Hide()
+        row.iconCheck:Show()
+        SetOverviewSmallBadge(row.statusBadge, "Done", GREEN_TEXT)
+    elseif progressValue > 0 then
+        row:SetBackdropColor(0.095, 0.072, 0.04, 0.92)
+        row:SetBackdropBorderColor(tone.r, tone.g, tone.b, 0.66)
+        row.iconFrame:SetBackdropColor(0.12, 0.11, 0.09, 1)
+        row.iconFrame:SetBackdropBorderColor(tone.r, tone.g, tone.b, 0.86)
+        row.accent:SetColorTexture(BLUE_TEXT.r, BLUE_TEXT.g, BLUE_TEXT.b, 0.90)
+        row.icon:SetDesaturated(false)
+        row.icon:SetVertexColor(0.95, 0.95, 0.95, 1)
+        row.iconShade:Hide()
+        row.iconCheck:Hide()
+        SetOverviewSmallBadge(row.statusBadge, tostring(math.floor((progressValue * 100) + 0.5)) .. "%", BLUE_TEXT)
+    else
+        row:SetBackdropColor(0.07, 0.055, 0.035, 0.88)
+        row:SetBackdropBorderColor(0.36, 0.30, 0.20, 0.65)
+        row.iconFrame:SetBackdropColor(0.08, 0.075, 0.065, 1)
+        row.iconFrame:SetBackdropBorderColor(0.36, 0.31, 0.22, 0.78)
+        row.accent:SetColorTexture(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b, 0.55)
+        row.icon:SetDesaturated(true)
+        row.icon:SetVertexColor(0.72, 0.66, 0.55, 1)
+        row.iconShade:Show()
+        row.iconCheck:Hide()
+        SetOverviewSmallBadge(row.statusBadge, "Open", MUTED_TEXT)
+    end
+end
+
+local function RefreshAchievementRow(row, achievement, categoryColor)
+    local progressValue = tonumber(achievement.progressValue or 0) or 0
+    if progressValue < 0 then progressValue = 0 end
+    if progressValue > 1 then progressValue = 1 end
+
+    row.icon:SetTexture(GetAchievementIcon(achievement))
+    row.name:SetText((achievement.earned and "|cffffd100" or "|cffd6c29a") .. Trunc(achievement.name or "Achievement", 42) .. "|r")
+    SetCompactText(row.description, achievement.description or "", 92)
+
+    if achievement.earnedAt then
+        row.date:SetText("|cff4ade80" .. FormatAchievementDate(achievement.earnedAt) .. "|r")
+    else
+        row.date:SetText("")
+    end
+
+    row.progress:SetValue(achievement.earned and 1 or progressValue)
+    if achievement.earned then
+        row.progress:SetStatusBarColor(0.86, 0.62, 0.16, 1)
+        row.progressText:SetText("|cff4ade80Complete|r")
+    elseif progressValue > 0 then
+        row.progress:SetStatusBarColor(BLUE_TEXT.r, BLUE_TEXT.g, BLUE_TEXT.b, 1)
+        row.progressText:SetText("|cffd6c29a" .. Trunc(achievement.progressText or "In progress", 42) .. "|r")
+    else
+        row.progress:SetStatusBarColor(0.34, 0.28, 0.18, 1)
+        row.progressText:SetText("|cffad8f61" .. Trunc(achievement.progressText or "Not earned", 42) .. "|r")
+    end
+
+    SetAchievementRowTone(row, achievement, categoryColor)
+
+    local tooltipBody = tostring(achievement.description or "")
+    local progressText = tostring(achievement.progressText or "")
+    if achievement.earnedAt then
+        tooltipBody = tooltipBody .. "\nEarned " .. FormatAchievementDate(achievement.earnedAt)
+    elseif progressText ~= "" then
+        tooltipBody = tooltipBody .. "\n" .. progressText
+    end
+    SetAuditRowTooltip(row, achievement.name or "Achievement", tooltipBody)
+end
+
+local function BuildAchievementGroups(rows)
+    local groups = {}
+    local byCategory = {}
+
+    for _, achievement in ipairs(rows) do
+        local category = tostring(achievement.category or "Other")
+        local group = byCategory[category]
+        if not group then
+            group = {
+                category = category,
+                rows = {},
+                earned = 0,
+                inProgress = 0,
+                total = 0,
+                rank = GetAchievementCategoryRank(category),
+            }
+            byCategory[category] = group
+            table.insert(groups, group)
+        end
+
+        table.insert(group.rows, achievement)
+        group.total = group.total + 1
+        if achievement.earned then
+            group.earned = group.earned + 1
+        elseif (tonumber(achievement.progressValue or 0) or 0) > 0 then
+            group.inProgress = group.inProgress + 1
+        end
+    end
+
+    table.sort(groups, function(left, right)
+        if left.rank ~= right.rank then
+            return left.rank < right.rank
+        end
+        return tostring(left.category or "") < tostring(right.category or "")
+    end)
+
+    return groups
+end
+
+local function RefreshAchievementSection(section, group, collapsed, topOffset)
+    local meta = GetAchievementCategoryMeta(group.category)
+    local categoryColor = meta.color or BODY_TEXT
+    local rowCount = #group.rows
+    local height = ACHIEVEMENT_LAYOUT.SECTION_HEADER_HEIGHT
+
+    if not collapsed then
+        height = height + ACHIEVEMENT_LAYOUT.SECTION_ROW_TOP_GAP
+            + (rowCount * ACHIEVEMENT_LAYOUT.ROW_HEIGHT)
+            + (math.max(rowCount - 1, 0) * ACHIEVEMENT_LAYOUT.ROW_GAP)
+            + ACHIEVEMENT_LAYOUT.SECTION_BOTTOM_INSET
+    end
+
+    section:ClearAllPoints()
+    section:SetPoint("TOPLEFT", section:GetParent(), "TOPLEFT", 0, -topOffset)
+    section:SetSize(ACHIEVEMENT_LAYOUT.CONTENT_WIDTH, height)
+    section.category = group.category
+    section:SetBackdropColor(0.08, 0.045, 0.018, 0.82)
+    section:SetBackdropBorderColor(categoryColor.r, categoryColor.g, categoryColor.b, collapsed and 0.42 or 0.74)
+    section.icon:SetTexture(meta.icon)
+    section.title:SetText("|cffffd100" .. tostring(meta.label or group.category) .. "|r")
+    SetOverviewSmallBadge(section.count, tostring(group.earned) .. "/" .. tostring(group.total), group.earned == group.total and GREEN_TEXT or GOLD_TEXT)
+    section.toggleGlyph:SetText(collapsed and "+" or "-")
+    SetRegionShown(section.divider, not collapsed and rowCount > 0)
+
+    for index = #section.rows + 1, rowCount do
+        section.rows[index] = CreateAchievementRow(section)
+    end
+
+    for index, row in ipairs(section.rows) do
+        local achievement = group.rows[index]
+        if achievement and not collapsed then
+            row:Show()
+            row:ClearAllPoints()
+            row:SetPoint(
+                "TOPLEFT",
+                section,
+                "TOPLEFT",
+                ACHIEVEMENT_LAYOUT.ROW_INSET,
+                -(ACHIEVEMENT_LAYOUT.SECTION_HEADER_HEIGHT + ACHIEVEMENT_LAYOUT.SECTION_ROW_TOP_GAP
+                    + ((index - 1) * (ACHIEVEMENT_LAYOUT.ROW_HEIGHT + ACHIEVEMENT_LAYOUT.ROW_GAP)))
+            )
+            RefreshAchievementRow(row, achievement, categoryColor)
+        else
+            row:Hide()
+        end
+    end
+
+    return height
 end
 
 local function RefreshAchievementsPanel(frame)
     if not frame.achievements then return end
 
     local rows = SC.GetAchievementRows and SC:GetAchievementRows() or {}
+    local groups = BuildAchievementGroups(rows)
     local earnedCount = 0
+    local inProgressCount = 0
 
-    for _, row in ipairs(rows) do
-        if row.earned then
+    for _, achievement in ipairs(rows) do
+        if achievement.earned then
             earnedCount = earnedCount + 1
+        elseif (tonumber(achievement.progressValue or 0) or 0) > 0 then
+            inProgressCount = inProgressCount + 1
         end
     end
 
-    frame.achievements.summary:SetText("Earned: " .. tostring(earnedCount) .. " / " .. tostring(#rows))
+    SetCardValue(frame.achievements.earnedCard, tostring(earnedCount), "", earnedCount > 0 and GOLD_TEXT or MUTED_TEXT)
+    SetCardValue(frame.achievements.progressCard, tostring(inProgressCount), "", inProgressCount > 0 and BLUE_TEXT or MUTED_TEXT)
+    SetCardValue(frame.achievements.remainingCard, tostring(math.max(#rows - earnedCount, 0)), "", earnedCount == #rows and GREEN_TEXT or BODY_TEXT)
 
-    if #rows == 0 then
-        frame.achievements.empty:Show()
-    else
-        frame.achievements.empty:Hide()
+    SetRegionShown(frame.achievements.empty, #rows == 0)
+
+    for index = #frame.achievements.sections + 1, #groups do
+        frame.achievements.sections[index] = CreateAchievementSection(frame.achievements.content)
     end
 
-    for index = #frame.achievements.rows + 1, #rows do
-        frame.achievements.rows[index] = CreateAchievementRow(frame.achievements.content, index)
-    end
-
-    local contentHeight = math.max(ACHIEVEMENT_SCROLL_HEIGHT, (#rows * 96) + 12)
-    frame.achievements.content:SetSize(628, contentHeight)
-
-    for index, rowFrame in ipairs(frame.achievements.rows) do
-        local achievement = rows[index]
-        if achievement then
-            rowFrame:Show()
-            local progressValue = tonumber(achievement.progressValue or 0) or 0
-            if achievement.earned then
-                rowFrame.icon:SetText("")
-                rowFrame.iconCheck:Show()
-            elseif progressValue > 0 then
-                rowFrame.iconCheck:Hide()
-                rowFrame.icon:SetText("|cffffffff" .. tostring(math.floor((progressValue * 100) + 0.5)) .. "%|r")
-            else
-                rowFrame.iconCheck:Hide()
-                rowFrame.icon:SetText("|cff6b7280?|r")
-            end
-            rowFrame.name:SetText((achievement.earned and "|cffffd100" or "|cffad8f61") .. tostring(achievement.name or "?") .. "|r")
-            rowFrame.description:SetText(Trunc(achievement.description or "", 180))
-            if achievement.earnedAt then
-                rowFrame.date:SetText("|cff4ade80" .. FormatTime(achievement.earnedAt) .. "|r")
-                rowFrame.progress:SetValue(1)
-                rowFrame.progress:SetStatusBarColor(0.86, 0.62, 0.16, 1)
-                rowFrame.progressText:SetText("|cff4ade80Complete|r")
-                rowFrame:SetBackdropColor(0.18, 0.12, 0.045, 0.96)
-                rowFrame:SetBackdropBorderColor(0.86, 0.62, 0.16, 0.92)
-                rowFrame.medal:SetBackdropColor(0.42, 0.30, 0.07, 1)
-                rowFrame.medal:SetBackdropBorderColor(1.0, 0.82, 0.20, 1)
-            else
-                rowFrame.date:SetText("")
-                rowFrame.progress:SetValue(progressValue)
-                if progressValue > 0 then
-                    rowFrame.progress:SetStatusBarColor(0.22, 0.56, 0.88, 1)
-                else
-                    rowFrame.progress:SetStatusBarColor(0.34, 0.28, 0.18, 1)
-                end
-                rowFrame.progressText:SetText("|cffd6c29a" .. tostring(achievement.progressText or "Not earned") .. "|r")
-                rowFrame:SetBackdropColor(0.10, 0.075, 0.04, 0.9)
-                rowFrame:SetBackdropBorderColor(0.46, 0.36, 0.18, 0.62)
-                rowFrame.medal:SetBackdropColor(0.13, 0.12, 0.10, 1)
-                rowFrame.medal:SetBackdropBorderColor(0.42, 0.36, 0.26, 0.9)
-            end
+    local topOffset = 0
+    for index, section in ipairs(frame.achievements.sections) do
+        local group = groups[index]
+        if group then
+            section:Show()
+            local collapsed = frame.achievements.collapsed and frame.achievements.collapsed[group.category]
+            local height = RefreshAchievementSection(section, group, collapsed, topOffset)
+            topOffset = topOffset + height + ACHIEVEMENT_LAYOUT.SECTION_GAP
         else
-            rowFrame:Hide()
+            section:Hide()
         end
     end
+
+    local contentHeight = math.max(ACHIEVEMENT_LAYOUT.SCROLL_HEIGHT, topOffset + 8)
+    frame.achievements.content:SetSize(ACHIEVEMENT_LAYOUT.CONTENT_WIDTH, contentHeight)
 end
 
 local function ConfirmStopRun()
@@ -3438,20 +3792,24 @@ function SC:OpenMasterWindow(focusTab)
 
     local achievementsPanel = CreatePanel(frame)
     frame.panels[TAB_ACHIEVEMENTS] = achievementsPanel
-    frame.achievements = { rows = {} }
-    CreateSectionHeader(achievementsPanel, "Achievements", 0, 0, 650)
-    frame.achievements.summary = CreateField(achievementsPanel, 0, -34, 250)
-    frame.achievements.summary:SetText("Earned: 0 / 0")
-    frame.achievements.empty = CreateField(achievementsPanel, 0, -72, 620)
+    frame.achievements = { sections = {}, collapsed = {} }
+    CreateSectionHeader(achievementsPanel, "Achievements", 0, 0, ACHIEVEMENT_LAYOUT.CONTENT_WIDTH)
+
+    local cardWidth = math.floor((ACHIEVEMENT_LAYOUT.CONTENT_WIDTH - (ACHIEVEMENT_LAYOUT.SUMMARY_GAP * 2)) / 3)
+    frame.achievements.earnedCard = CreateAchievementSummaryCard(achievementsPanel, "Earned", 0, ACHIEVEMENT_LAYOUT.SUMMARY_TOP, cardWidth)
+    frame.achievements.progressCard = CreateAchievementSummaryCard(achievementsPanel, "In Progress", cardWidth + ACHIEVEMENT_LAYOUT.SUMMARY_GAP, ACHIEVEMENT_LAYOUT.SUMMARY_TOP, cardWidth)
+    frame.achievements.remainingCard = CreateAchievementSummaryCard(achievementsPanel, "Open", (cardWidth + ACHIEVEMENT_LAYOUT.SUMMARY_GAP) * 2, ACHIEVEMENT_LAYOUT.SUMMARY_TOP, cardWidth)
+
+    frame.achievements.empty = CreateField(achievementsPanel, 0, ACHIEVEMENT_LAYOUT.SCROLL_TOP, 620)
     frame.achievements.empty:SetText("No achievements are loaded.")
     frame.achievements.scroll = CreateFrame("ScrollFrame", "SoftcoreAchievementsScrollFrame", achievementsPanel, "UIPanelScrollFrameTemplate")
-    frame.achievements.scroll:SetPoint("TOPLEFT", achievementsPanel, "TOPLEFT", 0, -64)
-    frame.achievements.scroll:SetSize(674, ACHIEVEMENT_SCROLL_HEIGHT)
+    frame.achievements.scroll:SetPoint("TOPLEFT", achievementsPanel, "TOPLEFT", 0, ACHIEVEMENT_LAYOUT.SCROLL_TOP)
+    frame.achievements.scroll:SetSize(ACHIEVEMENT_LAYOUT.SCROLL_WIDTH, ACHIEVEMENT_LAYOUT.SCROLL_HEIGHT)
     frame.achievements.scroll:EnableMouseWheel(true)
     frame.achievements.scroll:SetScript("OnMouseWheel", function(self, delta)
         local current = self:GetVerticalScroll() or 0
         local maxScroll = self:GetVerticalScrollRange() or 0
-        local nextScroll = current - (delta * 48)
+        local nextScroll = current - (delta * 46)
         if nextScroll < 0 then nextScroll = 0 end
         if nextScroll > maxScroll then nextScroll = maxScroll end
         self:SetVerticalScroll(nextScroll)
@@ -3461,7 +3819,7 @@ function SC:OpenMasterWindow(focusTab)
         end
     end)
     frame.achievements.content = CreateFrame("Frame", nil, frame.achievements.scroll)
-    frame.achievements.content:SetSize(628, ACHIEVEMENT_SCROLL_HEIGHT)
+    frame.achievements.content:SetSize(ACHIEVEMENT_LAYOUT.CONTENT_WIDTH, ACHIEVEMENT_LAYOUT.SCROLL_HEIGHT)
     frame.achievements.scroll:SetScrollChild(frame.achievements.content)
 
     self.masterFrame = frame

@@ -130,6 +130,25 @@ Violations and Log are dense audit surfaces, so they should share the same scala
 - cap the Log tab's in-menu display to the newest 1000 displayable entries for responsiveness while keeping CSV/debug exports complete
 - keep the Log tab export button always available in the footer; do not add an export action to Violations
 
+## Achievements Tab
+
+Achievements should feel like a compact in-game journal, not a static checklist.
+
+Use:
+
+- summary cards for earned, in-progress, and open counts
+- expandable category sections built from live achievement rows
+- real WoW icon textures chosen by achievement type, rule, class, or milestone
+- compact rows with left status accents, one-line names/descriptions, progress bars, status badges, and hover tooltips for full detail
+- muted locked styling, blue in-progress styling, and gold/green earned styling
+
+Avoid:
+
+- one giant ungrouped list
+- text-only medal placeholders
+- explanatory prose above the list
+- creating one-off row layouts that do not share the menu's native border, badge, and progress language
+
 ### Party Ledger
 
 The ledger is a five-member surface because normal party scale is the product boundary.
