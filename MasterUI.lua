@@ -63,6 +63,8 @@ local OVERVIEW_LAYOUT = {
     LEDGER_ROW_HEIGHT = 44,
     LEDGER_ROW_GAP = 6,
 }
+OVERVIEW_LAYOUT.LEDGER_MAX_ROWS_HEIGHT = (OVERVIEW_PARTY_ROWS * OVERVIEW_LAYOUT.LEDGER_ROW_HEIGHT)
+    + ((OVERVIEW_PARTY_ROWS - 1) * OVERVIEW_LAYOUT.LEDGER_ROW_GAP)
 local ACHIEVEMENT_SCROLL_HEIGHT = PANEL_HEIGHT - 82
 local BODY_TEXT = { r = 0.94, g = 0.86, b = 0.68 }
 local MUTED_TEXT = { r = 0.68, g = 0.56, b = 0.38 }
@@ -1263,7 +1265,7 @@ local function GetOverviewStatusColor(status)
 end
 
 local function CalculateOverviewLedgerHeight(rowCount)
-    rowCount = math.max(tonumber(rowCount or 1) or 1, 1)
+    rowCount = math.min(math.max(tonumber(rowCount or 1) or 1, 1), OVERVIEW_PARTY_ROWS)
     return OVERVIEW_LAYOUT.LEDGER_INSET
         + OVERVIEW_LAYOUT.LEDGER_HEADER_HEIGHT
         + (rowCount * OVERVIEW_LAYOUT.LEDGER_ROW_HEIGHT)
@@ -1390,7 +1392,7 @@ local function CreateOverviewPartyLedger(parent, x, y, width, maxRows)
 
     ledger.rowsFrame = CreateFrame("Frame", nil, ledger)
     ledger.rowsFrame:SetPoint("TOPLEFT", ledger, "TOPLEFT", OVERVIEW_LAYOUT.LEDGER_INSET, -(OVERVIEW_LAYOUT.LEDGER_HEADER_HEIGHT + OVERVIEW_LAYOUT.LEDGER_INSET))
-    ledger.rowsFrame:SetWidth(width - (OVERVIEW_LAYOUT.LEDGER_INSET * 2))
+    ledger.rowsFrame:SetSize(width - (OVERVIEW_LAYOUT.LEDGER_INSET * 2), OVERVIEW_LAYOUT.LEDGER_MAX_ROWS_HEIGHT)
 
     ledger.empty = ledger:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     ledger.empty:SetPoint("TOPLEFT", ledger.rowsFrame, "TOPLEFT", 4, -2)
@@ -1431,7 +1433,7 @@ local function RefreshOverviewLedger(ledger, rows, grouped, inRaid)
     ledger.mode:SetText("|cffad8f61" .. modeText .. "|r")
     SetOverviewSmallBadge(ledger.count, tostring(visibleRows) .. "/" .. tostring(OVERVIEW_PARTY_ROWS), GOLD_TEXT)
     SetRegionShown(ledger.empty, visibleRows == 0)
-    ledger:SetHeight(CalculateOverviewLedgerHeight(visibleRows > 0 and visibleRows or 1))
+    ledger:SetHeight(CalculateOverviewLedgerHeight(OVERVIEW_PARTY_ROWS))
 
     for index, row in ipairs(ledger.rows) do
         local display = rows[index]
