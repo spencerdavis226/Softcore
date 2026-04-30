@@ -1648,6 +1648,7 @@ local function RefreshRunPanel(frame)
         SetRunControlShown(frame.start.casualBtn, false)
         SetRunControlShown(frame.start.ironmanBtn, false)
         if frame.start.chefBtn then SetRunControlShown(frame.start.chefBtn, false) end
+        if frame.start.ironVigilBtn then SetRunControlShown(frame.start.ironVigilBtn, false) end
         SetRunSetupEnabled(frame, false)
         frame.start.inactiveText:SetShown(false)
         frame.start.activeText:SetShown(false)
@@ -1744,6 +1745,7 @@ local function RefreshRunPanel(frame)
         SetRunControlShown(frame.start.casualBtn, false)
         SetRunControlShown(frame.start.ironmanBtn, false)
         if frame.start.chefBtn then SetRunControlShown(frame.start.chefBtn, false) end
+        if frame.start.ironVigilBtn then SetRunControlShown(frame.start.ironVigilBtn, false) end
         SetRunSetupEnabled(frame, false)
         frame.start.inactiveText:SetShown(false)
         frame.start.activeText:SetShown(false)
@@ -1839,6 +1841,7 @@ local function RefreshRunPanel(frame)
     frame.start.casualBtn:SetShown(true)
     frame.start.ironmanBtn:SetShown(true)
     if frame.start.chefBtn then frame.start.chefBtn:SetShown(true) end
+    if frame.start.ironVigilBtn then frame.start.ironVigilBtn:SetShown(true) end
     for _, control in ipairs(frame.start.controls) do
         SetRunControlShown(control, true)
     end
@@ -1906,6 +1909,7 @@ local function RefreshRunPanel(frame)
         frame.start.casualBtn:SetEnabled(false)
         frame.start.ironmanBtn:SetEnabled(false)
         if frame.start.chefBtn then frame.start.chefBtn:SetEnabled(false) end
+        if frame.start.ironVigilBtn then frame.start.ironVigilBtn:SetEnabled(false) end
     end
 
     if active then
@@ -2395,7 +2399,7 @@ function SC:OpenMasterWindow(focusTab)
     end
 
     local overviewTab = AddTab("overviewTab", "Overview", TAB_OVERVIEW)
-    local runTab = AddTab("runTab", "Run", TAB_RUN, overviewTab)
+    local runTab = AddTab("runTab", "Charter", TAB_RUN, overviewTab)
     local violationsTab = AddTab("violationsTab", "Violations", TAB_VIOLATIONS, runTab)
     local logTab = AddTab("logTab", "Log", TAB_LOG, violationsTab)
     AddTab("achievementsTab", "Achievements", TAB_ACHIEVEMENTS, logTab, 110)
@@ -2446,24 +2450,26 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.presetLabel = CreateLabel(frame.start.charterSection.content, "Presets", charterLeftX, rowOneY - 4, "GameFontNormalSmall", charterLabelWidth)
     frame.start.presetLabel:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
     RegisterRunControl(frame.start, frame.start.presetLabel, frame.start.charterSection)
-    frame.start.casualBtn = CreateButton(frame.start.charterSection.content, "Casual", 86, 22)
+    local presetButtonWidth = 116
+    local presetButtonHeight = 22
+    frame.start.casualBtn = CreateButton(frame.start.charterSection.content, "Casual", presetButtonWidth, presetButtonHeight)
     frame.start.casualBtn:SetPoint("TOPLEFT", frame.start.charterSection.content, "TOPLEFT", charterControlX, rowOneY - 1)
     frame.start.casualBtn:SetScript("OnClick", function()
         ApplyStartPreset(frame, "CASUAL")
     end)
 
-    frame.start.chefBtn = CreateButton(frame.start.charterSection.content, "Chef's Special", 116, 22)
+    frame.start.chefBtn = CreateButton(frame.start.charterSection.content, "Chef's Special", presetButtonWidth, presetButtonHeight)
     frame.start.chefBtn:SetPoint("LEFT", frame.start.casualBtn, "RIGHT", 6, 0)
     frame.start.chefBtn:SetScript("OnClick", function()
         ApplyStartPreset(frame, "CHEF_SPECIAL")
     end)
 
-    frame.start.ironmanBtn = CreateButton(frame.start.charterSection.content, "Ironman", 86, 22)
+    frame.start.ironmanBtn = CreateButton(frame.start.charterSection.content, "Ironman", presetButtonWidth, presetButtonHeight)
     frame.start.ironmanBtn:SetPoint("TOPLEFT", frame.start.charterSection.content, "TOPLEFT", charterControlX, rowTwoY - 1)
     frame.start.ironmanBtn:SetScript("OnClick", function()
         ApplyStartPreset(frame, "IRONMAN")
     end)
-    frame.start.ironVigilBtn = CreateButton(frame.start.charterSection.content, "Iron Vigil", 96, 22)
+    frame.start.ironVigilBtn = CreateButton(frame.start.charterSection.content, "Iron Vigil", presetButtonWidth, presetButtonHeight)
     frame.start.ironVigilBtn:SetPoint("LEFT", frame.start.ironmanBtn, "RIGHT", 6, 0)
     frame.start.ironVigilBtn:SetScript("OnClick", function()
         ApplyStartPreset(frame, "IRON_VIGIL")

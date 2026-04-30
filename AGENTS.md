@@ -12,14 +12,14 @@ Softcore has three frontend surfaces:
 - HUD
 - minimap button
 
-The master menu is the primary interface. Group run proposals, run sync proposals, party invites, and rule amendments are reviewed in the Run tab. Actionable incoming governance requests should open the Run tab automatically. Do not add separate proposal popup windows.
+The master menu is the primary interface. Group run proposals, run sync proposals, party invites, and rule amendments are reviewed in the Charter tab. Actionable incoming governance requests should open the Charter tab automatically. Do not add separate proposal popup windows.
 
 Current menu tabs:
 
-- `Overview`: preset/custom run label, local run status, party status, run ID, elapsed time, deaths, active violation count, and a compact five-member party ledger with current/start level, status, and violation count (no Overview resync control; use `/sc resync` or Run tab Party Sync)
-- `Run`: start a run, review locked active rules in lightweight native-WoW styled rule groups on a consistent two-column grid, review highlighted rule amendment proposals in the normal rules layout, stop/reset a run, and use one shared action slot that shows Party Sync while party sync work/blockers exist or Modify Rules when the party is synced/local-only; keep the self-crafted gear exemption as a subordinate gear toggle that only applies while gear restriction is enabled, and lock it off for the Ironman and Iron Vigil presets; keep the Casual preset as the low-restriction grouped baseline (economy access allowed, no gear restriction, no level-gap enforcement, instanced PvP blocked); keep Chef's Special as the creator's personal preferred preset (grouped white/gray limits, mailbox/trade/bank allowed, auction/warband/guild banks blocked, flying mounts blocked, enchants enabled); keep Iron Vigil as the stricter Ironman preset with no flight paths and cinematic camera enforced; do not use a top detail banner to explain run/proposal state
+- `Overview`: preset/custom run label, local run status, party status, run ID, elapsed time, deaths, active violation count, and a compact five-member party ledger with current/start level, status, and violation count (no Overview resync control; use `/sc resync` or Charter tab Party Sync)
+- `Charter`: start a run, review locked active rules in lightweight native-WoW styled rule groups on a consistent two-column grid, review highlighted rule amendment proposals in the normal rules layout, stop/reset a run, and use one shared action slot that shows Party Sync while party sync work/blockers exist or Modify Rules when the party is synced/local-only; keep the self-crafted gear exemption as a subordinate gear toggle that only applies while gear restriction is enabled, and lock it off for the Ironman and Iron Vigil presets; keep the Casual preset as the low-restriction grouped baseline (economy access allowed, no gear restriction, no level-gap enforcement, instanced PvP blocked); keep Chef's Special as the creator's personal preferred preset (grouped white/gray limits, mailbox/trade/bank allowed, auction/warband/guild banks blocked, flying mounts blocked, enchants enabled); keep Iron Vigil as the stricter Ironman preset with no flight paths and cinematic camera enforced; do not use a top detail banner to explain run/proposal state
 - `Violations`: active clearable issues
-- `Log`: audit history, newest first (UI and `/sc log` hide low-value rows that do not apply to the current ruleset: pet battle start/end; taxi forced-movement audit unless flight paths are tracked; vehicle/override-bar forced-movement audit unless mounts or flying are tracked; instance enter unless repeated-dungeon or unsynced-instance rules are tracked; level-gap notices unless max level gap is tracked). Full rows remain in SavedVariables and CSV/debug exports. Applied rule amendments write one **Rules Amended** log row per changed rule (`RULE_AMENDMENT_SUMMARY`) with plain-language names and values (for example `Auction house: restricted (was allowed)`); solo Run-tab apply and slash `SetRule` skip redundant propose/accept log lines; amendments that apply no real diffs write nothing and do not bump ruleset version.
+- `Log`: audit history, newest first (UI and `/sc log` hide low-value rows that do not apply to the current ruleset: pet battle start/end; taxi forced-movement audit unless flight paths are tracked; vehicle/override-bar forced-movement audit unless mounts or flying are tracked; instance enter unless repeated-dungeon or unsynced-instance rules are tracked; level-gap notices unless max level gap is tracked). Full rows remain in SavedVariables and CSV/debug exports. Applied rule amendments write one **Rules Amended** log row per changed rule (`RULE_AMENDMENT_SUMMARY`) with plain-language names and values (for example `Auction house: restricted (was allowed)`); solo Charter-tab apply and slash `SetRule` skip redundant propose/accept log lines; amendments that apply no real diffs write nothing and do not bump ruleset version.
 
 The HUD is compact and glanceable. It shows local run status when solo, party status/member rows when grouped, and short governance/sync limbo or blocker labels such as Details, Review, Waiting, Settling, Syncing, Invite, Run Sync, No Addon, Offline, Raid Local, Version, Rules, Run ID, Not In Run, or Level Gap. It may appear for pending governance even before a run is active. Clicking the HUD toggles the main menu on the most relevant tab. The minimap button opens the main menu.
 
@@ -81,7 +81,7 @@ There is no separate HTTP or server “backend.” All multiplayer behavior is *
 - `Sync.lua`: prefix registration, inbound `CHAT_MSG_ADDON`, compact wire key/type aliases, **chunk reassembly** (per-sender buffers that **expire** without applying partial state), **outbound send queue** (token-budget pacing, priority insertion, send failure retries), compact fast status nudges, targeted full-state/proposal/amendment detail request-response metadata, queued status coalescing before higher-priority traffic, delayed bulk party-log sends, **stale send drops** for obsolete queued items, and serialization/chunking to the 255-byte body limit.
 - `Core.lua`: slash commands; **`/sc dc`** (`ClearDebugTrace`) clears the capped in-memory **debug trace** and resets **test-oriented `db.sync` counters** (stale send drops, coalesced status drops, last drop metadata, send failure count/last error, expired chunk buffer count/last expiry). **`/sc dl`** builds the CSV-style export that includes those fields.
 - `Events.lua`: game events that drive periodic **STATUS** heartbeats and other local hooks.
-- `ProposalUI.lua` / `MasterUI.lua`: Run-tab proposal UX; user actions enqueue outbound payloads through `Sync` rather than calling `SendAddonMessage` directly. Party Sync treats pending governance and just-applied rule changes as settling states, and detail-loading accept buttons become retry actions instead of dead ends.
+- `ProposalUI.lua` / `MasterUI.lua`: Charter-tab proposal UX; user actions enqueue outbound payloads through `Sync` rather than calling `SendAddonMessage` directly. Party Sync treats pending governance and just-applied rule changes as settling states, and detail-loading accept buttons become retry actions instead of dead ends.
 
 **Outbound path**
 
@@ -126,16 +126,16 @@ Run proposals, run sync proposals, party invites, and rule amendments are explic
 
 Current behavior:
 
-- Group run start creates a Run-tab proposal notice immediately; receivers request details and cannot accept until the rules arrive.
+- Group run start creates a Charter-tab proposal notice immediately; receivers request details and cannot accept until the rules arrive.
 - Separate active runs can align only through explicit Party Sync routing to a run sync proposal for the active run cohort; one Party Sync click should automatically continue to later stages after required approvals settle.
 - Active players can invite party members through Party Sync routing to a party invite proposal after active-run conflicts are resolved.
 - Ruleset mismatches route through Party Sync to a full-local-rules amendment proposal notice for active run members first; receivers request details, compute the review diff against their own rules, and cannot accept until the details arrive.
-- If a full-local-rules amendment detail response has no receiver-side diff, the receiver clears the pending detail state and acknowledges the amendment instead of leaving the Run tab in a loading state.
+- If a full-local-rules amendment detail response has no receiver-side diff, the receiver clears the pending detail state and acknowledges the amendment instead of leaving the Charter tab in a loading state.
 - While a proposal/amendment is pending or a rule change just settled, Party Sync should not start a second governance action; it should wait, request fresh state, or expose cancel/decline/retry controls.
 - Party Sync blocks members who never respond to Softcore addon messages after the initial grace period; they must install/enable the addon or leave the party before inclusion.
 - Party Sync may also route stale/unsynced display state to a targeted full-state resync without mutating local run state; fresh responses should advance the active Party Sync plan quickly, with retry timers only as fallback.
-- Mid-run rules change through `Modify Rules` and grouped amendment acceptance; pending amendments reuse the normal Run-tab rule groups with changed rules highlighted and footer acceptance controls.
-- HUD text is the quick user-facing status detail for proposal, amendment, Party Sync, settling limbos, and party blockers such as non-addon members, stale/offline peers, raid-local mode, version mismatch, rules mismatch, run mismatch, not-in-run members, and level-gap blocks; the Run tab should make state obvious through highlighted rules and action buttons instead of a top explanatory text line.
+- Mid-run rules change through `Modify Rules` and grouped amendment acceptance; pending amendments reuse the normal Charter-tab rule groups with changed rules highlighted and footer acceptance controls.
+- HUD text is the quick user-facing status detail for proposal, amendment, Party Sync, settling limbos, and party blockers such as non-addon members, stale/offline peers, raid-local mode, version mismatch, rules mismatch, run mismatch, not-in-run members, and level-gap blocks; the Charter tab should make state obvious through highlighted rules and action buttons instead of a top explanatory text line.
 - Pending proposals expire after 30 minutes.
 - Pending/accepted amendments expire after 30 minutes.
 - Late proposal confirmations or amendment applies after expiry should be ignored.
@@ -191,7 +191,7 @@ Prefer simple controls:
 - checkboxes for allowed/disallowed rules
 - short dropdown labels
 - clear buttons for clearable violations
-- Run-tab proposal states for group decisions
+- Charter-tab proposal states for group decisions
 
 Avoid technical internal severity labels such as `LOG_ONLY`, `WARNING`, or `FATAL` in primary setup UI unless needed for debugging.
 
@@ -269,7 +269,7 @@ When you change behavior or structure, patch the **smallest relevant sections**�
 | If you change… | Update (at minimum) |
 |----------------|---------------------|
 | `Sync.lua` or addon messaging (queue, chunking, throttling, message types, stale drops, counters, channel choice) | **Sync Model** and **Sync implementation map**; if user-facing, **README** party sync bullets |
-| Proposals, amendments, invites, expiry, Run-tab flows | **Proposal And Amendment Boundaries**; **Current Product Shape**; **README** starting runs / Run tab |
+| Proposals, amendments, invites, expiry, Charter-tab flows | **Proposal And Amendment Boundaries**; **Current Product Shape**; **README** starting runs / Charter tab |
 | New or removed menu tab, HUD behavior, minimap | **Current Product Shape**; **README** UI sections |
 | New or removed slash commands or debug export fields | **README** command table; **Testing Expectations** useful commands |
 | SavedVariables layout, per-character scope, migration | **Persistence Model** |

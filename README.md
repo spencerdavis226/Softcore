@@ -19,20 +19,20 @@ Softcore has three frontend surfaces:
 - **HUD**: compact active-run status display; click it to open or close the main menu on the relevant tab.
 - **Minimap button**: opens the main menu.
 
-There are no proposal popup windows. Incoming group proposals and rule amendments open the Run tab for review.
+There are no proposal popup windows. Incoming group proposals and rule amendments open the Charter tab for review.
 
 ## Main Menu
 
 Open with `/sc menu`, the minimap button, or the HUD.
 
 - **Overview**: preset/custom run label, local run status, party status, run ID, elapsed time, deaths, active violation count, and a compact party ledger for up to five members. The ledger shows each member's current level and, when their client reports it, level at run join.
-- **Run**: start a run, review locked active rules in native-WoW styled rule groups, stop a run, invite party members, propose run sync, or modify rules. Proposal/amendment state is shown through the visible rule review and footer actions rather than a top detail banner.
+- **Charter**: start a run, review locked active rules in native-WoW styled rule groups, stop a run, invite party members, propose run sync, or modify rules. Proposal/amendment state is shown through the visible rule review and footer actions rather than a top detail banner.
 - **Violations**: active clearable issues with one-click Clear where allowed.
 - **Log**: audit history, newest first. The menu and `/sc log` omit entries that are not relevant to your current rules (for example pet battles; taxi trips when flight paths are allowed even if mounts/flying are restricted; vehicle/override-bar notes when mounts and flying are both allowed; instance entries when no dungeon/unsynced-instance rules apply). Exports still include the full stored log. A successful rule amendment produces one **Rules Amended** row per changed rule in plain language (for example “Auction house: restricted (was allowed)”); applying changes that match the current rules adds no log line.
 - **Achievements**: account-level leveling, ruleset, and max-level milestones.
 
 When no run is active, the menu focuses on starting a run. When a run is active, it focuses on current status.
-The Run tab groups setup into Run Charter, Access and Economy, Travel and Camera, Gear and Items, and Party and Dungeons sections using a consistent two-column rule grid. Restrict Camera is a single rule with a mode selector for the active camera preference. Gear restriction uses a checkbox; when unchecked, any gear quality is allowed, and when checked, the dropdown selects the limit. A subordinate `Allow any self-crafted gear` checkbox is only active while gear restriction is enabled and is included in Modify Rules/amendment diffing. The Run Charter section also includes compact own-character death announcement checkboxes beside the core run options.
+The Charter tab groups setup into Run Charter, Access and Economy, Travel and Camera, Gear and Items, and Party and Dungeons sections using a consistent two-column rule grid. Restrict Camera is a single rule with a mode selector for the active camera preference. Gear restriction uses a checkbox; when unchecked, any gear quality is allowed, and when checked, the dropdown selects the limit. A subordinate `Allow any self-crafted gear` checkbox is only active while gear restriction is enabled and is included in Modify Rules/amendment diffing. The Run Charter section also includes compact own-character death announcement checkboxes beside the core run options.
 The `Casual` preset is the low-restriction baseline: grouped mode, no gear restriction, no enforced level gap, economy access allowed (including auction/mail/trade/banks), mounts/flying/flight paths allowed, heirlooms/enchants/consumables/repeated dungeons allowed, and instanced PvP disallowed.
 The `Chef's Special` preset is the addon creator's personal preferred run profile: grouped play with white/gray gear limits, mailbox/trade/bank allowed while auction/warband/guild banks stay disallowed, mounts and flight paths allowed (but not flying mounts), and enchants/consumables/repeated dungeons enabled.
 The `Ironman` preset follows the common WoW Challenges shape and allows flight paths. `Iron Vigil` is the stricter Ironman variant with no flight paths and cinematic camera enforced from run start. White/gray-only progression is split so `White Knuckles` requires no self-crafted exemption, while `Self-Forged` tracks white/gray-only runs that keep the self-crafted exemption enabled from start to max level.
@@ -46,7 +46,7 @@ The HUD is a compact glance view shown during active runs.
 - The HUD also appears for pending governance states, such as run proposals before a run starts.
 - Lamp colors: green (valid/synced), blue (syncing/settling), yellow (warning/conflict/blocked/review needed), orange (party member failed, local character still valid), red (local failed), gray (no run/pending).
 - The text is intentionally short and single-line, including limbo and blocker states such as Details, Review, Waiting, Settling, Syncing, Invite, Run Sync, No Addon, Offline, Raid Local, Version, Rules, Run ID, Not In Run, and Level Gap.
-- Clicking the HUD opens the most relevant main tab (typically Overview, Violations, or Run).
+- Clicking the HUD opens the most relevant main tab (typically Overview, Violations, or Charter).
 
 ## Slash Commands
 
@@ -59,7 +59,7 @@ Common commands:
 | `/sc menu` | Open the main menu |
 | `/sc status` | Open Overview |
 | `/sc status chat` | Print status in chat |
-| `/sc rules` | Open Run |
+| `/sc rules` | Open Charter |
 | `/sc rules chat` | Print rules in chat |
 | `/sc violations` | Open Violations |
 | `/sc log` | Open Log |
@@ -90,12 +90,12 @@ Common commands:
 
 ## Starting Runs
 
-Solo runs start immediately from the Run tab.
+Solo runs start immediately from the Charter tab.
 
-Grouped starts create a Run-tab proposal:
+Grouped starts create a Charter-tab proposal:
 
 1. The proposer configures rules and clicks Start Run.
-2. Party members review the rules in the Run tab.
+2. Party members review the rules in the Charter tab.
 3. Every current party member must accept.
 4. The proposer confirms the run.
 5. Accepted members start the same run ID and rules.
@@ -106,7 +106,7 @@ Declining cancels the proposal for everyone. Pending proposals expire after 30 m
 
 Softcore syncs over Blizzard addon messages using the `SOFTCORE` prefix. It supports normal parties only; raid groups are treated as local-only and show a raid-unsupported note instead of syncing or displaying a 40-player roster.
 
-Status heartbeats are sent every 10 seconds as a safety net, while user-driven changes send compact high-priority updates immediately. Proposals and rule amendments wake the Run tab with a tiny notice first, then fetch the larger rule details before acceptance is enabled. If details are delayed, the Run tab offers retry/decline/cancel controls instead of leaving the flow stuck. Party audit logs are treated as delayed bulk traffic so they do not slow proposal/rule controls. Reloading or rejoining may briefly show Unsynced until addon messages arrive. Use `/sc resync` or **Party Sync** in the Run tab if the display looks stale.
+Status heartbeats are sent every 10 seconds as a safety net, while user-driven changes send compact high-priority updates immediately. Proposals and rule amendments wake the Charter tab with a tiny notice first, then fetch the larger rule details before acceptance is enabled. If details are delayed, the Charter tab offers retry/decline/cancel controls instead of leaving the flow stuck. Party audit logs are treated as delayed bulk traffic so they do not slow proposal/rule controls. Reloading or rejoining may briefly show Unsynced until addon messages arrive. Use `/sc resync` or **Party Sync** in the Charter tab if the display looks stale.
 
 Party state is display and compatibility data. Remote state should not reset, fail, or overwrite the local character's run.
 
@@ -147,7 +147,7 @@ Summons, portals, quest teleports, Chromie Time, Timewalking, level scaling, and
 
 If two players started separate runs, matching rules are not enough by themselves because each run has a different run ID.
 
-Use **Party Sync** in the Run tab when:
+Use **Party Sync** in the Charter tab when:
 
 - both characters have active runs
 - rules match
@@ -161,7 +161,7 @@ Party Sync handles mixed parties in one staged plan: align active-run rules, ali
 
 ## Inviting Party Members
 
-An active grouped player can use **Party Sync** in the Run tab to invite party members into the current run when they are not already in it.
+An active grouped player can use **Party Sync** in the Charter tab to invite party members into the current run when they are not already in it.
 
 Accepted invitees join the existing run ID after proposal confirmation. Existing participants keep their progress and logs.
 
@@ -169,11 +169,11 @@ Targeted invites are also available with `/sc propose-add Player-Realm`.
 
 ## Rule Amendments
 
-Active run rules are locked by default. Use **Modify Rules** in the Run tab to create a draft. In grouped runs, **Modify Rules** and **Party Sync** share the same action slot: Party Sync is shown while the party has sync work or blockers, and Modify Rules returns once the party is synced.
+Active run rules are locked by default. Use **Modify Rules** in the Charter tab to create a draft. In grouped runs, **Modify Rules** and **Party Sync** share the same action slot: Party Sync is shown while the party has sync work or blockers, and Modify Rules returns once the party is synced.
 
 - Solo: Apply Changes applies immediately and logs the old/new values.
-- Grouped: Propose to Party creates a Run-tab amendment proposal.
-- Members review the normal Run-tab rule groups with changed rules highlighted, then accept or decline from the bottom controls.
+- Grouped: Propose to Party creates a Charter-tab amendment proposal.
+- Members review the normal Charter-tab rule groups with changed rules highlighted, then accept or decline from the bottom controls.
 - All accept: proposer applies and broadcasts the amendment.
 - Any decline: amendment is cancelled.
 
@@ -189,7 +189,7 @@ Clearing a violation marks it cleared, records who cleared it and when, and pres
 
 Remote violations may be displayed and shared as audit records for the same synced run, but they do not directly mutate local character validity.
 
-Optional death announcements are for your own character only and default to off. Use `/sc announce chat party`, `/sc announce guild`, or the Run-tab checkboxes if you want Softcore to announce your own deaths; incoming announcements never change your local run state.
+Optional death announcements are for your own character only and default to off. Use `/sc announce chat party`, `/sc announce guild`, or the Charter-tab checkboxes if you want Softcore to announce your own deaths; incoming announcements never change your local run state.
 
 PvP safety checks are advisory only. During an active run, Softcore warns locally and records a local log entry when War Mode/player PvP flagging is detected or when you target a PvP-flagged player; these warnings do not fail the run, add violations, or sync to party members.
 
