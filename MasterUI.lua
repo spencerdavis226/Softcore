@@ -104,7 +104,6 @@ local ACHIEVEMENT_LAYOUT = {
     SUMMARY_GAP = 10,
     SCROLL_TOP = -112,
     SCROLL_HEIGHT = PANEL_HEIGHT - 128,
-    SCROLL_WIDTH = 714,
     SECTION_GAP = 8,
     SECTION_HEADER_HEIGHT = 38,
     SECTION_ROW_TOP_GAP = 6,
@@ -117,6 +116,8 @@ local ACHIEVEMENT_LAYOUT = {
     BADGE_HEIGHT = 20,
     PROGRESS_WIDTH = 170,
 }
+-- Achievements list: bottom margin above panel edge (keeps height in sync with SCROLL_TOP + SCROLL_HEIGHT).
+ACHIEVEMENT_LAYOUT.SCROLL_BOTTOM_INSET = PANEL_HEIGHT + ACHIEVEMENT_LAYOUT.SCROLL_TOP - ACHIEVEMENT_LAYOUT.SCROLL_HEIGHT
 local BODY_TEXT = { r = 0.94, g = 0.86, b = 0.68 }
 local MUTED_TEXT = { r = 0.68, g = 0.56, b = 0.38 }
 local GOLD_TEXT = { r = 1.00, g = 0.82, b = 0.20 }
@@ -4368,7 +4369,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.achievements.empty:SetText("No achievements are loaded.")
     frame.achievements.scroll = CreateFrame("ScrollFrame", "SoftcoreAchievementsScrollFrame", achievementsPanel, "UIPanelScrollFrameTemplate")
     frame.achievements.scroll:SetPoint("TOPLEFT", achievementsPanel, "TOPLEFT", 0, ACHIEVEMENT_LAYOUT.SCROLL_TOP)
-    frame.achievements.scroll:SetSize(ACHIEVEMENT_LAYOUT.SCROLL_WIDTH, ACHIEVEMENT_LAYOUT.SCROLL_HEIGHT)
+    frame.achievements.scroll:SetPoint("BOTTOMRIGHT", achievementsPanel, "BOTTOMRIGHT", -AUDIT_LIST_LAYOUT.SCROLL_RIGHT_INSET, ACHIEVEMENT_LAYOUT.SCROLL_BOTTOM_INSET)
     frame.achievements.scroll:EnableMouseWheel(true)
     frame.achievements.scroll:SetScript("OnMouseWheel", function(self, delta)
         local current = self:GetVerticalScroll() or 0
