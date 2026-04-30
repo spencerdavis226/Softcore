@@ -2477,6 +2477,88 @@ function SC:ShowDebugExport()
     end
 end
 
+local SAMPLE_AWARD_NAMES = {
+    "Aelyra",
+    "Brenic",
+    "Cindra",
+    "Darian",
+    "Elowen",
+    "Kaelis",
+    "Maris",
+    "Seren",
+}
+
+local SAMPLE_AWARD_CLASSES = {
+    { class = "WARRIOR", label = "Warrior" },
+    { class = "PALADIN", label = "Paladin" },
+    { class = "HUNTER", label = "Hunter" },
+    { class = "ROGUE", label = "Rogue" },
+    { class = "PRIEST", label = "Priest" },
+    { class = "SHAMAN", label = "Shaman" },
+    { class = "MAGE", label = "Mage" },
+    { class = "WARLOCK", label = "Warlock" },
+    { class = "MONK", label = "Monk" },
+    { class = "DRUID", label = "Druid" },
+    { class = "DEMONHUNTER", label = "Demon Hunter" },
+    { class = "EVOKER", label = "Evoker" },
+}
+
+local SAMPLE_AWARD_PRESETS = {
+    { preset = "CASUAL", label = "Casual" },
+    { preset = "CHEF_SPECIAL", label = "Chef's Special" },
+    { preset = "IRONMAN", label = "Ironman" },
+    { preset = "IRON_VIGIL", label = "Iron Vigil" },
+    { preset = "CUSTOM", label = "Custom" },
+}
+
+local function PickRandom(list)
+    return list[math.random(1, #list)]
+end
+
+function SC:ShowSampleCompletionAward()
+    local class = PickRandom(SAMPLE_AWARD_CLASSES)
+    local preset = PickRandom(SAMPLE_AWARD_PRESETS)
+    local totalViolations = math.random(0, 7)
+    local clearedViolations = totalViolations > 0 and math.random(0, totalViolations) or 0
+    local award = {
+        id = "SC-SAMPLE-AWARD-" .. tostring(time()),
+        runId = "SC-SAMPLE-" .. tostring(math.random(1000, 9999)),
+        runName = "Sample Softcore Run",
+        characterName = PickRandom(SAMPLE_AWARD_NAMES),
+        realm = "Thrall",
+        class = class.class,
+        classLabel = class.label,
+        startLevel = math.random(1, 10),
+        completedLevel = 80,
+        startedAt = time() - math.random(3600 * 48, 3600 * 24 * 21),
+        completedAt = time() - math.random(60, 3600 * 24),
+        activeTimeSeconds = math.random(3600 * 18, 3600 * 9 * 24),
+        deaths = math.random(0, 2),
+        totalViolations = totalViolations,
+        activeViolations = totalViolations - clearedViolations,
+        clearedViolations = clearedViolations,
+        dungeonCount = math.random(0, 24),
+        partyMembers = math.random(1, 5),
+        rulesetHash = "sample",
+        preset = preset.preset,
+        presetLabel = preset.label,
+        rulesetModified = math.random(1, 4) == 1,
+        rulesetModifiedAtLevel = math.random(18, 72),
+    }
+    if not award.rulesetModified then
+        award.rulesetModifiedAtLevel = nil
+    end
+
+    Print("opening sample completion award.")
+    self:PlayUISound("ACHIEVEMENT_EARNED")
+    self:PlayUISound("RUN_COMPLETED")
+    if self.ShowCompletionAward then
+        self:ShowCompletionAward(award)
+    else
+        Print("completion award UI is not loaded.")
+    end
+end
+
 function SC:PrintHelp()
     Print("Softcore commands:")
     Print("  /sc menu | status | rules | violations | log")
@@ -2613,6 +2695,8 @@ function SC:HandleSlash(input)
         else
             Print("debug trace is not available.")
         end
+    elseif command == "awardtest" or command == "sampleaward" then
+        self:ShowSampleCompletionAward()
     elseif command == "announce" or command == "deathannounce" then
         local mode = string.lower(strtrim(rest or ""))
         if mode == "" then
