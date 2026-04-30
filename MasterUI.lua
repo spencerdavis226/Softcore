@@ -1592,8 +1592,9 @@ local function CreateOverviewActivityPanel(parent, x, y, width, height)
     local rowLeft = 150
     local rowWidth = width - rowLeft - 12
     local showActorColumn = rowWidth >= 500
-    local actorLeft = 158
+    local actorLeft = 50
     local actorWidth = 86
+    local kindLeft = showActorColumn and 144 or 50
     local messageLeft = showActorColumn and 252 or 166
     local rowHeight = math.floor((height - 16) / OVERVIEW_LAYOUT.ACTIVITY_ROWS)
     for index = 1, OVERVIEW_LAYOUT.ACTIVITY_ROWS do
@@ -1609,7 +1610,7 @@ local function CreateOverviewActivityPanel(parent, x, y, width, height)
         row.time:SetTextColor(MUTED_TEXT.r, MUTED_TEXT.g, MUTED_TEXT.b)
 
         row.kind = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        row.kind:SetPoint("LEFT", row, "LEFT", 50, 0)
+        row.kind:SetPoint("LEFT", row, "LEFT", kindLeft, 0)
         row.kind:SetWidth(110)
         row.kind:SetJustifyH("LEFT")
         row.kind:SetWordWrap(false)
