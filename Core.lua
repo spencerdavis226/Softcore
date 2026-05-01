@@ -3061,9 +3061,21 @@ function SC:PrintHelp()
     Print("  /sc resync        re-sync state with party")
     Print("  /sc hud          toggle the HUD")
     Print("  /sc minimap      toggle the minimap button")
-    Print("  /sc reset | retire")
+    Print("  /sc reset confirm end run")
+    Print("  /sc retire")
     Print("  /sc access        print access rules")
     Print("  /sc rule name value")
+end
+
+local function IsResetConfirmationText(text)
+    local normalized = string.lower(strtrim(text or ""))
+    normalized = string.gsub(normalized, "%s+", " ")
+    return normalized == "confirm end run"
+end
+
+local function PrintResetConfirmationHelp()
+    Print("reset ends the local run and clears local run logs/violations.")
+    Print("type /sc reset confirm end run to continue.")
 end
 
 function SC:HandleSlash(input)
@@ -3097,7 +3109,9 @@ function SC:HandleSlash(input)
             self:PrintStatus()
         end
     elseif command == "reset" then
-        if self.ConfirmStopRun then
+        if not IsResetConfirmationText(rest) then
+            PrintResetConfirmationHelp()
+        elseif self.ConfirmStopRun then
             self:ConfirmStopRun()
         else
             self:ResetRun()

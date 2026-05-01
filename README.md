@@ -66,7 +66,8 @@ Common commands:
 | `/sc resync` | Request and broadcast party sync state |
 | `/sc hud` | Toggle the HUD |
 | `/sc minimap` | Toggle the minimap button |
-| `/sc reset` | Stop/reset the local active run |
+| `/sc reset` | Explain the destructive reset confirmation |
+| `/sc reset confirm end run` | Stop/reset the local active run |
 | `/sc retire` | Retire this character from the active run |
 | `/sc accept` | Accept the current pending proposal |
 | `/sc decline` | Decline the current pending proposal |

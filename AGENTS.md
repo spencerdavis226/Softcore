@@ -228,7 +228,7 @@ Current multiplayer test setup:
 
 After any feature, bug fix, or sync/UI behavior change, give the user exact A/B test instructions. Include:
 
-- what to run on A and B before the test, usually `/reload`, `/sc dc <test name>`, and sometimes `/sc reset` if a fresh run is needed
+- what to run on A and B before the test, usually `/reload`, `/sc dc <test name>`, and sometimes `/sc reset confirm end run` if a fresh run is needed
 - what action to perform on A
 - what action to perform on B
 - expected UI/HUD/menu state on both computers
@@ -257,6 +257,7 @@ Useful commands:
 - `/sc gear`
 - `/sc dungeons`
 - `/sc resync`
+- `/sc reset confirm end run`
 - `/sc sound on|off|test [event]`
 
 `/sc dc` clears the in-memory debug trace and resets test-oriented sync counters such as stale send drops, coalesced status drops, send failures, and expired chunk buffers. Use it at the start of every A/B test so pasted exports describe only that test pass.
