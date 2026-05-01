@@ -1179,8 +1179,12 @@ function SC:BuildCompletionAwardSnapshot(maxLevel)
     local run = db.run or {}
     local character = db.character or GetPlayerSnapshot()
     local totalViolations, activeViolations, clearedViolations = CountAwardViolations(db.violations)
-    local preset = run.ruleset and run.ruleset.achievementPreset or "CUSTOM"
-    local runName = self.GetRunDisplayName and self:GetRunDisplayName(run, "Custom Run") or "Custom Run"
+    local runName, detectedPreset = nil, nil
+    if self.GetRunLabelForRuleset then
+        runName, detectedPreset = self:GetRunLabelForRuleset(run.ruleset)
+    end
+    runName = runName or (self.GetRunDisplayName and self:GetRunDisplayName(run, "Custom Run") or "Custom Run")
+    local preset = detectedPreset or "CUSTOM"
 
     return {
         id = run.runId or ("SC-COMPLETION-" .. tostring(time())),

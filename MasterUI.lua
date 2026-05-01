@@ -1661,6 +1661,10 @@ local function CreateDeathAnnounceCheckbox(parent, channel, label, x, y)
 end
 
 local function ConfigureRulesForPreset(rules, preset)
+    if SC.ConfigureRulesetForPreset then
+        return SC:ConfigureRulesetForPreset(rules, preset)
+    end
+
     local ironman = preset == "IRONMAN" or preset == "IRON_VIGIL"
     local ironVigil = preset == "IRON_VIGIL"
     local chef = preset == "CHEF_SPECIAL"

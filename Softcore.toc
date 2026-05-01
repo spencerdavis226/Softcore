@@ -8,6 +8,7 @@
 ## SavedVariablesPerCharacter: SoftcoreCharDB
 
 Core.lua
+RunLabels.lua
 Rules.lua
 Achievements.lua
 Integrity.lua
