@@ -10,10 +10,7 @@ local MOVEMENT_RULE_KEYS = { "mounts", "flying", "flightPaths" }
 local BOOST_RULE_KEYS = { "heirlooms", "enchants", "consumables" }
 
 local RUN_LABEL_RULE_KEYS = {
-    "warningsAreFatal",
-    "deathIsFatal",
     "death",
-    "deathFails",
     "groupingMode",
     "failedMemberBlocksParty",
     "allowLateJoin",
@@ -44,8 +41,6 @@ local RUN_LABEL_RULE_KEYS = {
     "consumables",
     "instancedPvP",
     "actionCam",
-    "maxDeaths",
-    "maxDeathsValue",
 }
 
 local function CopyTable(source)
