@@ -2028,12 +2028,13 @@ local function DetectRulesetPreset(rules)
 end
 
 local function FormatOverviewRunTitle(run)
-    local hiddenName = SC.GetHiddenRunName and SC:GetHiddenRunName(run and run.ruleset)
-    if hiddenName then
-        return hiddenName
-    end
     local preset = DetectRulesetPreset(run and run.ruleset)
-    return PRESET_DISPLAY[preset] or "Custom Run"
+    if preset then
+        return PRESET_DISPLAY[preset]
+    end
+
+    local hiddenName = SC.GetHiddenRunName and SC:GetHiddenRunName(run and run.ruleset)
+    return hiddenName or "Custom Run"
 end
 
 local function FormatOverviewRunDetail(run)

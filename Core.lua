@@ -723,7 +723,7 @@ end
 
 local HIDDEN_RUN_NAMES = {
     {
-        name = "Oops! All Restrictions",
+        name = "Oops! All Restrictions Run",
         matches = function(ruleset)
             return RunNameGrouped(ruleset)
                 and RunNameRulesAllRestricted(ruleset, RUN_NAME_ECONOMY_RULES)
@@ -738,7 +738,7 @@ local HIDDEN_RUN_NAMES = {
         end,
     },
     {
-        name = "Iron Vigilante",
+        name = "Iron Vigilante Run",
         matches = function(ruleset)
             return RunNameIronmanBase(ruleset)
                 and RunNameRuleRestricted(ruleset.flightPaths)
@@ -746,7 +746,7 @@ local HIDDEN_RUN_NAMES = {
         end,
     },
     {
-        name = "Irony Maiden",
+        name = "Irony Maiden Run",
         matches = function(ruleset)
             return RunNameIronmanBase(ruleset)
                 and RunNameRuleAllowed(ruleset.flightPaths)
@@ -754,7 +754,7 @@ local HIDDEN_RUN_NAMES = {
         end,
     },
     {
-        name = "Gordon Ramps",
+        name = "Gordon Ramps Run",
         matches = function(ruleset)
             return RunNameGrouped(ruleset)
                 and ruleset.gearQuality == "WHITE_GRAY_ONLY"
@@ -785,7 +785,7 @@ local HIDDEN_RUN_NAMES = {
         end,
     },
     {
-        name = "Casual Friday Night Wipes",
+        name = "Casual Friday Night Wipes Run",
         matches = function(ruleset)
             return RunNameGrouped(ruleset)
                 and RunNameCommonEasyRules(ruleset)
@@ -793,7 +793,7 @@ local HIDDEN_RUN_NAMES = {
         end,
     },
     {
-        name = "Solo Yolo",
+        name = "Solo Yolo Run",
         matches = function(ruleset)
             return RunNameSolo(ruleset)
                 and RunNameCommonEasyRules(ruleset)
@@ -801,7 +801,7 @@ local HIDDEN_RUN_NAMES = {
         end,
     },
     {
-        name = "Alone Ranger",
+        name = "Alone Ranger Run",
         matches = function(ruleset)
             return RunNameSolo(ruleset)
                 and RunNameGearAllowed(ruleset)
@@ -810,7 +810,7 @@ local HIDDEN_RUN_NAMES = {
         end,
     },
     {
-        name = "Mind the Gap",
+        name = "Mind the Gap Run",
         matches = function(ruleset)
             return RunNameGrouped(ruleset)
                 and RunNameRuleRestricted(ruleset.maxLevelGap)
@@ -819,33 +819,33 @@ local HIDDEN_RUN_NAMES = {
         end,
     },
     {
-        name = "Fifty Grades of Gray",
+        name = "Fifty Grades of Gray Run",
         matches = function(ruleset)
             return ruleset.gearQuality == "WHITE_GRAY_ONLY"
                 and ruleset.selfCraftedGearAllowed ~= true
         end,
     },
     {
-        name = "Made You Loot",
+        name = "Made You Loot Run",
         matches = function(ruleset)
             return RunNameGearRestricted(ruleset)
                 and ruleset.selfCraftedGearAllowed == true
         end,
     },
     {
-        name = "Green With Envy",
+        name = "Green With Envy Run",
         matches = function(ruleset)
             return ruleset.gearQuality == "GREEN_OR_LOWER"
         end,
     },
     {
-        name = "Blue Yourself",
+        name = "Blue Yourself Run",
         matches = function(ruleset)
             return ruleset.gearQuality == "BLUE_OR_LOWER"
         end,
     },
     {
-        name = "No Heir Today",
+        name = "No Heir Today Run",
         matches = function(ruleset)
             return RunNameRuleRestricted(ruleset.heirlooms)
                 and RunNameRuleAllowed(ruleset.enchants)
@@ -853,14 +853,14 @@ local HIDDEN_RUN_NAMES = {
         end,
     },
     {
-        name = "No Enchant Intended",
+        name = "No Enchant Intended Run",
         matches = function(ruleset)
             return RunNameRuleRestricted(ruleset.enchants)
                 and RunNameRuleAllowed(ruleset.heirlooms)
         end,
     },
     {
-        name = "Flaskless Gordon",
+        name = "Flaskless Gordon Run",
         matches = function(ruleset)
             return RunNameRuleRestricted(ruleset.consumables)
                 and RunNameRuleAllowed(ruleset.heirlooms)
@@ -868,14 +868,14 @@ local HIDDEN_RUN_NAMES = {
         end,
     },
     {
-        name = "Deadminesweeper",
+        name = "Deadminesweeper Run",
         matches = function(ruleset)
             return RunNameRuleRestricted(ruleset.dungeonRepeat)
                 and not RunNameIronmanBase(ruleset)
         end,
     },
     {
-        name = "Camera Shy",
+        name = "Camera Shy Run",
         matches = function(ruleset)
             return RunNameRuleRestricted(ruleset.actionCam)
                 and RunNameRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
@@ -883,13 +883,13 @@ local HIDDEN_RUN_NAMES = {
         end,
     },
     {
-        name = "Walk Hard",
+        name = "Walk Hard Run",
         matches = function(ruleset)
             return RunNameRulesAllRestricted(ruleset, RUN_NAME_TRAVEL_RULES)
         end,
     },
     {
-        name = "No Fly Zone",
+        name = "No Fly Zone Run",
         matches = function(ruleset)
             return RunNameRuleAllowed(ruleset.mounts)
                 and RunNameRuleRestricted(ruleset.flying)
@@ -897,7 +897,7 @@ local HIDDEN_RUN_NAMES = {
         end,
     },
     {
-        name = "Flight Pathological",
+        name = "Flight Pathological Run",
         matches = function(ruleset)
             return RunNameRuleAllowed(ruleset.mounts)
                 and RunNameRuleAllowed(ruleset.flying)
@@ -905,21 +905,21 @@ local HIDDEN_RUN_NAMES = {
         end,
     },
     {
-        name = "Mount Rushless",
+        name = "Mount Rushless Run",
         matches = function(ruleset)
             return RunNameRuleRestricted(ruleset.mounts)
                 and (RunNameRuleAllowed(ruleset.flying) or RunNameRuleAllowed(ruleset.flightPaths))
         end,
     },
     {
-        name = "Wallet of Warcraft",
+        name = "Wallet of Warcraft Run",
         matches = function(ruleset)
             return RunNameRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
                 and (RunNameGearRestricted(ruleset) or not RunNameRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES))
         end,
     },
     {
-        name = "Auction House Arrest",
+        name = "Auction House Arrest Run",
         matches = function(ruleset)
             return RunNameRuleRestricted(ruleset.auctionHouse)
                 and RunNameRuleAllowed(ruleset.mailbox)
@@ -928,7 +928,7 @@ local HIDDEN_RUN_NAMES = {
         end,
     },
     {
-        name = "Bank Error in Your Favor",
+        name = "Bank Error in Your Favor Run",
         matches = function(ruleset)
             return RunNameRulesAllRestricted(ruleset, RUN_NAME_BANK_RULES)
                 and (RunNameRuleAllowed(ruleset.auctionHouse) or RunNameRuleAllowed(ruleset.mailbox) or RunNameRuleAllowed(ruleset.trade))
