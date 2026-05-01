@@ -245,17 +245,6 @@ local function CheckPlayerPvpAdvisory()
     end
 end
 
-local function CheckTargetPvpAdvisory()
-    if not IsRunActiveForPvpAdvisory() then return end
-    if not UnitExists or not UnitExists("target") then return end
-    if UnitIsUnit and UnitIsUnit("target", "player") then return end
-    if UnitIsPlayer and not UnitIsPlayer("target") then return end
-    if not UnitIsPVP or not UnitIsPVP("target") then return end
-
-    local name = UnitName and UnitName("target") or "target"
-    WarnPvpAdvisory("targetPvpFlag:" .. tostring(name or "?"), "Target is PvP flagged: " .. tostring(name or "unknown") .. ".")
-end
-
 local function CheckInstancedPvP()
     local db = SC.db or SoftcoreDB
     if not db or not db.run or not db.run.active then return end
@@ -688,7 +677,6 @@ function SC:Events_Register()
     SafeRegisterEvent(eventFrame, "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED")
     eventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
     eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-    eventFrame:RegisterEvent("PLAYER_TARGET_CHANGED")
     eventFrame:RegisterEvent("PLAYER_MOUNT_DISPLAY_CHANGED")
     SafeRegisterEvent(eventFrame, "PLAYER_FLAGS_CHANGED")
     SafeRegisterEvent(eventFrame, "TAXIMAP_OPENED")
@@ -704,7 +692,7 @@ function SC:Events_Register()
     SafeRegisterEvent(eventFrame, "PET_BATTLE_OPENING_START")
     SafeRegisterEvent(eventFrame, "PET_BATTLE_CLOSE")
     eventFrame:RegisterUnitEvent("UNIT_AURA", "player")
-    eventFrame:RegisterUnitEvent("UNIT_FACTION", "player", "target")
+    eventFrame:RegisterUnitEvent("UNIT_FACTION", "player")
     eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player")
     eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_FAILED", "player")
     eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTED", "player")
@@ -754,15 +742,10 @@ function SC:Events_Register()
             HandleConsumableSpellcastSucceeded(...)
         elseif event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" then
             HandleConsumableSpellcastFailed(...)
-        elseif event == "PLAYER_TARGET_CHANGED" then
-            CheckTargetPvpAdvisory()
         elseif event == "PLAYER_FLAGS_CHANGED" or event == "UNIT_FACTION" then
             local unit = ...
             if not unit or unit == "player" then
                 CheckPlayerPvpAdvisory()
-            end
-            if not unit or unit == "target" then
-                CheckTargetPvpAdvisory()
             end
         elseif event == "TAXIMAP_OPENED" then
             -- Presence of the map alone is not a violation; the taxi API hook below
