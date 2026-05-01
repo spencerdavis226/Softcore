@@ -2092,6 +2092,19 @@ function SC:PrintRun()
     Print("governance: " .. tostring(db.run.governance.mode))
 end
 
+function SC:PrintRunLabelDebug()
+    local db = EnsureDatabase()
+    if not self.GetRunLabelDebugLines then
+        Print("run label diagnostics are not loaded.")
+        return
+    end
+
+    local lines = self:GetRunLabelDebugLines(db.run and db.run.ruleset)
+    for _, line in ipairs(lines or {}) do
+        Print(line)
+    end
+end
+
 function SC:GetDeathAnnouncementChannels()
     local db = EnsureDatabase()
     local channels = CopyDeathAnnouncementChannels(db.settings and db.settings.deathAnnouncements)
@@ -2743,6 +2756,7 @@ function SC:PrintHelp()
     Print("  /sc menu | status | rules | violations | log")
     Print("  /sc status chat | rules chat | log chat")
     Print("  /sc run chat      print run integrity summary")
+    Print("  /sc runlabel      print run label diagnostics")
     Print("  /sc export        copy CSV run summary")
     Print("  /sc participants  show current participants")
     Print("  /sc conflicts     print active party conflicts")
@@ -2860,6 +2874,8 @@ function SC:HandleSlash(input)
         else
             self:PrintRun()
         end
+    elseif command == "runlabel" or command == "labeldebug" then
+        self:PrintRunLabelDebug()
     elseif command == "export" or command == "summary" then
         local sub = string.lower(strtrim(rest or ""))
         if sub == "chat" or sub == "print" then

@@ -84,6 +84,7 @@ Common commands:
 | `/sc sound on\|off\|test [event]` | Toggle Softcore UI sounds or play a test cue |
 | `/sc access` | Print access/storage rules |
 | `/sc run chat` | Print run integrity summary |
+| `/sc runlabel` | Print run label diagnostics and nearest preset mismatches |
 | `/sc export` | Open a copyable CSV run summary for spreadsheets |
 | `/sc export chat` | Print the CSV run summary to chat |
 | `/sc debuglog chat` | Print the debug export to chat |

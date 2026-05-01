@@ -256,6 +256,7 @@ Useful commands:
 - `/sc dc`
 - `/sc syncdebug`
 - `/sc sd`
+- `/sc runlabel`
 - `/sc gear`
 - `/sc dungeons`
 - `/sc resync`

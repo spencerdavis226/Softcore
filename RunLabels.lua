@@ -40,7 +40,6 @@ local RUN_LABEL_RULE_KEYS = {
     "flying",
     "flightPaths",
     "maxLevelGap",
-    "maxLevelGapValue",
     "dungeonRepeat",
     "gearQuality",
     "selfCraftedGearAllowed",
@@ -307,6 +306,51 @@ local function FormatRunLabel(label)
         return label
     end
     return label .. RUN_SUFFIX
+end
+
+local function FormatDebugValue(value)
+    if value == nil then
+        return "nil"
+    end
+    return tostring(value)
+end
+
+function SC:GetRunLabelDebugLines(ruleset)
+    local lines = {}
+    local label, preset = self:GetRunLabelForRuleset(ruleset)
+    table.insert(lines, "run label: " .. tostring(label or "Custom Run") .. " preset=" .. tostring(preset or "CUSTOM") .. " source=RunLabels.lua")
+
+    local normalized = NormalizeRulesetForRunLabel(ruleset)
+    if not normalized then
+        table.insert(lines, "no ruleset table available")
+        return lines
+    end
+
+    for index = 1, 4 do
+        local spec = RUN_LABEL_SPECS[index]
+        if spec then
+            local mismatches = {}
+            for _, key in ipairs(RUN_LABEL_RULE_KEYS) do
+                local actual = CanonicalRunLabelValue(normalized, key)
+                local expected = CanonicalRunLabelValue(spec.rules, key)
+                if actual ~= expected then
+                    table.insert(mismatches, key .. "=" .. FormatDebugValue(actual) .. " expected " .. FormatDebugValue(expected))
+                end
+            end
+
+            if #mismatches == 0 then
+                table.insert(lines, FormatRunLabel(spec.label) .. ": match")
+            else
+                local preview = {}
+                for i = 1, math.min(#mismatches, 6) do
+                    preview[i] = mismatches[i]
+                end
+                table.insert(lines, FormatRunLabel(spec.label) .. ": " .. tostring(#mismatches) .. " mismatch(es): " .. table.concat(preview, "; "))
+            end
+        end
+    end
+
+    return lines
 end
 
 function SC:GetRunLabelForRuleset(ruleset)
