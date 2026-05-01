@@ -1890,6 +1890,7 @@ function SC:StartRun(runOptions)
     db.run.ruleset = startingRuleset
     db.run.ruleset.achievementPreset = runOptions.preset or db.run.ruleset.achievementPreset or "CUSTOM"
     ApplyGroupingModeRules(db.run.ruleset)
+    db.run.ruleset.achievementPreset = (self.DetectRulesetPreset and self:DetectRulesetPreset(db.run.ruleset)) or "CUSTOM"
     if not runOptions.runName or runOptions.runName == "Softcore Run" then
         db.run.runName = self.GetRunDisplayName and self:GetRunDisplayName(db.run, "Custom Run") or "Custom Run"
     end
@@ -2281,6 +2282,7 @@ function SC:PrintRules()
         "maxLevelGapValue",
         "dungeonRepeat",
         "gearQuality",
+        "selfCraftedGearAllowed",
         "heirlooms",
         "enchants",
         "instanceWithUnsyncedPlayers",
@@ -2293,6 +2295,8 @@ function SC:PrintRules()
         "consumables",
         "instancedPvP",
         "actionCam",
+        "maxDeaths",
+        "maxDeathsValue",
     }
 
     Print("current rules:")

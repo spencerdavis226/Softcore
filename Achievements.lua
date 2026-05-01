@@ -58,6 +58,29 @@ for _, spec in ipairs(CLASS_MAX_ACHIEVEMENTS) do
     CLASS_MAX_BY_FILE[spec.class] = spec
 end
 
+local PLAYER_RULE_CHANGE_KEYS = {
+    groupingMode = true,
+    auctionHouse = true,
+    mailbox = true,
+    trade = true,
+    bank = true,
+    warbandBank = true,
+    guildBank = true,
+    mounts = true,
+    flying = true,
+    flightPaths = true,
+    maxLevelGap = true,
+    maxLevelGapValue = true,
+    dungeonRepeat = true,
+    gearQuality = true,
+    selfCraftedGearAllowed = true,
+    heirlooms = true,
+    enchants = true,
+    consumables = true,
+    instancedPvP = true,
+    actionCam = true,
+}
+
 local ACHIEVEMENT_NAME_MAX_LEN = 34
 local ACHIEVEMENT_DESC_MAX_LEN = 160
 local lastAchievementSoundAt = 0
@@ -195,6 +218,7 @@ local function IsIronmanRules(rules)
         "enchants",
         "consumables",
         "dungeonRepeat",
+        "instancedPvP",
     }
 
     for _, ruleName in ipairs(requiredDisallowed) do
@@ -214,9 +238,34 @@ local function IsChefSpecialPreset(preset)
     return preset == "CHEF_SPECIAL"
 end
 
+local function InitialDetectedPreset(eligibility)
+    if not eligibility then return nil end
+    return (SC.DetectRulesetPreset and SC:DetectRulesetPreset(eligibility.initialRules)) or eligibility.initialPreset
+end
+
 local function IsCameraEnforcedRules(rules)
     if not rules then return false end
     return IsDisallowed(rules.actionCam)
+end
+
+local function RuleChanged(eligibility, ruleName)
+    return eligibility and eligibility.ruleChanges and eligibility.ruleChanges[ruleName] == true
+end
+
+local function IsPlayerFacingRuleChange(ruleName, oldValue, newValue, eligibility)
+    if not PLAYER_RULE_CHANGE_KEYS[ruleName] then
+        return false
+    end
+
+    if ruleName == "maxLevelGapValue" then
+        local initialGap = eligibility and eligibility.initialRules and eligibility.initialRules.maxLevelGap
+        local currentGap = SC.db and SC.db.run and SC.db.run.ruleset and SC.db.run.ruleset.maxLevelGap
+        if not IsDisallowed(initialGap) and not IsDisallowed(currentGap) then
+            return false
+        end
+    end
+
+    return tostring(oldValue) ~= tostring(newValue)
 end
 
 local function CanEarnMaxRunAchievement(eligibility)
@@ -359,7 +408,7 @@ local function BuildProgress(definition, earned)
         if not eligibility.startedAtOrBelow10 then
             return 0, "Started above level 10"
         end
-        if not IsChefSpecialPreset(eligibility.initialPreset) then
+        if not IsChefSpecialPreset(InitialDetectedPreset(eligibility)) then
             return 0, "Not a Chef's Special start"
         end
         if eligibility.anyRuleChanged then
@@ -372,7 +421,7 @@ local function BuildProgress(definition, earned)
         if not eligibility.startedAtOrBelow10 then
             return 0, "Started above level 10"
         end
-        if not IsIronmanPreset(eligibility.initialPreset) or not IsIronmanRules(eligibility.initialRules) then
+        if not IsIronmanPreset(InitialDetectedPreset(eligibility)) or not IsIronmanRules(eligibility.initialRules) then
             return 0, "Not an Ironman start"
         end
         if eligibility.anyRuleChanged then
@@ -384,6 +433,9 @@ local function BuildProgress(definition, earned)
     if definition.progressKind == "CAMERA_MAX" then
         if not eligibility.startedAtOrBelow10 then
             return 0, "Started above level 10"
+        end
+        if RuleChanged(eligibility, "actionCam") then
+            return 0, "Camera rule changed"
         end
         if not IsCameraEnforcedRules(eligibility.initialRules) then
             return 0, "No camera mode enforced at start"
@@ -398,7 +450,7 @@ local function BuildProgress(definition, earned)
         if not eligibility.startedAtOrBelow10 then
             return 0, "Started above level 10"
         end
-        if eligibility.initialPreset ~= "IRON_VIGIL" or not IsIronmanRules(eligibility.initialRules) then
+        if InitialDetectedPreset(eligibility) ~= "IRON_VIGIL" or not IsIronmanRules(eligibility.initialRules) then
             return 0, "Not an Iron Vigil start"
         end
         if not IsCameraEnforcedRules(eligibility.initialRules) then
@@ -461,6 +513,9 @@ local function BuildProgress(definition, earned)
         if eligibility.ruleChanges and eligibility.ruleChanges.gearQuality then
             return 0, "Gear quality changed"
         end
+        if RuleChanged(eligibility, "selfCraftedGearAllowed") then
+            return 0, "Self-crafted exemption changed"
+        end
         if eligibility.initialRules and eligibility.initialRules.selfCraftedGearAllowed == true then
             return 0, "Self-crafted exemption enabled"
         end
@@ -479,6 +534,9 @@ local function BuildProgress(definition, earned)
         end
         if eligibility.ruleChanges and eligibility.ruleChanges.gearQuality then
             return 0, "Gear quality changed"
+        end
+        if RuleChanged(eligibility, "selfCraftedGearAllowed") then
+            return 0, "Self-crafted exemption changed"
         end
         if not (eligibility.initialRules and eligibility.initialRules.selfCraftedGearAllowed == true) then
             return 0, "Self-crafted exemption not enabled at start"
@@ -669,23 +727,26 @@ function SC:Achievements_OnLevelChanged(level)
         Earn("char_clean_max_level", "CHARACTER", "Clean Finish")
     end
 
-    if IsChefSpecialPreset(eligibility.initialPreset) and not eligibility.anyRuleChanged then
+    if IsChefSpecialPreset(InitialDetectedPreset(eligibility)) and not eligibility.anyRuleChanged then
         Earn("char_chef_special_max_level", "CHARACTER", "Chef's Table")
     end
 
-    if IsIronmanPreset(eligibility.initialPreset) and IsIronmanRules(eligibility.initialRules) and not eligibility.anyRuleChanged then
+    if IsIronmanPreset(InitialDetectedPreset(eligibility)) and IsIronmanRules(eligibility.initialRules) and not eligibility.anyRuleChanged then
         Earn("char_ironman_max_level", "CHARACTER", "Iron Will")
     end
 
     if IsCameraEnforcedRules(eligibility.initialRules) and IsCameraEnforcedRules(db.run.ruleset) then
-        Earn("char_camera_max_level", "CHARACTER", "Locked Perspective")
+        if not RuleChanged(eligibility, "actionCam") then
+            Earn("char_camera_max_level", "CHARACTER", "Locked Perspective")
+        end
     end
 
-    if eligibility.initialPreset == "IRON_VIGIL"
+    if InitialDetectedPreset(eligibility) == "IRON_VIGIL"
        and IsIronmanRules(eligibility.initialRules)
        and IsCameraEnforcedRules(eligibility.initialRules)
        and IsCameraEnforcedRules(db.run.ruleset)
        and RequirementStayedLocked(eligibility, db.run.ruleset, "flightPaths")
+       and not RuleChanged(eligibility, "actionCam")
        and not eligibility.anyRuleChanged then
         Earn("char_camera_ironman_no_flight_paths_max_level", "CHARACTER", "Iron Vigil")
     end
@@ -700,6 +761,7 @@ function SC:Achievements_OnLevelChanged(level)
 
     if eligibility.initialRules and eligibility.initialRules.gearQuality == "WHITE_GRAY_ONLY"
        and not (eligibility.ruleChanges and eligibility.ruleChanges.gearQuality)
+       and not RuleChanged(eligibility, "selfCraftedGearAllowed")
        and eligibility.initialRules.selfCraftedGearAllowed ~= true
        and db.run.ruleset.selfCraftedGearAllowed ~= true then
         Earn("char_white_knuckles", "CHARACTER", "White Knuckles")
@@ -707,6 +769,7 @@ function SC:Achievements_OnLevelChanged(level)
 
     if eligibility.initialRules and eligibility.initialRules.gearQuality == "WHITE_GRAY_ONLY"
        and not (eligibility.ruleChanges and eligibility.ruleChanges.gearQuality)
+       and not RuleChanged(eligibility, "selfCraftedGearAllowed")
        and eligibility.initialRules.selfCraftedGearAllowed == true
        and db.run.ruleset.selfCraftedGearAllowed == true then
         Earn("char_self_forged", "CHARACTER", "Self-Forged")
@@ -753,6 +816,7 @@ function SC:Achievements_OnRuleChanged(ruleName, oldValue, newValue)
 
     local eligibility = CurrentEligibility()
     if not eligibility then return end
+    if not IsPlayerFacingRuleChange(ruleName, oldValue, newValue, eligibility) then return end
 
     eligibility.ruleChanges = eligibility.ruleChanges or {}
     eligibility.ruleChanges[ruleName] = true
