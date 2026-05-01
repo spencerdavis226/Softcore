@@ -21,7 +21,7 @@ local RESTRICTION_RULES = {
     { id = "no_heirlooms", name = "No Hand-Me-Downs", rule = "heirlooms", label = "Heirlooms" },
     { id = "no_enchants", name = "Unenchanted", rule = "enchants", label = "Enchants" },
     { id = "no_consumables", name = "No Crutches", rule = "consumables", label = "Consumables" },
-    { id = "level_gap_enforced", name = "Kept Together", rule = "maxLevelGap", description = "Reach max level with Level Gap Enforcement enabled from run start through max level." },
+    { id = "level_gap_enforced", name = "Kept Together", rule = "maxLevelGap", description = "Reach max level after starting at level 10 or lower with Level Gap Enforcement enabled from run start through max level." },
     { id = "no_repeat_dungeons", name = "One Clear Only", rule = "dungeonRepeat", label = "Repeated Dungeons" },
     { id = "no_instanced_pvp", name = "No Battleground Detours", rule = "instancedPvP", label = "Instanced PvP" },
 }
@@ -308,24 +308,24 @@ function SC:GetAchievementDefinitions()
     end
 
     AddDefinition(result, "char_max_level", "ACCOUNT", "Max Level", "Softcore Champion", "Reach max level after starting the run at level 10 or below.", "MAX_LEVEL")
-    AddDefinition(result, "char_clean_max_level", "ACCOUNT", "Max Level", "Clean Finish", "Reach max level on an eligible run without any local violations.", "CLEAN_MAX")
+    AddDefinition(result, "char_clean_max_level", "ACCOUNT", "Max Level", "Clean Finish", "Reach max level after starting at level 10 or lower without any local violations.", "CLEAN_MAX")
     AddDefinition(result, "char_chef_special_max_level", "ACCOUNT", "Max Level", "Chef's Table", "Reach max level after starting at level 10 or lower using the Chef's Special preset with no rule amendments.", "CHEF_SPECIAL_MAX")
     AddDefinition(result, "char_ironman_max_level", "ACCOUNT", "Max Level", "Iron Will", "Reach max level after starting at level 10 or lower using an Ironman preset with no rule amendments.", "IRONMAN_MAX")
-    AddDefinition(result, "char_camera_max_level", "ACCOUNT", "Max Level", "Locked Perspective", "Reach max level on an eligible run with Cinematic Camera enforced from run start.", "CAMERA_MAX")
+    AddDefinition(result, "char_camera_max_level", "ACCOUNT", "Max Level", "Locked Perspective", "Reach max level after starting at level 10 or lower with Cinematic Camera enforced from run start.", "CAMERA_MAX")
     AddDefinition(result, "char_camera_ironman_no_flight_paths_max_level", "ACCOUNT", "Max Level", "Iron Vigil", "Reach max level after starting at level 10 or lower using the Iron Vigil preset with no rule amendments.", "CAMERA_IRONMAN_NO_FLIGHT_PATHS_MAX")
-    AddDefinition(result, "char_original_terms", "ACCOUNT", "Max Level", "Original Terms", "Reach max level on an eligible run with no rule amendments applied.", "RULE_UNCHANGED_MAX")
-    AddDefinition(result, "char_party_survivor", "ACCOUNT", "Max Level", "Party Survivor", "Reach max level on an eligible run started in group mode.", "GROUPED_MAX")
+    AddDefinition(result, "char_original_terms", "ACCOUNT", "Max Level", "Original Terms", "Reach max level after starting at level 10 or lower with no rule amendments applied.", "RULE_UNCHANGED_MAX")
+    AddDefinition(result, "char_party_survivor", "ACCOUNT", "Max Level", "Party Survivor", "Reach max level after starting at level 10 or lower in group mode.", "GROUPED_MAX")
 
     for _, spec in ipairs(CLASS_MAX_ACHIEVEMENTS) do
         AddDefinition(result, "char_max_class_" .. string.lower(spec.class), "ACCOUNT", "Classes", spec.name, "Reach max level as a " .. spec.label .. " after starting the run at level 10 or below.", "CLASS_MAX", nil, spec.class)
     end
 
     for _, spec in ipairs(RESTRICTION_RULES) do
-        AddDefinition(result, "char_max_" .. spec.id, "ACCOUNT", "Rules", spec.name, spec.description or ("Reach max level with " .. spec.label .. " disallowed from run start through max level."), "RULE_MAX", nil, spec.rule)
+        AddDefinition(result, "char_max_" .. spec.id, "ACCOUNT", "Rules", spec.name, spec.description or ("Reach max level after starting at level 10 or lower with " .. spec.label .. " disallowed from run start through max level."), "RULE_MAX", nil, spec.rule)
     end
 
-    AddDefinition(result, "char_white_knuckles", "ACCOUNT", "Rules", "White Knuckles", "Reach max level with white/gray gear quality enforced from run start.", "GEAR_QUALITY_MAX", nil, "WHITE_GRAY_ONLY")
-    AddDefinition(result, "char_self_forged", "ACCOUNT", "Rules", "Self-Forged", "Reach max level with white/gray gear quality while self-crafted gear exemption stays enabled from run start.", "GEAR_QUALITY_CRAFTED_MAX", nil, "WHITE_GRAY_ONLY")
+    AddDefinition(result, "char_white_knuckles", "ACCOUNT", "Rules", "White Knuckles", "Reach max level after starting at level 10 or lower with white/gray gear quality enforced from run start.", "GEAR_QUALITY_MAX", nil, "WHITE_GRAY_ONLY")
+    AddDefinition(result, "char_self_forged", "ACCOUNT", "Rules", "Self-Forged", "Reach max level after starting at level 10 or lower with white/gray gear quality and self-crafted gear exemption from run start.", "GEAR_QUALITY_CRAFTED_MAX", nil, "WHITE_GRAY_ONLY")
 
     return result
 end
