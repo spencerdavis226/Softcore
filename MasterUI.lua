@@ -223,7 +223,6 @@ local PRESET_DISPLAY = {
     IRONMAN = "Ironman Run",
     IRON_VIGIL = "Iron Vigil Run",
 }
-local PRESET_ORDER = { "CASUAL", "CHEF_SPECIAL", "IRONMAN", "IRON_VIGIL" }
 
 local GROUPING_OPTIONS = {
     { text = "Group", value = "SYNCED_GROUP_ALLOWED" },
@@ -2001,41 +2000,10 @@ local function FormatTotalViolations(count)
     return tostring(count) .. (count == 1 and " total violation" or " total violations")
 end
 
-local function BuildPresetRuleset(preset)
-    local rules = SC.GetDefaultRuleset and SC:GetDefaultRuleset() or {}
-    ConfigureRulesForPreset(rules, preset)
-    return rules
-end
-
-local function RulesMatchPreset(rules, preset)
-    if not rules then return false end
-
-    local presetRules = BuildPresetRuleset(preset)
-    if SC.DescribeRulesetDifferences then
-        return #SC:DescribeRulesetDifferences(presetRules, rules) == 0
-    end
-
-    return rules.achievementPreset == preset
-end
-
-local function DetectRulesetPreset(rules)
-    for _, preset in ipairs(PRESET_ORDER) do
-        if RulesMatchPreset(rules, preset) then
-            return preset
-        end
-    end
-    return nil
-end
-
 local function FormatOverviewRunTitle(run)
     local ruleset = run and run.ruleset
     local preset = ruleset and ruleset.achievementPreset
     if PRESET_DISPLAY[preset] then
-        return PRESET_DISPLAY[preset]
-    end
-
-    preset = DetectRulesetPreset(ruleset)
-    if preset then
         return PRESET_DISPLAY[preset]
     end
 

@@ -655,6 +655,10 @@ function SC:GetPresetRunLabel(preset)
     return PRESET_RUN_LABELS[preset]
 end
 
+local function IsPresetRuleset(ruleset)
+    return PRESET_RUN_LABELS[ruleset and ruleset.achievementPreset] ~= nil
+end
+
 local RUN_NAME_ECONOMY_RULES = { "auctionHouse", "mailbox", "trade", "bank", "warbandBank", "guildBank" }
 local RUN_NAME_BANK_RULES = { "bank", "warbandBank", "guildBank" }
 local RUN_NAME_TRAVEL_RULES = { "mounts", "flying", "flightPaths" }
@@ -749,58 +753,11 @@ local HIDDEN_RUN_NAMES = {
         end,
     },
     {
-        name = "Iron Vigilante Run",
-        matches = function(ruleset)
-            return RunNameIronmanBase(ruleset)
-                and RunNameRuleRestricted(ruleset.flightPaths)
-                and RunNameRuleRestricted(ruleset.actionCam)
-        end,
-    },
-    {
-        name = "Irony Maiden Run",
-        matches = function(ruleset)
-            return RunNameIronmanBase(ruleset)
-                and RunNameRuleAllowed(ruleset.flightPaths)
-                and RunNameCameraOff(ruleset)
-        end,
-    },
-    {
-        name = "Gordon Ramps Run",
-        matches = function(ruleset)
-            return RunNameGrouped(ruleset)
-                and ruleset.gearQuality == "WHITE_GRAY_ONLY"
-                and ruleset.selfCraftedGearAllowed == true
-                and RunNameRuleRestricted(ruleset.auctionHouse)
-                and RunNameRuleAllowed(ruleset.mailbox)
-                and RunNameRuleAllowed(ruleset.trade)
-                and RunNameRuleAllowed(ruleset.bank)
-                and RunNameRuleRestricted(ruleset.warbandBank)
-                and RunNameRuleRestricted(ruleset.guildBank)
-                and RunNameRuleAllowed(ruleset.mounts)
-                and RunNameRuleRestricted(ruleset.flying)
-                and RunNameRuleAllowed(ruleset.flightPaths)
-                and RunNameRuleRestricted(ruleset.heirlooms)
-                and RunNameRuleAllowed(ruleset.enchants)
-                and RunNameRuleAllowed(ruleset.consumables)
-                and RunNameRuleAllowed(ruleset.dungeonRepeat)
-                and RunNameRuleRestricted(ruleset.instancedPvP)
-                and RunNameRuleRestricted(ruleset.actionCam)
-        end,
-    },
-    {
         name = "Chicken Run",
         matches = function(ruleset)
             return RunNameGrouped(ruleset)
                 and RunNameCommonEasyRules(ruleset)
                 and RunNameRuleAllowed(ruleset.instancedPvP)
-        end,
-    },
-    {
-        name = "Casual Friday Night Wipes Run",
-        matches = function(ruleset)
-            return RunNameGrouped(ruleset)
-                and RunNameCommonEasyRules(ruleset)
-                and RunNameRuleRestricted(ruleset.instancedPvP)
         end,
     },
     {
@@ -949,6 +906,9 @@ local HIDDEN_RUN_NAMES = {
 
 function SC:GetHiddenRunName(ruleset)
     if type(ruleset) ~= "table" then
+        return nil
+    end
+    if IsPresetRuleset(ruleset) then
         return nil
     end
 
