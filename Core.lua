@@ -650,13 +650,169 @@ local PRESET_RUN_LABELS = {
     IRONMAN = "Ironman Run",
     IRON_VIGIL = "Iron Vigil Run",
 }
+local PRESET_RUN_ORDER = { "CASUAL", "CHEF_SPECIAL", "IRONMAN", "IRON_VIGIL" }
 
 function SC:GetPresetRunLabel(preset)
     return PRESET_RUN_LABELS[preset]
 end
 
-local function IsPresetRuleset(ruleset)
-    return PRESET_RUN_LABELS[ruleset and ruleset.achievementPreset] ~= nil
+local PRESET_RULE_MATCHES = {
+    CASUAL = {
+        groupingMode = "SYNCED_GROUP_ALLOWED",
+        allowLateJoin = true,
+        allowReplacementCharacters = true,
+        failedMemberBlocksParty = true,
+        requireLeaderApprovalForJoin = false,
+        auctionHouse = "ALLOWED",
+        mailbox = "ALLOWED",
+        trade = "ALLOWED",
+        bank = "ALLOWED",
+        warbandBank = "ALLOWED",
+        guildBank = "ALLOWED",
+        mounts = "ALLOWED",
+        flying = "ALLOWED",
+        flightPaths = "ALLOWED",
+        gearQuality = "ALLOWED",
+        selfCraftedGearAllowed = false,
+        maxLevelGap = "ALLOWED",
+        maxLevelGapValue = 3,
+        heirlooms = "ALLOWED",
+        enchants = "ALLOWED",
+        consumables = "ALLOWED",
+        dungeonRepeat = "ALLOWED",
+        instancedPvP = "WARNING",
+        actionCam = "ALLOWED",
+        instanceWithUnsyncedPlayers = "ALLOWED",
+        unsyncedMembers = "ALLOWED",
+        maxDeaths = false,
+    },
+    CHEF_SPECIAL = {
+        groupingMode = "SYNCED_GROUP_ALLOWED",
+        allowLateJoin = true,
+        allowReplacementCharacters = true,
+        failedMemberBlocksParty = true,
+        requireLeaderApprovalForJoin = false,
+        auctionHouse = "WARNING",
+        mailbox = "ALLOWED",
+        trade = "ALLOWED",
+        bank = "ALLOWED",
+        warbandBank = "WARNING",
+        guildBank = "WARNING",
+        mounts = "ALLOWED",
+        flying = "WARNING",
+        flightPaths = "ALLOWED",
+        gearQuality = "WHITE_GRAY_ONLY",
+        selfCraftedGearAllowed = true,
+        maxLevelGap = "ALLOWED",
+        maxLevelGapValue = 3,
+        heirlooms = "WARNING",
+        enchants = "ALLOWED",
+        consumables = "ALLOWED",
+        dungeonRepeat = "ALLOWED",
+        instancedPvP = "WARNING",
+        actionCam = "WARNING",
+        instanceWithUnsyncedPlayers = "ALLOWED",
+        unsyncedMembers = "ALLOWED",
+        maxDeaths = false,
+    },
+    IRONMAN = {
+        groupingMode = "SOLO_SELF_FOUND",
+        allowLateJoin = false,
+        allowReplacementCharacters = false,
+        failedMemberBlocksParty = true,
+        requireLeaderApprovalForJoin = false,
+        auctionHouse = "WARNING",
+        mailbox = "WARNING",
+        trade = "WARNING",
+        bank = "WARNING",
+        warbandBank = "WARNING",
+        guildBank = "WARNING",
+        mounts = "WARNING",
+        flying = "WARNING",
+        flightPaths = "ALLOWED",
+        gearQuality = "WHITE_GRAY_ONLY",
+        selfCraftedGearAllowed = false,
+        maxLevelGap = "WARNING",
+        maxLevelGapValue = 3,
+        heirlooms = "WARNING",
+        enchants = "WARNING",
+        consumables = "WARNING",
+        dungeonRepeat = "WARNING",
+        instancedPvP = "WARNING",
+        actionCam = "ALLOWED",
+        instanceWithUnsyncedPlayers = "ALLOWED",
+        unsyncedMembers = "ALLOWED",
+        maxDeaths = false,
+    },
+    IRON_VIGIL = {
+        groupingMode = "SOLO_SELF_FOUND",
+        allowLateJoin = false,
+        allowReplacementCharacters = false,
+        failedMemberBlocksParty = true,
+        requireLeaderApprovalForJoin = false,
+        auctionHouse = "WARNING",
+        mailbox = "WARNING",
+        trade = "WARNING",
+        bank = "WARNING",
+        warbandBank = "WARNING",
+        guildBank = "WARNING",
+        mounts = "WARNING",
+        flying = "WARNING",
+        flightPaths = "WARNING",
+        gearQuality = "WHITE_GRAY_ONLY",
+        selfCraftedGearAllowed = false,
+        maxLevelGap = "WARNING",
+        maxLevelGapValue = 3,
+        heirlooms = "WARNING",
+        enchants = "WARNING",
+        consumables = "WARNING",
+        dungeonRepeat = "WARNING",
+        instancedPvP = "WARNING",
+        actionCam = "WARNING",
+        instanceWithUnsyncedPlayers = "ALLOWED",
+        unsyncedMembers = "ALLOWED",
+        maxDeaths = false,
+    },
+}
+
+local function RuleValueMatches(actual, expected)
+    if type(expected) == "number" then
+        return tonumber(actual) == expected
+    end
+    return tostring(actual) == tostring(expected)
+end
+
+local function RulesetMatchesPreset(ruleset, preset)
+    local expected = PRESET_RULE_MATCHES[preset]
+    if type(ruleset) ~= "table" or type(expected) ~= "table" then
+        return false
+    end
+
+    for ruleName, expectedValue in pairs(expected) do
+        if not RuleValueMatches(ruleset[ruleName], expectedValue) then
+            return false
+        end
+    end
+
+    return true
+end
+
+function SC:DetectRulesetPreset(ruleset)
+    for _, preset in ipairs(PRESET_RUN_ORDER) do
+        if RulesetMatchesPreset(ruleset, preset) then
+            return preset
+        end
+    end
+    return nil
+end
+
+local function IsPresetRunLabel(label)
+    for _, presetLabel in pairs(PRESET_RUN_LABELS) do
+        if label == presetLabel then
+            return true
+        end
+    end
+    return false
 end
 
 local RUN_NAME_ECONOMY_RULES = { "auctionHouse", "mailbox", "trade", "bank", "warbandBank", "guildBank" }
@@ -908,7 +1064,7 @@ function SC:GetHiddenRunName(ruleset)
     if type(ruleset) ~= "table" then
         return nil
     end
-    if IsPresetRuleset(ruleset) then
+    if self.DetectRulesetPreset and self:DetectRulesetPreset(ruleset) then
         return nil
     end
 
@@ -922,13 +1078,21 @@ end
 
 function SC:GetRunDisplayName(run, fallback)
     local ruleset = run and run.ruleset
-    local presetLabel = self:GetPresetRunLabel(ruleset and ruleset.achievementPreset)
+    local presetLabel = self:GetPresetRunLabel(self.DetectRulesetPreset and self:DetectRulesetPreset(ruleset))
     if presetLabel then
         return presetLabel
     end
 
     local hiddenName = self.GetHiddenRunName and self:GetHiddenRunName(ruleset)
-    return hiddenName or (run and run.runName) or fallback or "Softcore Run"
+    if hiddenName then
+        return hiddenName
+    end
+
+    local storedName = run and run.runName
+    if storedName and storedName ~= "" and storedName ~= "Softcore Run" and not IsPresetRunLabel(storedName) then
+        return storedName
+    end
+    return fallback or "Custom Run"
 end
 
 local CLASS_AWARD_LABELS = {

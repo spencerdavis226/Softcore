@@ -217,13 +217,6 @@ local ACHIEVEMENT_KIND_ICONS = {
     RULE_UNCHANGED_MAX = "Interface\\Icons\\INV_Misc_Note_05",
 }
 
-local PRESET_DISPLAY = {
-    CASUAL = "Casual Run",
-    CHEF_SPECIAL = "Chef's Special Run",
-    IRONMAN = "Ironman Run",
-    IRON_VIGIL = "Iron Vigil Run",
-}
-
 local GROUPING_OPTIONS = {
     { text = "Group", value = "SYNCED_GROUP_ALLOWED" },
     { text = "Solo Only", value = "SOLO_SELF_FOUND" },
@@ -2001,14 +1994,10 @@ local function FormatTotalViolations(count)
 end
 
 local function FormatOverviewRunTitle(run)
-    local ruleset = run and run.ruleset
-    local preset = ruleset and ruleset.achievementPreset
-    if PRESET_DISPLAY[preset] then
-        return PRESET_DISPLAY[preset]
+    if SC.GetRunDisplayName then
+        return SC:GetRunDisplayName(run, "Custom Run")
     end
-
-    local hiddenName = SC.GetHiddenRunName and SC:GetHiddenRunName(ruleset)
-    return hiddenName or "Custom Run"
+    return "Custom Run"
 end
 
 local function FormatOverviewRunDetail(run)
