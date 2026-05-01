@@ -644,6 +644,17 @@ local PRESET_AWARD_LABELS = {
     CUSTOM = "Custom",
 }
 
+local PRESET_RUN_LABELS = {
+    CASUAL = "Casual Run",
+    CHEF_SPECIAL = "Chef's Special Run",
+    IRONMAN = "Ironman Run",
+    IRON_VIGIL = "Iron Vigil Run",
+}
+
+function SC:GetPresetRunLabel(preset)
+    return PRESET_RUN_LABELS[preset]
+end
+
 local RUN_NAME_ECONOMY_RULES = { "auctionHouse", "mailbox", "trade", "bank", "warbandBank", "guildBank" }
 local RUN_NAME_BANK_RULES = { "bank", "warbandBank", "guildBank" }
 local RUN_NAME_TRAVEL_RULES = { "mounts", "flying", "flightPaths" }
@@ -949,6 +960,17 @@ function SC:GetHiddenRunName(ruleset)
     return nil
 end
 
+function SC:GetRunDisplayName(run, fallback)
+    local ruleset = run and run.ruleset
+    local presetLabel = self:GetPresetRunLabel(ruleset and ruleset.achievementPreset)
+    if presetLabel then
+        return presetLabel
+    end
+
+    local hiddenName = self.GetHiddenRunName and self:GetHiddenRunName(ruleset)
+    return hiddenName or (run and run.runName) or fallback or "Softcore Run"
+end
+
 local CLASS_AWARD_LABELS = {
     DEATHKNIGHT = "Death Knight",
     DEMONHUNTER = "Demon Hunter",
@@ -1005,7 +1027,10 @@ function SC:BuildCompletionAwardSnapshot(maxLevel)
     local character = db.character or GetPlayerSnapshot()
     local totalViolations, activeViolations, clearedViolations = CountAwardViolations(db.violations)
     local preset = run.ruleset and run.ruleset.achievementPreset or "CUSTOM"
-    local runName = (self.GetHiddenRunName and self:GetHiddenRunName(run.ruleset)) or run.runName or "Softcore Run"
+    local runName = (self.GetRunDisplayName and self:GetRunDisplayName(run, "Softcore Run"))
+        or (self.GetHiddenRunName and self:GetHiddenRunName(run.ruleset))
+        or run.runName
+        or "Softcore Run"
 
     return {
         id = run.runId or ("SC-COMPLETION-" .. tostring(time())),
@@ -1470,7 +1495,9 @@ function SC:GetLocalPlayerStatus()
 
     return {
         runId = db.run.runId,
-        runName = (self.GetHiddenRunName and self:GetHiddenRunName(db.run.ruleset)) or db.run.runName,
+        runName = (self.GetRunDisplayName and self:GetRunDisplayName(db.run, db.run.runName))
+            or (self.GetHiddenRunName and self:GetHiddenRunName(db.run.ruleset))
+            or db.run.runName,
         playerKey = playerKey,
         name = db.character.name,
         realm = db.character.realm,
@@ -2191,8 +2218,12 @@ function SC:StartRun(runOptions)
     db.run.ruleset = startingRuleset
     db.run.ruleset.achievementPreset = runOptions.preset or db.run.ruleset.achievementPreset or "CUSTOM"
     ApplyGroupingModeRules(db.run.ruleset)
-    if (not runOptions.runName or runOptions.runName == "Softcore Run") and self.GetHiddenRunName then
-        db.run.runName = self:GetHiddenRunName(db.run.ruleset) or db.run.runName
+    if not runOptions.runName or runOptions.runName == "Softcore Run" then
+        if self.GetRunDisplayName then
+            db.run.runName = self:GetRunDisplayName(db.run, db.run.runName)
+        elseif self.GetHiddenRunName then
+            db.run.runName = self:GetHiddenRunName(db.run.ruleset) or db.run.runName
+        end
     end
     db.run.cameraMode = runOptions.cameraMode or DefaultCameraModeForRules(db.run.ruleset)
     db.run.governance = CreateDefaultGovernance()
@@ -2379,7 +2410,10 @@ function SC:PrintRun()
         end
     end
 
-    local runName = (self.GetHiddenRunName and self:GetHiddenRunName(db.run.ruleset)) or db.run.runName or "none"
+    local runName = (self.GetRunDisplayName and self:GetRunDisplayName(db.run, "none"))
+        or (self.GetHiddenRunName and self:GetHiddenRunName(db.run.ruleset))
+        or db.run.runName
+        or "none"
     Print("run: " .. tostring(runName))
     Print("runId: " .. tostring(db.run.runId or "none"))
     Print("active: " .. tostring(db.run.active) .. ", party: " .. self:GetPartyStatus())
@@ -2488,7 +2522,9 @@ function SC:AnnounceLocalDeath(detail)
         .. " level " .. tostring(character.level or UnitLevel("player") or "?")
         .. " in " .. tostring(character.zone or GetRealZoneText() or "Unknown")
         .. " - " .. tostring(detail or "character died.")
-    local runName = (self.GetHiddenRunName and self:GetHiddenRunName(run.ruleset)) or run.runName
+    local runName = (self.GetRunDisplayName and self:GetRunDisplayName(run, run.runName))
+        or (self.GetHiddenRunName and self:GetHiddenRunName(run.ruleset))
+        or run.runName
     if runName then
         message = message .. " (" .. tostring(runName) .. ")"
     end
@@ -2687,7 +2723,10 @@ local function BuildRunExportText()
     AddCsvLine(lines, "Character", "Class", character.class or "?")
     AddCsvLine(lines, "Character", "Level", character.level or "?")
     AddCsvLine(lines, "Character", "Zone", character.zone or "?")
-    AddCsvLine(lines, "Run", "Name", (SC.GetHiddenRunName and SC:GetHiddenRunName(run.ruleset)) or run.runName or "none")
+    AddCsvLine(lines, "Run", "Name", (SC.GetRunDisplayName and SC:GetRunDisplayName(run, "none"))
+        or (SC.GetHiddenRunName and SC:GetHiddenRunName(run.ruleset))
+        or run.runName
+        or "none")
     AddCsvLine(lines, "Run", "Run ID", run.runId or "none")
     AddCsvLine(lines, "Run", "Status", SC:GetStatusText())
     AddCsvLine(lines, "Run", "Active", run.active == true)
