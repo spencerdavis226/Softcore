@@ -9,6 +9,32 @@ local ECONOMY_RULE_KEYS = { "auctionHouse", "mailbox", "trade", "bank", "warband
 local MOVEMENT_RULE_KEYS = { "mounts", "flying", "flightPaths" }
 local BOOST_RULE_KEYS = { "heirlooms", "enchants", "consumables" }
 
+local SEVERITY_RULE_KEYS = {
+    death = true,
+    auctionHouse = true,
+    mailbox = true,
+    trade = true,
+    mounts = true,
+    flying = true,
+    flightPaths = true,
+    outsiderGrouping = true,
+    unsyncedMembers = true,
+    maxLevelGap = true,
+    dungeonRepeat = true,
+    heirlooms = true,
+    enchants = true,
+    instanceWithUnsyncedPlayers = true,
+    bank = true,
+    warbandBank = true,
+    guildBank = true,
+    voidStorage = true,
+    craftingOrders = true,
+    vendor = true,
+    consumables = true,
+    instancedPvP = true,
+    actionCam = true,
+}
+
 local RUN_LABEL_RULE_KEYS = {
     "death",
     "groupingMode",
@@ -247,13 +273,46 @@ local function NormalizeRulesetForRunLabel(ruleset)
     return normalized
 end
 
+local function CanonicalSeverityValue(value)
+    if value == "ALLOWED" or value == "LOG_ONLY" then
+        return "ALLOWED"
+    end
+    if value == nil or value == false then
+        return "ALLOWED"
+    end
+    return "RESTRICTED"
+end
+
+local function CanonicalRunLabelValue(ruleset, key)
+    if key == "selfCraftedGearAllowed" then
+        if not ruleset or ruleset.gearQuality == nil or ruleset.gearQuality == "ALLOWED" then
+            return "IGNORED"
+        end
+        return ruleset.selfCraftedGearAllowed == true
+    end
+
+    if key == "maxLevelGapValue" then
+        if CanonicalSeverityValue(ruleset and ruleset.maxLevelGap) == "ALLOWED" then
+            return "IGNORED"
+        end
+        local value = tonumber(ruleset and ruleset.maxLevelGapValue)
+        return value or tostring(ruleset and ruleset.maxLevelGapValue)
+    end
+
+    if SEVERITY_RULE_KEYS[key] then
+        return CanonicalSeverityValue(ruleset and ruleset[key])
+    end
+
+    return ruleset and ruleset[key]
+end
+
 local function RulesetsMatch(a, b)
     if not a or not b then
         return false
     end
 
     for _, key in ipairs(RUN_LABEL_RULE_KEYS) do
-        if a[key] ~= b[key] then
+        if CanonicalRunLabelValue(a, key) ~= CanonicalRunLabelValue(b, key) then
             return false
         end
     end
