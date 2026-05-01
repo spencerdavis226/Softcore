@@ -703,6 +703,20 @@ local function RunLabelCameraOff(ruleset)
     return not RunLabelRuleRestricted(ruleset and ruleset.actionCam)
 end
 
+local function RunLabelBoostRulesAllAllowed(ruleset)
+    return RunLabelRulesAllAllowed(ruleset, RUN_NAME_BOOST_RULES)
+end
+
+local function RunLabelCommonCustomBase(ruleset)
+    return RunLabelRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
+        and RunLabelRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
+        and RunLabelBoostRulesAllAllowed(ruleset)
+        and RunLabelRuleAllowed(ruleset and ruleset.dungeonRepeat)
+        and RunLabelLevelGapOff(ruleset)
+        and RunLabelRuleAllowed(ruleset and ruleset.instancedPvP)
+        and RunLabelCameraOff(ruleset)
+end
+
 -- Ordered from exposed presets to hidden funny labels; first match wins.
 local RUN_LABELS = {
     {
@@ -829,6 +843,7 @@ local RUN_LABELS = {
                 and RunLabelGearAllowed(ruleset)
                 and RunLabelRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
                 and RunLabelRulesAllAllowed(ruleset, RUN_NAME_BOOST_RULES)
+                and not RunLabelRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
         end,
     },
     {
@@ -838,133 +853,236 @@ local RUN_LABELS = {
                 and RunLabelRuleRestricted(ruleset and ruleset.maxLevelGap)
                 and RunLabelGearAllowed(ruleset)
                 and RunLabelRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
+                and RunLabelBoostRulesAllAllowed(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.dungeonRepeat)
+                and RunLabelRuleAllowed(ruleset and ruleset.instancedPvP)
+                and RunLabelCameraOff(ruleset)
         end,
     },
     {
         label = "Fifty Grades of Gray Run",
         matches = function(ruleset)
-            return RunLabelWhiteGrayGear(ruleset)
+            return RunLabelGrouped(ruleset)
+                and RunLabelWhiteGrayGear(ruleset)
                 and ruleset.selfCraftedGearAllowed ~= true
+                and RunLabelCommonCustomBase(ruleset)
         end,
     },
     {
         label = "Made You Loot Run",
         matches = function(ruleset)
-            return RunLabelGearRestricted(ruleset)
+            return RunLabelGrouped(ruleset)
+                and RunLabelWhiteGrayGear(ruleset)
                 and ruleset.selfCraftedGearAllowed == true
+                and RunLabelCommonCustomBase(ruleset)
         end,
     },
     {
         label = "Green With Envy Run",
         matches = function(ruleset)
-            return ruleset and ruleset.gearQuality == "GREEN_OR_LOWER"
+            return RunLabelGrouped(ruleset)
+                and ruleset and ruleset.gearQuality == "GREEN_OR_LOWER"
+                and ruleset.selfCraftedGearAllowed ~= true
+                and RunLabelCommonCustomBase(ruleset)
         end,
     },
     {
         label = "Blue Yourself Run",
         matches = function(ruleset)
-            return ruleset and ruleset.gearQuality == "BLUE_OR_LOWER"
+            return RunLabelGrouped(ruleset)
+                and ruleset and ruleset.gearQuality == "BLUE_OR_LOWER"
+                and ruleset.selfCraftedGearAllowed ~= true
+                and RunLabelCommonCustomBase(ruleset)
         end,
     },
     {
         label = "No Heir Today Run",
         matches = function(ruleset)
-            return RunLabelRuleRestricted(ruleset and ruleset.heirlooms)
+            return RunLabelGrouped(ruleset)
+                and RunLabelGearAllowed(ruleset)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
+                and RunLabelRuleRestricted(ruleset and ruleset.heirlooms)
                 and RunLabelRuleAllowed(ruleset and ruleset.enchants)
                 and RunLabelRuleAllowed(ruleset and ruleset.consumables)
+                and RunLabelRuleAllowed(ruleset and ruleset.dungeonRepeat)
+                and RunLabelLevelGapOff(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.instancedPvP)
+                and RunLabelCameraOff(ruleset)
         end,
     },
     {
         label = "No Enchant Intended Run",
         matches = function(ruleset)
-            return RunLabelRuleRestricted(ruleset and ruleset.enchants)
+            return RunLabelGrouped(ruleset)
+                and RunLabelGearAllowed(ruleset)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
                 and RunLabelRuleAllowed(ruleset and ruleset.heirlooms)
+                and RunLabelRuleRestricted(ruleset and ruleset.enchants)
+                and RunLabelRuleAllowed(ruleset and ruleset.consumables)
+                and RunLabelRuleAllowed(ruleset and ruleset.dungeonRepeat)
+                and RunLabelLevelGapOff(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.instancedPvP)
+                and RunLabelCameraOff(ruleset)
         end,
     },
     {
         label = "Flaskless Gordon Run",
         matches = function(ruleset)
-            return RunLabelRuleRestricted(ruleset and ruleset.consumables)
+            return RunLabelGrouped(ruleset)
+                and RunLabelGearAllowed(ruleset)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
                 and RunLabelRuleAllowed(ruleset and ruleset.heirlooms)
                 and RunLabelRuleAllowed(ruleset and ruleset.enchants)
+                and RunLabelRuleRestricted(ruleset and ruleset.consumables)
+                and RunLabelRuleAllowed(ruleset and ruleset.dungeonRepeat)
+                and RunLabelLevelGapOff(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.instancedPvP)
+                and RunLabelCameraOff(ruleset)
         end,
     },
     {
         label = "Deadminesweeper Run",
         matches = function(ruleset)
-            return RunLabelRuleRestricted(ruleset and ruleset.dungeonRepeat)
-                and not (RunLabelSolo(ruleset)
-                    and RunLabelWhiteGrayGear(ruleset)
-                    and ruleset.selfCraftedGearAllowed ~= true
-                    and RunLabelRulesAllRestricted(ruleset, RUN_NAME_ECONOMY_RULES)
-                    and RunLabelRuleRestricted(ruleset and ruleset.mounts)
-                    and RunLabelRuleRestricted(ruleset and ruleset.flying)
-                    and RunLabelRulesAllRestricted(ruleset, RUN_NAME_BOOST_RULES)
-                    and RunLabelRuleRestricted(ruleset and ruleset.instancedPvP))
+            return RunLabelGrouped(ruleset)
+                and RunLabelGearAllowed(ruleset)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
+                and RunLabelBoostRulesAllAllowed(ruleset)
+                and RunLabelRuleRestricted(ruleset and ruleset.dungeonRepeat)
+                and RunLabelLevelGapOff(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.instancedPvP)
+                and RunLabelCameraOff(ruleset)
         end,
     },
     {
         label = "Camera Shy Run",
         matches = function(ruleset)
-            return RunLabelRuleRestricted(ruleset and ruleset.actionCam)
-                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
+            return RunLabelGrouped(ruleset)
                 and RunLabelGearAllowed(ruleset)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
+                and RunLabelBoostRulesAllAllowed(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.dungeonRepeat)
+                and RunLabelLevelGapOff(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.instancedPvP)
+                and RunLabelRuleRestricted(ruleset and ruleset.actionCam)
         end,
     },
     {
         label = "Walk Hard Run",
         matches = function(ruleset)
-            return RunLabelRulesAllRestricted(ruleset, RUN_NAME_TRAVEL_RULES)
+            return RunLabelGrouped(ruleset)
+                and RunLabelGearAllowed(ruleset)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
+                and RunLabelRulesAllRestricted(ruleset, RUN_NAME_TRAVEL_RULES)
+                and RunLabelBoostRulesAllAllowed(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.dungeonRepeat)
+                and RunLabelLevelGapOff(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.instancedPvP)
+                and RunLabelCameraOff(ruleset)
         end,
     },
     {
         label = "No Fly Zone Run",
         matches = function(ruleset)
-            return RunLabelRuleAllowed(ruleset and ruleset.mounts)
+            return RunLabelGrouped(ruleset)
+                and RunLabelGearAllowed(ruleset)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
+                and RunLabelRuleAllowed(ruleset and ruleset.mounts)
                 and RunLabelRuleRestricted(ruleset and ruleset.flying)
                 and RunLabelRuleAllowed(ruleset and ruleset.flightPaths)
+                and RunLabelBoostRulesAllAllowed(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.dungeonRepeat)
+                and RunLabelLevelGapOff(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.instancedPvP)
+                and RunLabelCameraOff(ruleset)
         end,
     },
     {
         label = "Flight Pathological Run",
         matches = function(ruleset)
-            return RunLabelRuleAllowed(ruleset and ruleset.mounts)
+            return RunLabelGrouped(ruleset)
+                and RunLabelGearAllowed(ruleset)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
+                and RunLabelRuleAllowed(ruleset and ruleset.mounts)
                 and RunLabelRuleAllowed(ruleset and ruleset.flying)
                 and RunLabelRuleRestricted(ruleset and ruleset.flightPaths)
+                and RunLabelBoostRulesAllAllowed(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.dungeonRepeat)
+                and RunLabelLevelGapOff(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.instancedPvP)
+                and RunLabelCameraOff(ruleset)
         end,
     },
     {
         label = "Mount Rushless Run",
         matches = function(ruleset)
-            return RunLabelRuleRestricted(ruleset and ruleset.mounts)
+            return RunLabelGrouped(ruleset)
+                and RunLabelGearAllowed(ruleset)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
+                and RunLabelRuleRestricted(ruleset and ruleset.mounts)
                 and (RunLabelRuleAllowed(ruleset and ruleset.flying)
                     or RunLabelRuleAllowed(ruleset and ruleset.flightPaths))
+                and RunLabelBoostRulesAllAllowed(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.dungeonRepeat)
+                and RunLabelLevelGapOff(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.instancedPvP)
+                and RunLabelCameraOff(ruleset)
         end,
     },
     {
         label = "Wallet of Warcraft Run",
         matches = function(ruleset)
-            return RunLabelRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
-                and (RunLabelGearRestricted(ruleset)
-                    or not RunLabelRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES))
+            return RunLabelGrouped(ruleset)
+                and ruleset and ruleset.gearQuality == "GREEN_OR_LOWER"
+                and ruleset.selfCraftedGearAllowed == true
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_ECONOMY_RULES)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
+                and RunLabelBoostRulesAllAllowed(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.dungeonRepeat)
+                and RunLabelLevelGapOff(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.instancedPvP)
+                and RunLabelCameraOff(ruleset)
         end,
     },
     {
         label = "Auction House Arrest Run",
         matches = function(ruleset)
-            return RunLabelRuleRestricted(ruleset and ruleset.auctionHouse)
+            return RunLabelGrouped(ruleset)
+                and RunLabelGearAllowed(ruleset)
+                and RunLabelRuleRestricted(ruleset and ruleset.auctionHouse)
                 and RunLabelRuleAllowed(ruleset and ruleset.mailbox)
                 and RunLabelRuleAllowed(ruleset and ruleset.trade)
                 and RunLabelRuleAllowed(ruleset and ruleset.bank)
+                and RunLabelRuleAllowed(ruleset and ruleset.warbandBank)
+                and RunLabelRuleAllowed(ruleset and ruleset.guildBank)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
+                and RunLabelBoostRulesAllAllowed(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.dungeonRepeat)
+                and RunLabelLevelGapOff(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.instancedPvP)
+                and RunLabelCameraOff(ruleset)
         end,
     },
     {
         label = "Bank Error in Your Favor Run",
         matches = function(ruleset)
-            return RunLabelRulesAllRestricted(ruleset, RUN_NAME_BANK_RULES)
-                and (RunLabelRuleAllowed(ruleset and ruleset.auctionHouse)
-                    or RunLabelRuleAllowed(ruleset and ruleset.mailbox)
-                    or RunLabelRuleAllowed(ruleset and ruleset.trade))
+            return RunLabelGrouped(ruleset)
+                and RunLabelGearAllowed(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.auctionHouse)
+                and RunLabelRuleAllowed(ruleset and ruleset.mailbox)
+                and RunLabelRuleAllowed(ruleset and ruleset.trade)
+                and RunLabelRulesAllRestricted(ruleset, RUN_NAME_BANK_RULES)
+                and RunLabelRulesAllAllowed(ruleset, RUN_NAME_TRAVEL_RULES)
+                and RunLabelBoostRulesAllAllowed(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.dungeonRepeat)
+                and RunLabelLevelGapOff(ruleset)
+                and RunLabelRuleAllowed(ruleset and ruleset.instancedPvP)
+                and RunLabelCameraOff(ruleset)
         end,
     },
 }
