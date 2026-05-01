@@ -573,11 +573,7 @@ function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, r
     end
     local proposalName = runName or "Softcore Run"
     if not runName or runName == "Softcore Run" then
-        if self.GetRunDisplayName then
-            proposalName = self:GetRunDisplayName({ ruleset = proposalRuleset, runName = proposalName }, proposalName)
-        elseif self.GetHiddenRunName then
-            proposalName = self:GetHiddenRunName(proposalRuleset) or proposalName
-        end
+        proposalName = self.GetRunDisplayName and self:GetRunDisplayName({ ruleset = proposalRuleset }, "Custom Run") or "Custom Run"
     end
     local proposal = {
         proposalId = self:CreateProposalId(),
@@ -626,10 +622,7 @@ function SC:CreateRunSyncProposal(partyAtProposalTime)
         return nil
     end
 
-    local runName = (self.GetRunDisplayName and self:GetRunDisplayName(db.run, "Softcore Run"))
-        or (self.GetHiddenRunName and self:GetHiddenRunName(db.run.ruleset))
-        or db.run.runName
-        or "Softcore Run"
+    local runName = self.GetRunDisplayName and self:GetRunDisplayName(db.run, "Custom Run") or "Custom Run"
     return self:CreateRunProposal(runName, db.run.ruleset, "SYNC_RUN", nil, db.run.runId, {
         partyAtProposalTime = partyAtProposalTime,
     })
@@ -646,10 +639,7 @@ function SC:CreateRunInviteProposal(targetPlayerKey, partyAtProposalTime)
         return nil
     end
 
-    local runName = (self.GetRunDisplayName and self:GetRunDisplayName(db.run, "Softcore Run"))
-        or (self.GetHiddenRunName and self:GetHiddenRunName(db.run.ruleset))
-        or db.run.runName
-        or "Softcore Run"
+    local runName = self.GetRunDisplayName and self:GetRunDisplayName(db.run, "Custom Run") or "Custom Run"
     return self:CreateRunProposal(runName, db.run.ruleset, "ADD_PARTICIPANT", targetPlayerKey, db.run.runId, {
         partyAtProposalTime = partyAtProposalTime,
     })
@@ -1822,10 +1812,7 @@ function SC:ProposeAddParticipant(playerKey)
         return
     end
 
-    local runName = (self.GetRunDisplayName and self:GetRunDisplayName(db.run, "Softcore Run"))
-        or (self.GetHiddenRunName and self:GetHiddenRunName(db.run.ruleset))
-        or db.run.runName
-        or "Softcore Run"
+    local runName = self.GetRunDisplayName and self:GetRunDisplayName(db.run, "Custom Run") or "Custom Run"
     local proposal = self:CreateRunProposal(runName, db.run.ruleset, "ADD_PARTICIPANT", playerKey, db.run.runId)
     if proposal then
         Print("proposed adding participant: " .. playerKey)
