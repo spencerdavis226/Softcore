@@ -90,8 +90,14 @@ local function ApplyPresetProfile(rules, preset)
 
     rules.groupingMode = ironman and "SOLO_SELF_FOUND" or "SYNCED_GROUP_ALLOWED"
     rules.gearQuality = (ironman or chef) and "WHITE_GRAY_ONLY" or "ALLOWED"
-    rules.selfCraftedGearAllowed = ironman and false or true
-    rules.maxLevelGap = ironman and DISALLOWED_OUTCOME or "ALLOWED"
+    if ironman then
+        rules.selfCraftedGearAllowed = false
+    elseif chef then
+        rules.selfCraftedGearAllowed = true
+    else
+        rules.selfCraftedGearAllowed = false
+    end
+    rules.maxLevelGap = "ALLOWED"
     rules.maxLevelGapValue = 3
     rules.heirlooms = DISALLOWED_OUTCOME
     rules.enchants = ironman and DISALLOWED_OUTCOME or "ALLOWED"
@@ -340,7 +346,7 @@ function SC:GetRunLabelDebugLines(ruleset)
 
             if #mismatches == 0 then
                 table.insert(lines, FormatRunLabel(spec.label) .. ": match")
-            else
+            elseif not preset then
                 local preview = {}
                 for i = 1, math.min(#mismatches, 6) do
                     preview[i] = mismatches[i]

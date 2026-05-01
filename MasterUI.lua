@@ -1672,8 +1672,14 @@ local function ConfigureRulesForPreset(rules, preset)
 
     rules.groupingMode = ironman and "SOLO_SELF_FOUND" or "SYNCED_GROUP_ALLOWED"
     rules.gearQuality = (ironman or chef) and "WHITE_GRAY_ONLY" or "ALLOWED"
-    rules.selfCraftedGearAllowed = ironman and false or true
-    rules.maxLevelGap = ironman and DISALLOWED_OUTCOME or "ALLOWED"
+    if ironman then
+        rules.selfCraftedGearAllowed = false
+    elseif chef then
+        rules.selfCraftedGearAllowed = true
+    else
+        rules.selfCraftedGearAllowed = false
+    end
+    rules.maxLevelGap = "ALLOWED"
     rules.maxLevelGapValue = 3
     rules.heirlooms = DISALLOWED_OUTCOME
     rules.enchants = ironman and DISALLOWED_OUTCOME or "ALLOWED"
@@ -4186,7 +4192,7 @@ function SC:OpenMasterWindow(focusTab)
         end
         ruleset.instanceWithUnsyncedPlayers = "ALLOWED"
         ruleset.unsyncedMembers = "ALLOWED"
-        ruleset.achievementPreset = frame.start.selectedPreset or ruleset.achievementPreset or "CUSTOM"
+        ruleset.achievementPreset = (SC.DetectRulesetPreset and SC:DetectRulesetPreset(ruleset)) or "CUSTOM"
         if IsInGroup() and not IsInRaid() then
             if SC.CreateRunProposal then
                 SC:CreateRunProposal("Softcore Run", ruleset, "RUN")

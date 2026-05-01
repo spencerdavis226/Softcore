@@ -599,7 +599,7 @@ function SC:Achievements_OnRunStart(runOptions)
 
     local achievements = GetCharDB()
     local startLevel = tonumber(db.run.startLevel or db.character.level or 0) or 0
-    local preset = (runOptions and runOptions.preset) or (db.run.ruleset and db.run.ruleset.achievementPreset) or "CUSTOM"
+    local preset = (self.DetectRulesetPreset and self:DetectRulesetPreset(db.run.ruleset)) or "CUSTOM"
 
     achievements.runEligibility = {
         runId = db.run.runId,

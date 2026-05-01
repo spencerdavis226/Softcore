@@ -212,7 +212,7 @@ Avoid adding new windows. Use the master menu, HUD, or minimap button unless the
 
 Keep files modular and changes targeted.
 
-Run name discovery lives in `RunLabels.lua`. Do not reintroduce duplicate run-label predicates in `Core.lua`; Overview, proposals, exports, and completion awards should all call the shared `GetRunDisplayName` / `GetRunLabelForRuleset` path.
+Run name and preset-shape discovery lives in `RunLabels.lua`. Do not reintroduce duplicate run-label predicates in `Core.lua`; Overview, proposals, exports, completion awards, and preset achievement eligibility should all call the shared `GetRunDisplayName` / `GetRunLabelForRuleset` / `DetectRulesetPreset` path.
 
 Use Lua 5.1-compatible code. Avoid external dependencies, build tooling, obfuscation, protected action behavior, combat automation, rotation suggestions, or boss-mechanic solving.
 
