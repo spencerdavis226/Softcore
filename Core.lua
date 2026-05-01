@@ -84,20 +84,178 @@ local function GetGroupAnnouncementChannel()
     return nil
 end
 
-function SC:PlayUISound(event)
-    if not PlaySound then return end
+local UI_SOUND_EVENTS = {
+    RUN_STARTED = {
+        label = "Run Started",
+        kits = { "IG_QUEST_LOG_ACCEPT", 878 },
+        cooldown = 1.5,
+    },
+    RUN_COMPLETED = {
+        label = "Run Completed",
+        kits = { "UI_AzeriteEmpoweredItem", "UI_EpicLoot_Toasts", "UI_BonusLootRoll_Start", 31578 },
+        cooldown = 8,
+        channel = "Master",
+    },
+    ACHIEVEMENT_EARNED = {
+        label = "Achievement Earned",
+        kits = { "UI_EpicLoot_Toasts", "UI_BonusLootRoll_Start", 31578 },
+        cooldown = 2.5,
+        bucket = "REWARD",
+    },
+    VIOLATION = {
+        label = "Violation",
+        kits = { "UI_ERROR_MESSAGE", 882 },
+        cooldown = 2,
+    },
+    DEATH = {
+        label = "Death",
+        kits = { "IG_QUEST_FAILED", 851 },
+        cooldown = 5,
+        channel = "Master",
+    },
+    VIOLATION_CLEARED = {
+        label = "Violation Cleared",
+        kits = { "IG_QUEST_OBJECTIVE_COMPLETE", 879 },
+        cooldown = 1,
+    },
+    PROPOSAL_RECEIVED = {
+        label = "Governance Received",
+        kits = { "READY_CHECK", 8960 },
+        cooldown = 6,
+        bucket = "GOVERNANCE_ATTENTION",
+    },
+    PROPOSAL_ACCEPTED = {
+        label = "Governance Accepted",
+        kits = { "IG_QUEST_OBJECTIVE_COMPLETE", 879 },
+        cooldown = 1.5,
+        bucket = "GOVERNANCE_CONFIRM",
+    },
+    PROPOSAL_CONFIRMED = {
+        label = "Governance Confirmed",
+        kits = { "IG_QUEST_LOG_ACCEPT", 878 },
+        cooldown = 2,
+        bucket = "GOVERNANCE_CONFIRM",
+    },
+    PROPOSAL_CANCELLED = {
+        label = "Governance Cancelled",
+        kits = { "UI_ERROR_MESSAGE", 882 },
+        cooldown = 3,
+        bucket = "GOVERNANCE_STOP",
+    },
+    RULES_APPLIED = {
+        label = "Rules Applied",
+        kits = { "IG_QUEST_OBJECTIVE_COMPLETE", 879 },
+        cooldown = 2,
+        bucket = "GOVERNANCE_CONFIRM",
+    },
+}
+
+local UI_SOUND_EVENT_ORDER = {
+    "RUN_STARTED",
+    "RUN_COMPLETED",
+    "ACHIEVEMENT_EARNED",
+    "VIOLATION",
+    "DEATH",
+    "VIOLATION_CLEARED",
+    "PROPOSAL_RECEIVED",
+    "PROPOSAL_ACCEPTED",
+    "PROPOSAL_CONFIRMED",
+    "PROPOSAL_CANCELLED",
+    "RULES_APPLIED",
+}
+
+local lastUISoundAt = {}
+
+local function EnsureUISoundSettings()
+    SoftcoreDB = SoftcoreDB or {}
+    SoftcoreDB.settings = SoftcoreDB.settings or {}
+    if SoftcoreDB.settings.uiSounds == nil then
+        SoftcoreDB.settings.uiSounds = true
+    end
+    return SoftcoreDB.settings
+end
+
+local function ResolveSoundKit(candidates)
     local SK = _G["SOUNDKIT"] or {}
-    local sounds = {
-        RUN_STARTED       = SK.IG_QUEST_LOG_ACCEPT          or 878,
-        VIOLATION         = SK.UI_ERROR_MESSAGE              or 882,
-        DEATH             = SK.IG_QUEST_FAILED               or 851,
-        VIOLATION_CLEARED = SK.IG_QUEST_OBJECTIVE_COMPLETE   or 879,
-        PROPOSAL_RECEIVED = SK.READY_CHECK                   or 8960,
-        ACHIEVEMENT_EARNED = SK.UI_EpicLoot_Toasts           or SK.UI_BonusLootRoll_Start or 31578,
-        RUN_COMPLETED     = SK.UI_AzeriteEmpoweredItem       or SK.UI_EpicLoot_Toasts or 31578,
-    }
-    local id = sounds[event]
-    if id then PlaySound(id, "Master") end
+    for _, candidate in ipairs(candidates or {}) do
+        if type(candidate) == "number" then
+            return candidate
+        elseif type(candidate) == "string" then
+            local soundKit = SK[candidate] or _G[candidate]
+            if type(soundKit) == "number" then
+                return soundKit
+            end
+        end
+    end
+    return nil
+end
+
+function SC:AreUISoundsEnabled()
+    return EnsureUISoundSettings().uiSounds ~= false
+end
+
+function SC:SetUISoundsEnabled(enabled)
+    EnsureUISoundSettings().uiSounds = enabled == true
+    return EnsureUISoundSettings().uiSounds
+end
+
+function SC:PrintUISoundSettings()
+    Print("UI sounds: " .. (self:AreUISoundsEnabled() and "on" or "off"))
+    Print("usage: /sc sound on|off|test [event]")
+end
+
+function SC:PlayUISound(event, options)
+    if not PlaySound then return false end
+
+    options = options or {}
+    event = string.upper(tostring(event or ""))
+    local profile = UI_SOUND_EVENTS[event]
+    if not profile then return false end
+
+    if not options.force and not self:AreUISoundsEnabled() then
+        return false
+    end
+
+    local soundKit = ResolveSoundKit(profile.kits)
+    if not soundKit then return false end
+
+    local now = GetTime and GetTime() or time()
+    local bucket = profile.bucket or event
+    local cooldown = tonumber(profile.cooldown or 0) or 0
+    if not options.force and cooldown > 0 and lastUISoundAt[bucket] and now - lastUISoundAt[bucket] < cooldown then
+        return false
+    end
+
+    lastUISoundAt[bucket] = now
+    PlaySound(soundKit, options.channel or profile.channel or "SFX")
+    return true
+end
+
+function SC:TestUISound(event)
+    if not event or event == "" then
+        event = "RUN_STARTED"
+    end
+    event = string.upper(tostring(event))
+    if event == "LIST" then
+        local labels = {}
+        for _, key in ipairs(UI_SOUND_EVENT_ORDER) do
+            table.insert(labels, string.lower(key))
+        end
+        Print("sound events: " .. table.concat(labels, ", "))
+        return
+    end
+
+    if not UI_SOUND_EVENTS[event] then
+        Print("unknown sound event: " .. tostring(event))
+        Print("use /sc sound test list")
+        return
+    end
+
+    if self:PlayUISound(event, { force = true }) then
+        Print("played sound: " .. UI_SOUND_EVENTS[event].label)
+    else
+        Print("could not play sound: " .. tostring(event))
+    end
 end
 
 local function FormatTime(timestamp)
@@ -348,6 +506,9 @@ local function EnsureDatabase()
     SoftcoreDB.acceptedRulesetHash = SoftcoreDB.acceptedRulesetHash or nil
     SoftcoreDB.settings = SoftcoreDB.settings or {}
     SoftcoreDB.settings.deathAnnouncements = SoftcoreDB.settings.deathAnnouncements or {}
+    if SoftcoreDB.settings.uiSounds == nil then
+        SoftcoreDB.settings.uiSounds = true
+    end
     SoftcoreDB.sync = SoftcoreDB.sync or {}
     SoftcoreDB.sync.remoteSequences = SoftcoreDB.sync.remoteSequences or {}
     SoftcoreDB.sync.localSequence = SoftcoreDB.sync.localSequence or 0
@@ -2870,7 +3031,6 @@ function SC:ShowSampleCompletionAward()
     end
 
     Print("opening sample completion award.")
-    self:PlayUISound("ACHIEVEMENT_EARNED")
     self:PlayUISound("RUN_COMPLETED")
     if self.ShowCompletionAward then
         self:ShowCompletionAward(award)
@@ -2897,6 +3057,7 @@ function SC:PrintHelp()
     Print("  /sc propose       propose a grouped run")
     Print("  /sc propose-add Player-Realm")
     Print("  /sc announce off|chat|party|guild")
+    Print("  /sc sound on|off|test [event]")
     Print("  /sc resync        re-sync state with party")
     Print("  /sc hud          toggle the HUD")
     Print("  /sc minimap      toggle the minimap button")
@@ -3024,6 +3185,22 @@ function SC:HandleSlash(input)
         else
             local _, message = self:SetDeathAnnouncementChannelsFromText(mode)
             Print(message)
+        end
+    elseif command == "sound" or command == "sounds" then
+        local mode, arg = string.match(strtrim(rest or ""), "^(%S*)%s*(.-)$")
+        mode = string.lower(mode or "")
+        if mode == "" or mode == "status" then
+            self:PrintUISoundSettings()
+        elseif mode == "on" or mode == "enable" or mode == "enabled" then
+            self:SetUISoundsEnabled(true)
+            Print("UI sounds: on")
+        elseif mode == "off" or mode == "disable" or mode == "disabled" then
+            self:SetUISoundsEnabled(false)
+            Print("UI sounds: off")
+        elseif mode == "test" then
+            self:TestUISound(arg)
+        else
+            Print("usage: /sc sound on|off|test [event]")
         end
     elseif command == "resync" then
         if self.Sync_RequestFullState then

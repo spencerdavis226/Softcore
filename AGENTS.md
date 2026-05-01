@@ -24,6 +24,8 @@ Current menu tabs:
 
 The HUD is compact and glanceable. It shows local run status when solo, party status/member rows when grouped, and short governance/sync limbo or blocker labels such as Details, Review, Waiting, Settling, Syncing, Invite, Run Sync, No Addon, Offline, Raid Local, Version, Rules, Run ID, Not In Run, or Level Gap. It may appear for pending governance even before a run is active. Clicking the HUD toggles the main menu on the most relevant tab. The minimap button opens the main menu.
 
+Softcore-specific UI sounds are centralized through `SC:PlayUISound`. Keep cues restrained and reserved for milestones, attention states, and resolutions: run start/completion, achievements, local death/violations, incoming governance review, proposal acceptance or confirmation, cancelled governance, applied rules, and violation clears. `/sc sound on|off|test [event]` controls and tests these cues.
+
 ## Core Safety Principle
 
 Softcore is individual-first.
@@ -255,6 +257,7 @@ Useful commands:
 - `/sc gear`
 - `/sc dungeons`
 - `/sc resync`
+- `/sc sound on|off|test [event]`
 
 `/sc dc` clears the in-memory debug trace and resets test-oriented sync counters such as stale send drops, coalesced status drops, send failures, and expired chunk buffers. Use it at the start of every A/B test so pasted exports describe only that test pass.
 

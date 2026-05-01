@@ -471,6 +471,9 @@ function SC:CheckPendingProposalOnRosterUpdate()
         else
             Print("all present members accepted. Run started.")
         end
+        if proposal.proposalType ~= "RUN" and self.PlayUISound then
+            self:PlayUISound("PROPOSAL_CONFIRMED")
+        end
         if proposal.proposalType == "SYNC_RUN" or proposal.proposalType == "ADD_PARTICIPANT" then
             self:PartySync_ScheduleContinue("PROPOSAL_CONFIRMED")
         end
@@ -527,6 +530,9 @@ function SC:ConfirmPendingProposalPeerActive(playerKey, runId, rulesetHash)
         Print("run started from party acceptance.")
     end
 
+    if proposal.proposalType ~= "RUN" and self.PlayUISound then
+        self:PlayUISound("PROPOSAL_CONFIRMED")
+    end
     if proposal.proposalType == "SYNC_RUN" or proposal.proposalType == "ADD_PARTICIPANT" then
         self:PartySync_ScheduleContinue("PROPOSAL_CONFIRMED")
     end
@@ -1231,6 +1237,7 @@ function SC:AcceptPendingProposal()
     local db = GetDB()
     local proposal = self:GetPendingProposal()
     local playerKey = self:GetPlayerKey()
+    local wasRunActive = db.run and db.run.active == true
 
     if not proposal then
         Print("no pending proposal.")
@@ -1341,6 +1348,9 @@ function SC:AcceptPendingProposal()
         proposalId = proposal.proposalId,
         runId = proposal.runId,
     })
+    if wasRunActive and self.PlayUISound then
+        self:PlayUISound("PROPOSAL_ACCEPTED")
+    end
 
     if self.Sync_SendProposalResponse then
         self:Sync_SendProposalResponse("PROPOSAL_ACCEPT", proposal)
@@ -1497,6 +1507,9 @@ function SC:ReceiveProposalResponse(payload, playerKey)
                 proposalId = proposal.proposalId,
                 playerKey = playerKey,
             })
+            if proposal.proposedBy == self:GetPlayerKey() and self.PlayUISound and not self:CheckAllProposalMembersAccepted(proposal) then
+                self:PlayUISound("PROPOSAL_ACCEPTED")
+            end
         end
 
         if proposal.proposedBy == self:GetPlayerKey() and proposal.status == "CONFIRMED" then
@@ -1537,6 +1550,9 @@ function SC:ReceiveProposalResponse(payload, playerKey)
                 else
                     Print("all members accepted. Run started.")
                 end
+                if proposal.proposalType ~= "RUN" and self.PlayUISound then
+                    self:PlayUISound("PROPOSAL_CONFIRMED")
+                end
                 if proposal.proposalType == "SYNC_RUN" or proposal.proposalType == "ADD_PARTICIPANT" then
                     self:PartySync_ScheduleContinue("PROPOSAL_CONFIRMED")
                 end
@@ -1567,6 +1583,9 @@ function SC:ReceiveProposalResponse(payload, playerKey)
             db.pendingProposalId = nil
 
             Print(playerKey .. " declined. Proposal cancelled.")
+            if self.PlayUISound then
+                self:PlayUISound("PROPOSAL_CANCELLED")
+            end
 
             if self.Sync_SendProposalCancelled then
                 self:Sync_SendProposalCancelled(proposal)
@@ -1602,6 +1621,7 @@ function SC:ReceiveRunConfirmed(payload, confirmerKey)
     end
 
     local playerKey = self:GetPlayerKey()
+    local wasRunActive = db.run and db.run.active == true
 
     -- Only act if we already accepted this proposal and are not the proposer.
     if not proposal.acceptedBy[playerKey] then return end
@@ -1648,6 +1668,10 @@ function SC:ReceiveRunConfirmed(payload, confirmerKey)
         Print("run started: all members accepted.")
     end
 
+    if wasRunActive and proposal.proposalType ~= "RUN" and self.PlayUISound then
+        self:PlayUISound("PROPOSAL_CONFIRMED")
+    end
+
     if self.HUD_Refresh then
         self:HUD_Refresh()
     end
@@ -1673,6 +1697,7 @@ function SC:ConfirmAcceptedProposalFromStatus(proposerKey, runId, rulesetHash)
 
     local playerKey = self:GetPlayerKey()
     if not proposal.acceptedBy[playerKey] then return false end
+    local wasRunActive = db.run and db.run.active == true
 
     proposal.status = "CONFIRMED"
     if db.pendingProposalId == proposal.proposalId then
@@ -1709,6 +1734,9 @@ function SC:ConfirmAcceptedProposalFromStatus(proposerKey, runId, rulesetHash)
     })
 
     Print("run started: proposer status confirmed accepted run.")
+    if wasRunActive and proposal.proposalType ~= "RUN" and self.PlayUISound then
+        self:PlayUISound("PROPOSAL_CONFIRMED")
+    end
     if self.HUD_Refresh then self:HUD_Refresh() end
     if self.MasterUI_Refresh then self:MasterUI_Refresh() end
     return true
@@ -1730,6 +1758,9 @@ function SC:ReceiveProposalCancelled(payload, cancellerKey)
     })
 
     Print("proposal cancelled: " .. tostring(proposal.runName) .. ".")
+    if self.PlayUISound then
+        self:PlayUISound("PROPOSAL_CANCELLED")
+    end
 
     if self.HUD_Refresh then
         self:HUD_Refresh()

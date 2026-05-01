@@ -773,6 +773,9 @@ function SC:ApplyRuleAmendment(amendmentId)
                             ruleName = c.ruleName,
                         })
                     end
+                    if self.PlayUISound then
+                        self:PlayUISound("RULES_APPLIED")
+                    end
                     if self.Sync_BroadcastStatus then
                         self:Sync_BroadcastStatus("RULE_AMENDMENT_APPLIED", { fast = true })
                     end
@@ -989,6 +992,9 @@ function SC:ReceiveRuleAmendmentResponse(payload, senderKey)
                     self:PartySync_StopPlan("Party Sync stopped: rule amendment declined.")
                 end
                 DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r |cfffbbf24Rule amendment declined by " .. tostring(senderKey or "?") .. ".|r")
+                if self.PlayUISound then
+                    self:PlayUISound("PROPOSAL_CANCELLED")
+                end
             end
 
             if self.MasterUI_Refresh then self:MasterUI_Refresh() end
@@ -1043,6 +1049,9 @@ function SC:ReceiveRuleAmendmentCancelled(payload, senderKey)
 
     if cancelled then
         DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r |cfffbbf24Rule amendment was cancelled.|r")
+        if self.PlayUISound then
+            self:PlayUISound("PROPOSAL_CANCELLED")
+        end
         if self.MasterUI_Refresh then self:MasterUI_Refresh() end
         if self.HUD_Refresh then self:HUD_Refresh() end
     end

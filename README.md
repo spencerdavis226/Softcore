@@ -80,6 +80,7 @@ Common commands:
 | `/sc proposal` | Show the current pending proposal |
 | `/sc propose` | Propose a grouped run from chat |
 | `/sc propose-add Player-Realm` | Invite a party member into the current run |
+| `/sc sound on\|off\|test [event]` | Toggle Softcore UI sounds or play a test cue |
 | `/sc access` | Print access/storage rules |
 | `/sc run chat` | Print run integrity summary |
 | `/sc export` | Open a copyable CSV run summary for spreadsheets |
@@ -101,6 +102,8 @@ Grouped starts create a Charter-tab proposal:
 5. Accepted members start the same run ID and rules.
 
 Declining cancels the proposal for everyone. Pending proposals expire after 30 minutes.
+
+Softcore uses restrained UI sound cues for important moments: run start/completion, achievements, local deaths or violations, incoming governance that needs review, accepted/confirmed proposals, applied rule amendments, cancelled governance, and violation clears. Use `/sc sound off` to mute Softcore-specific cues or `/sc sound test list` to inspect the available test events.
 
 ## Existing Runs And Party Sync
 
