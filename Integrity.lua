@@ -746,6 +746,69 @@ local ACTION_CAM_ENEMY_FOCUS_PITCH = "0.4"
 local ACTION_CAM_INTERACT_FOCUS_YAW = "0"
 local ACTION_CAM_INTERACT_FOCUS_PITCH = "0"
 
+local ACTION_CAM_PROFILE_ORDER = { "SOFT", "CINEMATIC", "DRAMATIC" }
+local ACTION_CAM_PROFILES = {
+    SOFT = {
+        label = "Soft",
+        note = "gentle shoulder camera, low motion",
+        zoom = 6,
+        mountedZoom = 7,
+        keepCentered = "0",
+        reduceUnexpected = "1",
+        shoulder = "0.45",
+        mountedShoulder = "0",
+        dynamicPitch = "0",
+        enemyFocusEnable = "0",
+        interactFocusEnable = "0",
+        enemyFocusYaw = "0.25",
+        enemyFocusPitch = "0.2",
+        interactFocusYaw = "0",
+        interactFocusPitch = "0",
+        headMovement = "0.15",
+        headMovementFirstPerson = "0",
+    },
+    CINEMATIC = {
+        label = "Cinematic",
+        note = "current Softcore enforced profile",
+        zoom = 5,
+        mountedZoom = 7,
+        keepCentered = "0",
+        reduceUnexpected = "0",
+        shoulder = ACTION_CAM_SHOULDER_OFFSET,
+        mountedShoulder = ACTION_CAM_MOUNTED_SHOULDER_OFFSET,
+        dynamicPitch = "1",
+        enemyFocusEnable = "1",
+        interactFocusEnable = "0",
+        enemyFocusYaw = ACTION_CAM_ENEMY_FOCUS_YAW,
+        enemyFocusPitch = ACTION_CAM_ENEMY_FOCUS_PITCH,
+        interactFocusYaw = ACTION_CAM_INTERACT_FOCUS_YAW,
+        interactFocusPitch = ACTION_CAM_INTERACT_FOCUS_PITCH,
+        headMovement = ACTION_CAM_HEAD_MOVEMENT_STRENGTH,
+        headMovementFirstPerson = ACTION_CAM_HEAD_MOVEMENT_STRENGTH_FIRST_PERSON,
+    },
+    DRAMATIC = {
+        label = "Dramatic",
+        note = "stronger offset, target focus, and camera motion",
+        zoom = 4.5,
+        mountedZoom = 6.5,
+        keepCentered = "0",
+        reduceUnexpected = "0",
+        shoulder = "0.85",
+        mountedShoulder = "0.25",
+        dynamicPitch = "1",
+        enemyFocusEnable = "1",
+        interactFocusEnable = "1",
+        enemyFocusYaw = "0.7",
+        enemyFocusPitch = "0.55",
+        interactFocusYaw = "0.35",
+        interactFocusPitch = "0.25",
+        headMovement = "1",
+        headMovementFirstPerson = "0.5",
+    },
+}
+
+local actionCamTestProfile = nil
+
 local function SetCVarIfChanged(key, value)
     local str = tostring(value)
     if GetCVarCompat(key) ~= str then
@@ -822,7 +885,34 @@ end
 
 local function GetActionCamZoomTarget()
     if GetRunCameraMode() ~= "CINEMATIC" then return nil end
-    return (IsMounted and IsMounted()) and 7 or 5
+    local profile = ACTION_CAM_PROFILES[actionCamTestProfile] or ACTION_CAM_PROFILES.CINEMATIC
+    return (IsMounted and IsMounted()) and profile.mountedZoom or profile.zoom
+end
+
+local function ApplyActionCamProfileSettings(profile)
+    local mounted = IsMounted and IsMounted()
+
+    SetCVarIfChanged("CameraKeepCharacterCentered", profile.keepCentered)
+    SetCVarIfChanged("CameraReduceUnexpectedMovement", profile.reduceUnexpected)
+    SetCVarIfChanged("test_cameraOverShoulder", mounted and profile.mountedShoulder or profile.shoulder)
+    SetCVarIfChanged("test_cameraDynamicPitch", profile.dynamicPitch)
+    SetCVarIfChanged("test_cameraTargetFocusEnemyEnable", profile.enemyFocusEnable)
+    SetCVarIfChanged("test_cameraTargetFocusInteractEnable", profile.interactFocusEnable)
+    SetCVarIfChanged("test_cameraTargetFocusEnemyStrengthYaw", profile.enemyFocusYaw)
+    SetCVarIfChanged("test_cameraTargetFocusEnemyStrengthPitch", profile.enemyFocusPitch)
+    SetCVarIfChanged("test_cameraTargetFocusInteractStrengthYaw", profile.interactFocusYaw)
+    SetCVarIfChanged("test_cameraTargetFocusInteractStrengthPitch", profile.interactFocusPitch)
+    SetCVarIfChanged("test_cameraHeadMovementStrength", IsFirstPersonZoomedIn()
+        and profile.headMovementFirstPerson
+        or profile.headMovement)
+
+    if not IsNpcInteractionActive() and not HasHostileCameraTarget() then
+        local target = (mounted and profile.mountedZoom) or profile.zoom
+        local current = GetCameraZoom and GetCameraZoom() or target
+        if current - target > 0.5 then
+            CameraZoomIn(current - target)
+        end
+    end
 end
 
 function SC:IsActionCamEnforced()
@@ -853,6 +943,71 @@ function SC:SetCameraMode(mode)
     if self.MasterUI_Refresh then self:MasterUI_Refresh() end
     if self.HUD_Refresh then self:HUD_Refresh() end
     return true
+end
+
+function SC:PrintActionCamTestStatus()
+    local activeProfile = ACTION_CAM_PROFILES[actionCamTestProfile]
+    Print("camera test profile: " .. (activeProfile and activeProfile.label or "off"))
+    if activeProfile then
+        Print(activeProfile.note)
+    end
+    Print("macro: /sc camera next")
+    Print("profiles: soft, cinematic, dramatic, off")
+    Print("current CVars: shoulder=" .. tostring(GetCVarCompat("test_cameraOverShoulder"))
+        .. ", dynamicPitch=" .. tostring(GetCVarCompat("test_cameraDynamicPitch"))
+        .. ", enemyFocus=" .. tostring(GetCVarCompat("test_cameraTargetFocusEnemyEnable"))
+        .. ", interactFocus=" .. tostring(GetCVarCompat("test_cameraTargetFocusInteractEnable"))
+        .. ", headMovement=" .. tostring(GetCVarCompat("test_cameraHeadMovementStrength")))
+end
+
+function SC:SetActionCamTestProfile(profileKey)
+    profileKey = string.upper(tostring(profileKey or ""))
+    if profileKey == "" or profileKey == "STATUS" then
+        self:PrintActionCamTestStatus()
+        return true
+    end
+
+    if profileKey == "OFF" or profileKey == "DEFAULT" or profileKey == "RESTORE" then
+        actionCamTestProfile = nil
+        self:RestoreActionCamSettings()
+        Print("camera test profile: off")
+        return true
+    end
+
+    if profileKey == "NEXT" or profileKey == "TOGGLE" or profileKey == "CYCLE" then
+        local nextIndex = 1
+        for i, key in ipairs(ACTION_CAM_PROFILE_ORDER) do
+            if key == actionCamTestProfile then
+                nextIndex = i + 1
+                break
+            end
+        end
+        if nextIndex > #ACTION_CAM_PROFILE_ORDER then
+            actionCamTestProfile = nil
+            self:RestoreActionCamSettings()
+            Print("camera test profile: off")
+            return true
+        end
+        profileKey = ACTION_CAM_PROFILE_ORDER[nextIndex]
+    end
+
+    local profile = ACTION_CAM_PROFILES[profileKey]
+    if not profile then
+        Print("usage: /sc camera status|next|soft|cinematic|dramatic|off")
+        return false
+    end
+
+    CaptureActionCamOriginals()
+    actionCamTestProfile = profileKey
+    ApplyActionCamProfileSettings(profile)
+    Print("camera test profile: " .. profile.label .. " - " .. profile.note)
+    return true
+end
+
+function SC:HandleActionCamSlash(input)
+    local profileKey = string.lower(strtrim(input or ""))
+    if profileKey == "" then profileKey = "status" end
+    return self:SetActionCamTestProfile(profileKey)
 end
 
 function SC:RestoreActionCamSettings()
@@ -906,29 +1061,7 @@ function SC:EnforceActionCamSettings()
 
     CaptureActionCamOriginals()
 
-    local mounted = IsMounted and IsMounted()
-
-    SetCVarIfChanged("CameraKeepCharacterCentered", "0")
-    SetCVarIfChanged("CameraReduceUnexpectedMovement", "0")
-    SetCVarIfChanged("test_cameraOverShoulder", mounted and ACTION_CAM_MOUNTED_SHOULDER_OFFSET or ACTION_CAM_SHOULDER_OFFSET)
-    SetCVarIfChanged("test_cameraDynamicPitch", "1")
-    SetCVarIfChanged("test_cameraTargetFocusEnemyEnable", "1")
-    SetCVarIfChanged("test_cameraTargetFocusInteractEnable", "0")
-    SetCVarIfChanged("test_cameraTargetFocusEnemyStrengthYaw", ACTION_CAM_ENEMY_FOCUS_YAW)
-    SetCVarIfChanged("test_cameraTargetFocusEnemyStrengthPitch", ACTION_CAM_ENEMY_FOCUS_PITCH)
-    SetCVarIfChanged("test_cameraTargetFocusInteractStrengthYaw", ACTION_CAM_INTERACT_FOCUS_YAW)
-    SetCVarIfChanged("test_cameraTargetFocusInteractStrengthPitch", ACTION_CAM_INTERACT_FOCUS_PITCH)
-    local headMovementStrength = IsFirstPersonZoomedIn()
-        and ACTION_CAM_HEAD_MOVEMENT_STRENGTH_FIRST_PERSON
-        or ACTION_CAM_HEAD_MOVEMENT_STRENGTH
-    SetCVarIfChanged("test_cameraHeadMovementStrength", headMovementStrength)
-
-    if not IsNpcInteractionActive() and not HasHostileCameraTarget() then
-        local current = GetCameraZoom and GetCameraZoom() or target
-        if current - target > 0.5 then
-            CameraZoomIn(current - target)
-        end
-    end
+    ApplyActionCamProfileSettings(ACTION_CAM_PROFILES[actionCamTestProfile] or ACTION_CAM_PROFILES.CINEMATIC)
 end
 
 do

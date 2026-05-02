@@ -2775,6 +2775,7 @@ function SC:PrintHelp()
     Print("  /sc propose-add Player-Realm")
     Print("  /sc announce off|chat|party|guild")
     Print("  /sc sound on|off|test [event]")
+    Print("  /sc camera status|next|soft|cinematic|dramatic|off")
     Print("  /sc resync        re-sync state with party")
     Print("  /sc hud          toggle the HUD")
     Print("  /sc minimap      toggle the minimap button")
@@ -2934,6 +2935,12 @@ function SC:HandleSlash(input)
             self:TestUISound(arg)
         else
             Print("usage: /sc sound on|off|test [event]")
+        end
+    elseif command == "camera" or command == "cam" or command == "actioncam" then
+        if self.HandleActionCamSlash then
+            self:HandleActionCamSlash(rest)
+        else
+            Print("camera helpers are not loaded.")
         end
     elseif command == "resync" then
         if self.Sync_RequestFullState then

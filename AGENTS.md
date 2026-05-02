@@ -26,6 +26,8 @@ The HUD is compact and glanceable. It shows local run status when solo, party st
 
 Softcore-specific UI sounds are centralized through `SC:PlayUISound`. Keep cues restrained and reserved for milestones, attention states, and resolutions: run start/completion, achievements, local death/violations, incoming governance review, proposal acceptance or confirmation, cancelled governance, applied rules, and violation clears. `/sc sound on|off|test [event]` controls and tests these cues.
 
+Temporary cinematic camera profile testing is exposed through `/sc camera status|next|soft|cinematic|dramatic|off`. It is a local tuning helper for comparing ActionCam CVars in game and must not change run rules, proposal payloads, achievements, or synced state.
+
 ## Core Safety Principle
 
 Softcore is individual-first.
@@ -262,6 +264,7 @@ Useful commands:
 - `/sc resync`
 - `/sc reset confirm end run`
 - `/sc sound on|off|test [event]`
+- `/sc camera status|next|soft|cinematic|dramatic|off`
 
 `/sc dc` clears the in-memory debug trace and resets test-oriented sync counters such as stale send drops, coalesced status drops, send failures, and expired chunk buffers. Use it at the start of every A/B test so pasted exports describe only that test pass.
 

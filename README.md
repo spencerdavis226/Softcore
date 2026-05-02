@@ -84,6 +84,7 @@ Common commands:
 | `/sc propose` | Propose a grouped run from chat |
 | `/sc propose-add Player-Realm` | Invite a party member into the current run |
 | `/sc sound on\|off\|test [event]` | Toggle Softcore UI sounds or play a test cue |
+| `/sc camera status\|next\|soft\|cinematic\|dramatic\|off` | Try temporary cinematic camera profiles for live tuning |
 | `/sc access` | Print access/storage rules |
 | `/sc run chat` | Print run integrity summary |
 | `/sc runlabel` | Print run label diagnostics and nearest preset mismatches |
