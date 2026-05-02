@@ -235,6 +235,59 @@ Boundary behavior:
 - [x] Audit remote status participant writes so same-run display remains useful without bypassing proposal, invite, late-join, or leader-approval rules.
 - [ ] Add in-game party test passes for disconnect/reload, non-addon members, members joining/leaving during pending proposals, and rule amendment expiry.
 
+## CurseForge Publish Checklist
+
+Use this as the last-mile checklist before uploading a public file.
+
+Release readiness:
+
+- [ ] Run a syntax pass against all TOC-loaded Lua files.
+- [ ] Verify the Retail interface number in-game with `/dump select(4, GetBuildInfo())` and update `## Interface` in `Softcore.toc` if needed.
+- [ ] Confirm `## Version` in `Softcore.toc` and `SC.version` in `Core.lua` match the release version.
+- [ ] Add or confirm the project license selected for CurseForge, and keep a local `LICENSE` file when possible.
+- [ ] Prepare CurseForge page copy: short summary, full description, categories, logo, supported Retail version, release type, and changelog.
+- [ ] For the first public upload, prefer `Beta` unless every multiplayer checklist below has passed cleanly.
+
+Package contents:
+
+- [ ] Build a clean zip with the top-level folder named `Softcore`.
+- [ ] Include `Softcore.toc`, all Lua files loaded by the TOC, `Assets/*.tga`, `README.md`, changelog/release notes, and license.
+- [ ] Exclude `.git`, `.claude`, `.cursor`, `.vscode`, `AGENTS.md`, `DESIGN.md`, editor files, local test files, and unused stubs such as empty files not loaded by the TOC.
+- [ ] Install from the exact zip into a clean `Interface/AddOns` folder and confirm the addon appears as `Softcore`.
+
+Single-client smoke test:
+
+- [ ] Log in with only Softcore plus normal debugging addons enabled.
+- [ ] Confirm no BugSack errors on login, `/reload`, opening the menu, and switching all tabs.
+- [ ] Run `/sc`, `/sc status`, `/sc rules`, `/sc log`, `/sc violations`, `/sc gear`, `/sc dungeons`, `/sc runlabel`, `/sc sound test list`, and `/sc export`.
+- [ ] Start a solo run, reload, and confirm run state, HUD, minimap button, logs, rules, and active time remain sane.
+- [ ] Trigger or inspect representative rule checks where practical: gear, mailbox/bank/auction/trade access, mount/flying/flight-path rules, dungeon tracking, and violation clear.
+- [ ] Verify inactive/no-run states do not nil-error after reset with `/sc reset confirm end run`.
+
+Two-client party test setup:
+
+- [ ] Computer A: `Cathe-Thrall`, usually party leader/proposer.
+- [ ] Computer B: `Hordrien-Thrall`, usually party member/receiver/accepter.
+- [ ] Start each test with `/reload` on both clients, then `/sc dc <test name>` on both clients.
+- [ ] Use `/sc reset confirm end run` on both clients when a clean inactive state is required.
+- [ ] After each sync-heavy action, wait 10-30 seconds for addon-message queue settling.
+- [ ] After each pass, collect `/sc syncdebug`, `/sc debuglog`, and `/sc dl` from both clients if anything looks wrong.
+
+Two-client multiplayer checklist:
+
+- [ ] Fresh grouped run proposal: A proposes, B reviews in Charter, B accepts, A confirms, both start the same run ID and rules hash.
+- [ ] Party Sync for separate matching active runs: A routes through run-sync proposal, B accepts, both settle to the same run ID without wiping local history.
+- [ ] Party Sync for mismatched active rules: A proposes amendment, B sees highlighted diffs, B accepts, both settle to the same rules hash with one meaningful amendment log row per changed rule.
+- [ ] Invite into active run: A has active grouped run, B is not in run, Party Sync routes to invite, B accepts, both show compatible participant rows.
+- [ ] Disconnect/reload: reload B during pending and settled states; verify stale rows recover through heartbeat/resync and no local run is reset.
+- [ ] Non-addon member: add a player without Softcore or with addon disabled; verify Party Sync blocks inclusion after grace period and HUD/Charter show a clear blocker.
+- [ ] Join/leave during pending proposal: party member leaves or joins while a proposal is pending; verify no late apply, no silent local mutation, and no audit spam.
+- [ ] Proposal expiry: leave a proposal pending past 30 minutes or simulate the expiry path; late accept/confirm should be ignored.
+- [ ] Rule amendment expiry: leave an amendment pending past 30 minutes or simulate the expiry path; late accept/apply should be ignored.
+- [ ] Raid conversion: convert party to raid during or after governance; Softcore becomes local-only, clears remote roster display, and expires pending group governance without resetting local runs.
+- [ ] Remote safety: remote death, reset, violation, rules mismatch, run mismatch, stale message, or violation clear never fails, resets, overwrites, or clears local authoritative state.
+- [ ] Final pass checks on both clients: run ID, ruleset hash, pending proposal/amendment state, participants, party status, HUD lamp/text, active violations, conflicts, `/sc log`, `/sc syncdebug`, and no BugSack errors.
+
 ## What Softcore Tracks
 
 - Character name, realm, class, level, and zone

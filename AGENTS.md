@@ -276,6 +276,42 @@ Check for:
 - proposals/amendments expiring instead of applying late
 - commands handling inactive states safely
 
+## CurseForge Publish Readiness
+
+Maintain this section as the release gate for public CurseForge uploads. Future AI chats should treat unchecked items here and in the README's **CurseForge Publish Checklist** as active context, not historical notes.
+
+Before recommending a public `Release` upload:
+
+- syntax-check all TOC-loaded Lua files
+- verify the current Retail interface number in-game with `/dump select(4, GetBuildInfo())`
+- keep `## Interface`, `## Version`, and `SC.version` aligned
+- confirm a project license and preferably a local `LICENSE` file
+- prepare CurseForge summary, description, categories, logo, supported Retail version, release type, and changelog
+- prefer a first public `Beta` file unless every multiplayer checklist has passed cleanly
+
+Package requirements:
+
+- zip must contain a top-level `Softcore` folder with `Softcore/Softcore.toc`
+- include TOC-loaded Lua files, `Assets/*.tga`, `README.md`, release notes/changelog, and license
+- exclude `.git`, `.claude`, `.cursor`, `.vscode`, `AGENTS.md`, `DESIGN.md`, editor files, local test files, and unused empty stubs
+- install and smoke-test the exact zip from a clean `Interface/AddOns` folder before upload
+
+Required release test passes:
+
+- single-client smoke: login, `/reload`, every menu tab, HUD, minimap button, slash commands, sound test list, export, solo start, reset, and active-run persistence
+- grouped proposal: A proposes, B accepts, A confirms, both share run ID/rules hash
+- Party Sync for matching active runs: explicit run-sync proposal aligns run ID without wiping local history
+- Party Sync for mismatched active rules: amendment review highlights diffs and settles to one rules hash with meaningful logs
+- active-run invite: Party Sync invites a not-in-run party member without changing existing participant history
+- disconnect/reload: stale rows recover through heartbeat/resync without local reset
+- non-addon member: Party Sync blocks inclusion after the grace period with clear HUD/Charter state
+- join/leave during pending governance: no late apply, no silent local mutation, no audit spam
+- proposal expiry and rule amendment expiry: late accept/confirm/apply messages are ignored
+- raid conversion: Softcore becomes local-only and expires pending group governance without resetting local runs
+- remote safety: remote death, reset, failure, mismatch, stale message, or violation clear never mutates local authoritative validity, rules, logs, deaths, or violations
+
+For each multiplayer release test, start with `/reload` and `/sc dc <test name>` on both computers, wait 10-30 seconds after sync-heavy actions, and collect `/sc syncdebug`, `/sc debuglog`, and `/sc dl` from both clients when diagnosing.
+
 ## Rolling documentation updates
 
 There is no separate doc bot or CI job. **Rolling updates are a required part of feature work:** keep `AGENTS.md` and `README.md` aligned with reality in the **same commit** as the code (or split only if the user explicitly wants a doc-only follow-up).
