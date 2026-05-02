@@ -278,6 +278,10 @@ local function FormatDuration(seconds)
     return string.format("%dm", minutes)
 end
 
+local DEBUG_EXPORT_MAX_AUDIT_ROWS = 300
+local DEBUG_EXPORT_MAX_VIOLATION_ROWS = 200
+local DEBUG_EXPORT_MAX_TRACE_ROWS = 300
+
 local function GetPlayerSnapshot()
     local name, realm = UnitFullName("player")
 
@@ -2476,10 +2480,17 @@ local function BuildDebugExportText()
     local character = db.character or GetPlayerSnapshot()
     local lines = {}
     local localKey = GetPlayerKey(character)
+    local buildVersion, buildNumber, buildDate, interfaceVersion
+    if GetBuildInfo then
+        buildVersion, buildNumber, buildDate, interfaceVersion = GetBuildInfo()
+    end
 
     table.insert(lines, "Section,Field,Value,Time,Actor,Kind,Message")
-    AddCsvLine(lines, "Info", "Format", "Softcore debug export - paste both clients into chat")
+    AddCsvLine(lines, "Info", "Format", "Softcore bounded debug export - paste from every involved client")
     AddCsvLine(lines, "Info", "Exported", FormatTime(time()))
+    AddCsvLine(lines, "Info", "Addon Version", SC.version or "?")
+    AddCsvLine(lines, "Info", "WoW Build", tostring(buildVersion or "?") .. " build=" .. tostring(buildNumber or "?") .. " interface=" .. tostring(interfaceVersion or "?") .. " date=" .. tostring(buildDate or "?"))
+    AddCsvLine(lines, "Info", "Caps", "audit newest " .. tostring(DEBUG_EXPORT_MAX_AUDIT_ROWS) .. " | violations newest " .. tostring(DEBUG_EXPORT_MAX_VIOLATION_ROWS) .. " | trace newest " .. tostring(DEBUG_EXPORT_MAX_TRACE_ROWS))
     AddCsvLine(lines, "Character", "Player", localKey)
     AddCsvLine(lines, "Character", "Level", character.level or "?")
     AddCsvLine(lines, "Character", "Zone", character.zone or "?")
@@ -2500,6 +2511,13 @@ local function BuildDebugExportText()
     AddKeyValueCsv(lines, "Sync", "Last Stale Send Drop", db.sync and db.sync.lastStaleSendDrop)
     AddCsvLine(lines, "Sync", "Coalesced Status Drops", db.sync and db.sync.coalescedStatusDrops or 0)
     AddKeyValueCsv(lines, "Sync", "Last Coalesced Status Drop", db.sync and db.sync.lastCoalescedStatusDrop)
+    AddCsvLine(lines, "Sync", "Send Failures", db.sync and db.sync.sendFailureCount or 0)
+    AddKeyValueCsv(lines, "Sync", "Last Send Error", db.sync and db.sync.lastSendError)
+    AddCsvLine(lines, "Sync", "Expired Chunk Buffers", db.sync and db.sync.expiredChunkBuffers or 0)
+    AddKeyValueCsv(lines, "Sync", "Last Expired Chunk", db.sync and db.sync.lastExpiredChunk)
+    AddKeyValueCsv(lines, "Sync", "Last Queued Send", db.sync and db.sync.lastQueuedSend)
+    AddKeyValueCsv(lines, "Sync", "Last Full State Request", db.sync and db.sync.lastFullStateRequest)
+    AddKeyValueCsv(lines, "Sync", "Last Full State Response", db.sync and db.sync.lastFullStateResponse)
 
     local proposal = SC.GetPendingProposal and SC:GetPendingProposal() or nil
     if proposal then
@@ -2508,7 +2526,19 @@ local function BuildDebugExportText()
         AddCsvLine(lines, "Proposal", "Pending", "none")
     end
 
-    for _, violation in ipairs(db.violations or {}) do
+    for _, amendment in ipairs(db.ruleAmendments or {}) do
+        if amendment.status == "PENDING" or amendment.status == "ACCEPTED" then
+            AddCsvLine(lines, "Amendment", amendment.id or "?", amendment.status or "?", FormatTime(amendment.proposedAt), amendment.proposedBy or "", amendment.fullRulesProposal and "FULL_RULES" or "PARTIAL", amendment.reason or "")
+        end
+    end
+
+    local violationCount = #(db.violations or {})
+    local violationStart = math.max(1, violationCount - DEBUG_EXPORT_MAX_VIOLATION_ROWS + 1)
+    if violationCount > DEBUG_EXPORT_MAX_VIOLATION_ROWS then
+        AddCsvLine(lines, "Violation", "Omitted Older Rows", tostring(violationCount - DEBUG_EXPORT_MAX_VIOLATION_ROWS))
+    end
+    for index = violationStart, violationCount do
+        local violation = db.violations[index]
         AddCsvLine(
             lines,
             "Violation",
@@ -2521,7 +2551,13 @@ local function BuildDebugExportText()
         )
     end
 
-    for _, entry in ipairs(db.eventLog or {}) do
+    local auditCount = #(db.eventLog or {})
+    local auditStart = math.max(1, auditCount - DEBUG_EXPORT_MAX_AUDIT_ROWS + 1)
+    if auditCount > DEBUG_EXPORT_MAX_AUDIT_ROWS then
+        AddCsvLine(lines, "Audit", "Omitted Older Rows", tostring(auditCount - DEBUG_EXPORT_MAX_AUDIT_ROWS))
+    end
+    for index = auditStart, auditCount do
+        local entry = db.eventLog[index]
         AddCsvLine(lines, "Audit", entry.id or "?", "", FormatTime(entry.time), entry.actorKey or entry.playerKey or "", entry.kind or "?", entry.message or "")
     end
 
@@ -2548,7 +2584,14 @@ local function BuildDebugExportText()
         AddCsvLine(lines, "Conflict", conflict.playerKey or "?", conflict.type or "?", FormatTime(conflict.detectedAt), "", conflict.active and "ACTIVE" or "CLEARED", "local=" .. tostring(conflict.localValue) .. " remote=" .. tostring(conflict.remoteValue))
     end
 
-    for index, entry in ipairs(db.debugTrace or {}) do
+    local trace = db.debugTrace or {}
+    local traceCount = #trace
+    local traceStart = math.max(1, traceCount - DEBUG_EXPORT_MAX_TRACE_ROWS + 1)
+    if traceCount > DEBUG_EXPORT_MAX_TRACE_ROWS then
+        AddCsvLine(lines, "Trace", "Omitted Older Rows", tostring(traceCount - DEBUG_EXPORT_MAX_TRACE_ROWS))
+    end
+    for index = traceStart, traceCount do
+        local entry = trace[index]
         AddKeyValueCsv(lines, "Trace", tostring(index) .. " " .. tostring(entry.kind or "?"), entry)
     end
 
@@ -2667,7 +2710,7 @@ end
 
 function SC:ShowDebugExport()
     local text = BuildDebugExportText()
-    if ShowRunExportWindow(text, "Softcore Debug Export", "Paste this from both clients when tracing sync or violation lifecycles.") then
+    if ShowRunExportWindow(text, "Softcore Bug Report", "Paste this bounded CSV from every involved client after the problem happens.") then
         Print("debug export opened for copy.")
     else
         self:PrintDebugExport()
@@ -2765,7 +2808,7 @@ function SC:PrintHelp()
     Print("  /sc participants  show current participants")
     Print("  /sc conflicts     print active party conflicts")
     Print("  /sc syncdebug | sd  print sync diagnostics")
-    Print("  /sc debuglog | dl   copy sync/audit debug export")
+    Print("  /sc debuglog | dl | bug copy bounded bug-report export")
     Print("  /sc debugclear | dc clear debug trace for a fresh test")
     Print("  /sc gear          print equipped gear rule status")
     Print("  /sc dungeons      print dungeon tracking state")
@@ -2896,7 +2939,7 @@ function SC:HandleSlash(input)
         else
             Print("sync debug is not loaded.")
         end
-    elseif command == "debuglog" or command == "debug" or command == "dl" then
+    elseif command == "debuglog" or command == "debug" or command == "dl" or command == "bugreport" or command == "bug" then
         local sub = string.lower(strtrim(rest or ""))
         if sub == "chat" or sub == "print" then
             self:PrintDebugExport()

@@ -77,7 +77,7 @@ Common commands:
 | `/sc dungeons` | Print dungeon tracking state |
 | `/sc participants` | Print current participants |
 | `/sc conflicts` | Print active conflicts |
-| `/sc debuglog` or `/sc dl` | Open a copyable sync/audit debug export |
+| `/sc debuglog`, `/sc dl`, or `/sc bug` | Open a bounded copyable bug-report export |
 | `/sc debugclear` or `/sc dc` | Clear the in-memory debug trace and test counters before a test pass |
 | `/sc syncdebug` or `/sc sd` | Print sync diagnostics |
 | `/sc proposal` | Show the current pending proposal |
@@ -90,7 +90,7 @@ Common commands:
 | `/sc runlabel` | Print run label diagnostics and nearest preset mismatches |
 | `/sc export` | Open a copyable CSV run summary for spreadsheets |
 | `/sc export chat` | Print the CSV run summary to chat |
-| `/sc debuglog chat` | Print the debug export to chat |
+| `/sc debuglog chat` | Print the bounded bug-report export to chat |
 | `/sc announce off\|chat\|party\|guild` | Configure optional death announcements; combine targets with spaces |
 | `/sc rule name value` | Change or propose a single rule value |
 
@@ -205,7 +205,9 @@ Optional death announcements are for your own character only and default to off.
 
 PvP safety checks are advisory only. During an active run, Softcore warns locally and records a local log entry when War Mode/player PvP flagging is detected; these warnings do not fail the run, add violations, or sync to party members.
 
-Use `/sc export` to open a comma-delimited CSV summary for spreadsheets. It is derived from the current local ledger: character, run ID/status, observed active time, death/violation/conflict counts, rules hash, participants, and recent log entries. The export is a convenience summary, not external verification.
+Use `/sc export` to open a comma-delimited CSV summary for spreadsheets. It is derived from the current local ledger: character, run ID/status, observed active time, death/violation/conflict counts, rules hash, participants, and the full stored audit log. The export is a convenience summary, not external verification.
+
+For bug reports, use `/sc bug` or `/sc dl` after the problem happens. The copyable CSV is intentionally bounded for chat/email: it includes current character/run/rules/sync state, pending proposal/amendment state, participants, peers, conflicts, sync counters, the newest audit rows, the newest violations, and the capped debug trace. In multiplayer tests, send this export from every involved client after starting the test with `/sc dc <test name>`. Include any BugSack/Lua error text separately because Blizzard UI errors are not part of Softcore's SavedVariables ledger.
 
 ## Completion Awards
 
