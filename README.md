@@ -46,6 +46,7 @@ The HUD is a compact glance view shown during active runs.
 - Starting a new run always shows the HUD by default.
 - The HUD also appears for pending governance states, such as run proposals before a run starts.
 - Lamp colors: green (valid/synced), blue (syncing/settling), yellow (warning/conflict/blocked/review needed), orange (party member failed, local character still valid), red (local failed), gray (no run/pending).
+- Solo rule edits apply locally without a HUD settling state; Settling is reserved for grouped proposal/amendment flow timing.
 - The text is intentionally short and single-line, including limbo and blocker states such as Details, Review, Waiting, Settling, Syncing, Invite, Run Sync, No Addon, Offline, Raid Local, Version, Rules, Run ID, Not In Run, and Level Gap.
 - Clicking the HUD opens the most relevant main tab (typically Overview, Violations, or Charter).
 
@@ -112,7 +113,7 @@ Softcore uses restrained UI sound cues for important moments: run start/completi
 
 Softcore syncs over Blizzard addon messages using the `SOFTCORE` prefix. It supports normal parties only; raid groups are treated as local-only and show a raid-unsupported note instead of syncing or displaying a 40-player roster.
 
-Status heartbeats are sent every 10 seconds as a safety net, while user-driven changes send compact high-priority updates immediately. Proposals and rule amendments wake the Charter tab with a tiny notice first, then fetch the larger rule details before acceptance is enabled; acceptance and confirmation use explicit proposal controls, not status heartbeats alone. If details are delayed, the Charter tab offers retry/decline/cancel controls instead of leaving the flow stuck. Party audit logs are treated as delayed bulk traffic so they do not slow proposal/rule controls. Reloading or rejoining may briefly show Unsynced until addon messages arrive. Use `/sc resync` or **Party Sync** in the Charter tab if the display looks stale.
+Status heartbeats are sent every 10 seconds as a safety net, while user-driven changes send compact high-priority updates immediately. Proposals and rule amendments wake the Charter tab with a tiny notice first, then fetch the larger rule details before acceptance is enabled; acceptance and confirmation use explicit proposal controls, not status heartbeats alone. Proposal details, cancels, accepts, declines, and amendment responses are scoped to the original proposer/voters so unrelated party members cannot hijack or cancel a governance flow. If details are delayed, the Charter tab offers retry/decline/cancel controls instead of leaving the flow stuck. Party audit logs are treated as delayed bulk traffic so they do not slow proposal/rule controls. Reloading or rejoining may briefly show Unsynced until addon messages arrive. Use `/sc resync` or **Party Sync** in the Charter tab if the display looks stale.
 
 Party state is display and compatibility data. Remote state should not reset, fail, or overwrite the local character's run.
 

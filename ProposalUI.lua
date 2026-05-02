@@ -205,6 +205,12 @@ local function IsGroupProposal(proposal)
         or proposal.proposalType == "ADD_PARTICIPANT"
 end
 
+local function IsSupportedProposalType(proposalType)
+    return proposalType == "RUN"
+        or proposalType == "SYNC_RUN"
+        or proposalType == "ADD_PARTICIPANT"
+end
+
 local function ActivateAcceptedProposalParticipants(self, proposal)
     if not proposal or not proposal.acceptedBy then
         return
@@ -436,6 +442,23 @@ function SC:CheckAllProposalMembersAccepted(proposal)
     end
 
     return true
+end
+
+local function IsProposalVoter(proposal, playerKey)
+    if not proposal or not playerKey or playerKey == "" then
+        return false
+    end
+
+    if proposal.targetPlayerKey then
+        return playerKey == proposal.targetPlayerKey
+    end
+
+    local party = proposal.partyAtProposalTime
+    if not party or not next(party) then
+        return true
+    end
+
+    return party[playerKey] == true
 end
 
 -- Called on GROUP_ROSTER_UPDATE. If the local player is the proposer and a member who
@@ -1111,6 +1134,18 @@ end
 function SC:ReceiveRunProposal(payload, proposerKey)
     local db = GetDB()
     local now = time()
+    local proposalId = payload.proposalId
+    local proposalType = payload.proposalKind or "RUN"
+    local proposedAt = tonumber(payload.proposedAt) or now
+    if not proposalId or proposalId == "" or not payload.proposalRunId or payload.proposalRunId == "" or not IsSupportedProposalType(proposalType) then
+        return
+    end
+    if proposedAt > now + 60 then
+        proposedAt = now
+    elseif now - proposedAt > PROPOSAL_TIMEOUT_SECONDS then
+        return
+    end
+
     local hasDetails = payload.ruleset and payload.ruleset ~= ""
     local ruleset = hasDetails and self:DeserializeRuleset(payload.ruleset) or self:GetDefaultRuleset()
     local computedHash = hasDetails and self:ComputeRulesetHash(ruleset) or (payload.proposalRulesetHash or payload.rulesetHash or "")
@@ -1125,18 +1160,18 @@ function SC:ReceiveRunProposal(payload, proposerKey)
 
     local voterKeys = payload.voterKeys and payload.voterKeys ~= "" and ParseKeySet(payload.voterKeys) or GetCurrentPartyKeys()
     local proposal = {
-        proposalId = payload.proposalId,
+        proposalId = proposalId,
         runId = payload.proposalRunId,
         runName = payload.runName or "Softcore Run",
         proposedBy = proposerKey,
-        proposedAt = tonumber(payload.proposedAt) or now,
+        proposedAt = proposedAt,
         ruleset = ruleset,
         rulesetHash = payload.proposalRulesetHash or computedHash,
         preset = payload.preset or "CUSTOM",
         acceptedBy = {},
         declinedBy = {},
         status = "PENDING",
-        proposalType = payload.proposalKind or "RUN",
+        proposalType = proposalType,
         targetPlayerKey = payload.proposalTargetPlayerKey or payload.targetPlayerKey,
         partyAtProposalTime = voterKeys,
         detailsPending = not hasDetails,
@@ -1186,6 +1221,16 @@ function SC:ReceiveRunProposal(payload, proposerKey)
 
     local sameExisting = db.proposals[proposal.proposalId]
     if sameExisting then
+        if sameExisting.proposedBy and sameExisting.proposedBy ~= proposerKey then
+            if self.TraceDebug then
+                self:TraceDebug("PROPOSAL_DETAILS_SENDER_MISMATCH", {
+                    proposalId = proposal.proposalId,
+                    expected = sameExisting.proposedBy,
+                    sender = proposerKey,
+                })
+            end
+            return
+        end
         sameExisting.runName = proposal.runName
         if hasDetails then
             sameExisting.ruleset = proposal.ruleset
@@ -1493,6 +1538,17 @@ function SC:ReceiveProposalResponse(payload, playerKey)
         end
         return
     end
+    if playerKey == proposal.proposedBy or not GetCurrentPartyKeys()[playerKey] or not IsProposalVoter(proposal, playerKey) then
+        if self.TraceDebug then
+            self:TraceDebug("PROPOSAL_RESPONSE_UNAUTHORIZED", {
+                proposalId = proposal.proposalId,
+                messageType = payload.type,
+                playerKey = playerKey,
+                proposedBy = proposal.proposedBy,
+            })
+        end
+        return
+    end
 
     if payload.type == "PROPOSAL_ACCEPT" then
         if proposal.status == "CANCELLED" or proposal.status == "DECLINED" or proposal.status == "EXPIRED" then
@@ -1747,6 +1803,17 @@ function SC:ReceiveProposalCancelled(payload, cancellerKey)
     local db = GetDB()
     local proposal = db.proposals[payload.proposalId]
     if not proposal then return end
+    if cancellerKey ~= proposal.proposedBy then
+        if self.TraceDebug then
+            self:TraceDebug("PROPOSAL_CANCEL_UNAUTHORIZED", {
+                proposalId = payload.proposalId,
+                sender = cancellerKey,
+                proposedBy = proposal.proposedBy,
+            })
+        end
+        return
+    end
+    if payload.runId and proposal.runId and payload.runId ~= proposal.runId then return end
 
     proposal.status = "CANCELLED"
     if db.pendingProposalId == proposal.proposalId then

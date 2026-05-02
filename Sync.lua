@@ -1435,6 +1435,7 @@ function SC:Sync_SendProposalCancelled(proposal)
     SendPayloadWithRepeats({
         type = "PROPOSAL_CANCELLED",
         proposalId = proposal.proposalId,
+        runId = proposal.runId,
     }, CONTROL_REPEAT_ATTEMPTS)
 end
 

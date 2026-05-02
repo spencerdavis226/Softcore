@@ -323,6 +323,36 @@ local function IsAmendmentExpired(amendment)
     return time() - (tonumber(amendment and amendment.proposedAt) or time()) > AMENDMENT_TIMEOUT_SECONDS
 end
 
+local function IsAmendmentVoter(amendment, playerKey)
+    if not amendment or not playerKey or playerKey == "" then
+        return false
+    end
+
+    local voters = amendment.partyAtProposalTime
+    if not voters or not next(voters) then
+        return true
+    end
+
+    return voters[playerKey] == true
+end
+
+local function IsTrustedRuleAmendmentSender(db, senderKey)
+    if not senderKey or senderKey == "" or not GetCurrentPartyKeys()[senderKey] then
+        return false
+    end
+
+    local participant = db and db.run and db.run.participants and db.run.participants[senderKey]
+    if not participant then
+        return false
+    end
+
+    local status = participant.status
+    return status ~= "FAILED"
+        and status ~= "RETIRED"
+        and status ~= "OUT_OF_PARTY"
+        and status ~= "NOT_IN_RUN"
+end
+
 local function CountKeys(values)
     local count = 0
     for _ in pairs(values or {}) do
@@ -794,10 +824,26 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
     local db = GetDB()
     if not db.run or not db.run.active then return end
     if payload.runId and db.run.runId and payload.runId ~= db.run.runId then return end
+    if not IsTrustedRuleAmendmentSender(db, senderKey) then
+        if self.TraceDebug then
+            self:TraceDebug("AMENDMENT_SENDER_UNAUTHORIZED", {
+                amendmentId = payload.amendmentId or payload.proposalId,
+                senderKey = senderKey,
+                runId = payload.runId,
+            })
+        end
+        return
+    end
 
     local amendmentId = payload.amendmentId or payload.proposalId
-    if not amendmentId then return end
+    if not amendmentId or amendmentId == "" then return end
     local now = time()
+    local proposedAt = tonumber(payload.proposedAt) or now
+    if proposedAt > now + 60 then
+        proposedAt = now
+    elseif now - proposedAt > AMENDMENT_TIMEOUT_SECONDS then
+        return
+    end
     local hasDetails = payload.newRules and payload.newRules ~= ""
     if self.TraceDebug then
         self:TraceDebug(hasDetails and "AMENDMENT_DETAILS_RECEIVED" or "AMENDMENT_NOTICE_RECEIVED", {
@@ -809,6 +855,16 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
     for _, existing in ipairs(db.ruleAmendments) do
         if existing.id == amendmentId then
             if hasDetails and existing.detailsPending then
+                if existing.proposedBy and existing.proposedBy ~= senderKey then
+                    if self.TraceDebug then
+                        self:TraceDebug("AMENDMENT_DETAILS_SENDER_MISMATCH", {
+                            amendmentId = amendmentId,
+                            expected = existing.proposedBy,
+                            sender = senderKey,
+                        })
+                    end
+                    return
+                end
                 local newRules = self.DeserializePartialRules and self:DeserializePartialRules(payload.newRules) or {}
                 local previousRules = self.DeserializePartialRules and self:DeserializePartialRules(payload.previousRules) or {}
                 for ruleName, value in pairs(newRules) do
@@ -907,7 +963,7 @@ function SC:ReceiveRuleAmendmentProposal(payload, senderKey)
         previousRules = previousRules,
         reason = payload.reason or "Rule amendment proposed.",
         status = "PENDING",
-        proposedAt = tonumber(payload.proposedAt) or now,
+        proposedAt = proposedAt,
         proposedBy = senderKey,
         fullRulesProposal = payload.fullRulesProposal == "1",
         remote = true,
@@ -947,6 +1003,16 @@ function SC:ReceiveRuleAmendmentResponse(payload, senderKey)
             if payload.runId and amendment.runId and payload.runId ~= amendment.runId then return end
             local currentParty = GetCurrentPartyKeys()
             if not currentParty[senderKey] then return end
+            if not IsAmendmentVoter(amendment, senderKey) then
+                if self.TraceDebug then
+                    self:TraceDebug("AMENDMENT_RESPONSE_UNAUTHORIZED", {
+                        amendmentId = amendmentId,
+                        messageType = payload.type,
+                        senderKey = senderKey,
+                    })
+                end
+                return
+            end
             if IsAmendmentExpired(amendment) then
                 amendment.status = "EXPIRED"
                 amendment.expiredAt = time()

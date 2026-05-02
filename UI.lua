@@ -194,6 +194,10 @@ local function GetPendingRuleAmendment(db)
 end
 
 local function HasRecentRuleGovernance(db)
+    if not IsInGroup() or IsInRaid() then
+        return false
+    end
+
     local now = time()
     for _, amendment in ipairs(db and db.ruleAmendments or {}) do
         local settledAt = amendment.appliedAt or amendment.declinedAt or amendment.expiredAt or amendment.noChangesAt
