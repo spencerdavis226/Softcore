@@ -2254,7 +2254,7 @@ function SC:PrintConflicts()
                     Print("  full rule diff unavailable.")
                 end
             elseif conflict.type == "RULESET_MISMATCH" then
-                Print("  full remote rules unavailable. Use /sc resync, then /sc conflicts.")
+                Print("  full remote rules unavailable. Use /sc sync, then /sc conflicts.")
             end
         end
     end
@@ -2711,7 +2711,7 @@ end
 function SC:ShowDebugExport()
     local text = BuildDebugExportText()
     if ShowRunExportWindow(text, "Softcore Bug Report", "Paste this bounded CSV from every involved client after the problem happens.") then
-        Print("debug export opened for copy.")
+        Print("bug report opened for copy.")
     else
         self:PrintDebugExport()
     end
@@ -2800,32 +2800,39 @@ end
 
 function SC:PrintHelp()
     Print("Softcore commands:")
+    Print("  /sc menu          open the main menu")
+    Print("  /sc status        show run status")
+    Print("  /sc rules         open Charter and rules")
+    Print("  /sc violations    open active issues")
+    Print("  /sc log           open audit log")
+    Print("  /sc sync          refresh party sync")
+    Print("  /sc bug           copy a bounded bug report")
+    Print("  /sc reset         show reset confirmation")
+    Print("More useful commands: /sc commands")
+end
+
+function SC:PrintCommandList()
+    Print("Softcore useful commands:")
     Print("  /sc menu | status | rules | violations | log")
-    Print("  /sc status chat | rules chat | log chat")
-    Print("  /sc run chat      print run integrity summary")
-    Print("  /sc runlabel      print run label diagnostics")
-    Print("  /sc export        copy CSV run summary")
-    Print("  /sc participants  show current participants")
+    Print("  /sc sync          refresh party sync")
+    Print("  /sc bug | report  copy a bounded bug report")
+    Print("  /sc export        copy the full run CSV")
+    Print("  /sc participants  print current participants")
     Print("  /sc conflicts     print active party conflicts")
-    Print("  /sc syncdebug | sd  print sync diagnostics")
-    Print("  /sc debuglog | dl | bug copy bounded bug-report export")
-    Print("  /sc debugclear | dc clear debug trace for a fresh test")
     Print("  /sc gear          print equipped gear rule status")
     Print("  /sc dungeons      print dungeon tracking state")
+    Print("  /sc sound on|off|test [event]")
+    Print("  /sc announce off|chat|party|guild")
+    Print("  /sc hud | minimap toggle small UI surfaces")
     Print("  /sc proposal      show pending proposal")
     Print("  /sc accept | decline")
-    Print("  /sc propose       propose a grouped run")
     Print("  /sc propose-add Player-Realm")
-    Print("  /sc announce off|chat|party|guild")
-    Print("  /sc sound on|off|test [event]")
-    Print("  /sc camera status|next|soft|cinematic|dramatic|off")
-    Print("  /sc resync        re-sync state with party")
-    Print("  /sc hud          toggle the HUD")
-    Print("  /sc minimap      toggle the minimap button")
     Print("  /sc reset confirm end run")
     Print("  /sc retire")
-    Print("  /sc access        print access rules")
-    Print("  /sc rule name value")
+    Print("Support/testing:")
+    Print("  /sc dc <test>     clear test trace counters")
+    Print("  /sc sd            print sync diagnostics")
+    Print("  /sc status chat | rules chat | log chat | run chat")
 end
 
 local function IsResetConfirmationText(text)
@@ -2846,6 +2853,8 @@ function SC:HandleSlash(input)
 
     if command == "" or command == "help" then
         self:PrintHelp()
+    elseif command == "commands" or command == "command" or command == "more" then
+        self:PrintCommandList()
     elseif command == "menu" then
         if self.OpenMasterWindow then
             self:OpenMasterWindow()
@@ -2939,7 +2948,7 @@ function SC:HandleSlash(input)
         else
             Print("sync debug is not loaded.")
         end
-    elseif command == "debuglog" or command == "debug" or command == "dl" or command == "bugreport" or command == "bug" then
+    elseif command == "debuglog" or command == "debug" or command == "dl" or command == "bugreport" or command == "bug" or command == "report" then
         local sub = string.lower(strtrim(rest or ""))
         if sub == "chat" or sub == "print" then
             self:PrintDebugExport()
@@ -2985,10 +2994,10 @@ function SC:HandleSlash(input)
         else
             Print("camera helpers are not loaded.")
         end
-    elseif command == "resync" then
+    elseif command == "resync" or command == "sync" then
         if self.Sync_RequestFullState then
             self:Sync_RequestFullState()
-            Print("requested full state from party.")
+            Print("requested fresh party sync state.")
         else
             Print("sync is not ready yet.")
         end

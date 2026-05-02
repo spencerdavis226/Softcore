@@ -59,40 +59,44 @@ Common commands:
 | Command | What it does |
 |---|---|
 | `/sc menu` | Open the main menu |
-| `/sc status` | Open Overview |
-| `/sc status chat` | Print status in chat |
-| `/sc rules` | Open Charter |
-| `/sc rules chat` | Print rules in chat |
+| `/sc status` | Show current run status |
+| `/sc rules` | Open Charter and rules |
 | `/sc violations` | Open Violations |
 | `/sc log` | Open Log |
-| `/sc resync` | Request and broadcast party sync state |
-| `/sc hud` | Toggle the HUD |
-| `/sc minimap` | Toggle the minimap button |
+| `/sc sync` | Request fresh party sync state |
+| `/sc bug` | Open a bounded copyable bug-report export |
 | `/sc reset` | Explain the destructive reset confirmation |
-| `/sc reset confirm end run` | Stop/reset the local active run |
-| `/sc retire` | Retire this character from the active run |
-| `/sc accept` | Accept the current pending proposal |
-| `/sc decline` | Decline the current pending proposal |
+
+Use `/sc commands` for useful support and testing commands without exposing every internal endpoint.
+
+Useful support commands:
+
+| Command | What it does |
+|---|---|
+| `/sc export` | Open the full run CSV for spreadsheets |
+| `/sc participants` | Print current participants |
+| `/sc conflicts` | Print active party conflicts |
 | `/sc gear` | Print equipped gear rule status |
 | `/sc dungeons` | Print dungeon tracking state |
-| `/sc participants` | Print current participants |
-| `/sc conflicts` | Print active conflicts |
-| `/sc debuglog`, `/sc dl`, or `/sc bug` | Open a bounded copyable bug-report export |
-| `/sc debugclear` or `/sc dc` | Clear the in-memory debug trace and test counters before a test pass |
-| `/sc syncdebug` or `/sc sd` | Print sync diagnostics |
-| `/sc proposal` | Show the current pending proposal |
-| `/sc propose` | Propose a grouped run from chat |
-| `/sc propose-add Player-Realm` | Invite a party member into the current run |
 | `/sc sound on\|off\|test [event]` | Toggle Softcore UI sounds or play a test cue |
-| `/sc camera status\|next\|soft\|cinematic\|dramatic\|off` | Try temporary cinematic camera profiles for live tuning |
-| `/sc access` | Print access/storage rules |
+| `/sc announce off\|chat\|party\|guild` | Configure optional death announcements; combine targets with spaces |
+| `/sc hud` | Toggle the HUD |
+| `/sc minimap` | Toggle the minimap button |
+| `/sc proposal` | Show the current pending proposal |
+| `/sc accept` | Accept the current pending proposal |
+| `/sc decline` | Decline the current pending proposal |
+| `/sc propose-add Player-Realm` | Invite a party member into the current run |
+| `/sc reset confirm end run` | Stop/reset the local active run |
+| `/sc retire` | Retire this character from the active run |
+| `/sc syncdebug` or `/sc sd` | Print sync diagnostics |
+| `/sc debugclear <test>` or `/sc dc <test>` | Clear the in-memory debug trace and test counters before a test pass |
+| `/sc debuglog`, `/sc dl`, `/sc bug`, or `/sc report` | Open a bounded copyable bug-report export |
 | `/sc run chat` | Print run integrity summary |
-| `/sc runlabel` | Print run label diagnostics and nearest preset mismatches |
-| `/sc export` | Open a copyable CSV run summary for spreadsheets |
+| `/sc status chat` | Print status in chat |
+| `/sc rules chat` | Print rules in chat |
+| `/sc log chat` | Print recent log rows in chat |
 | `/sc export chat` | Print the CSV run summary to chat |
 | `/sc debuglog chat` | Print the bounded bug-report export to chat |
-| `/sc announce off\|chat\|party\|guild` | Configure optional death announcements; combine targets with spaces |
-| `/sc rule name value` | Change or propose a single rule value |
 
 ## Starting Runs
 
@@ -114,7 +118,7 @@ Softcore uses restrained UI sound cues for important moments: run start/completi
 
 Softcore syncs over Blizzard addon messages using the `SOFTCORE` prefix. It supports normal parties only; raid groups are treated as local-only and show a raid-unsupported note instead of syncing or displaying a 40-player roster.
 
-Status heartbeats are sent every 10 seconds as a safety net, while user-driven changes send compact high-priority updates immediately. Proposals and rule amendments wake the Charter tab with a tiny notice first, then fetch the larger rule details before acceptance is enabled; acceptance and confirmation use explicit proposal controls, not status heartbeats alone. Proposal details, cancels, accepts, declines, and amendment responses are scoped to the original proposer/voters so unrelated party members cannot hijack or cancel a governance flow. If details are delayed, the Charter tab offers retry/decline/cancel controls instead of leaving the flow stuck. Party audit logs are treated as delayed bulk traffic so they do not slow proposal/rule controls. Reloading or rejoining may briefly show Unsynced until addon messages arrive. Use `/sc resync` or **Party Sync** in the Charter tab if the display looks stale.
+Status heartbeats are sent every 10 seconds as a safety net, while user-driven changes send compact high-priority updates immediately. Proposals and rule amendments wake the Charter tab with a tiny notice first, then fetch the larger rule details before acceptance is enabled; acceptance and confirmation use explicit proposal controls, not status heartbeats alone. Proposal details, cancels, accepts, declines, and amendment responses are scoped to the original proposer/voters so unrelated party members cannot hijack or cancel a governance flow. If details are delayed, the Charter tab offers retry/decline/cancel controls instead of leaving the flow stuck. Party audit logs are treated as delayed bulk traffic so they do not slow proposal/rule controls. Reloading or rejoining may briefly show Unsynced until addon messages arrive. Use `/sc sync` or **Party Sync** in the Charter tab if the display looks stale.
 
 Party state is display and compatibility data. Remote state should not reset, fail, or overwrite the local character's run.
 
@@ -263,7 +267,7 @@ Single-client smoke test:
 
 - [ ] Log in with only Softcore plus normal debugging addons enabled.
 - [ ] Confirm no BugSack errors on login, `/reload`, opening the menu, and switching all tabs.
-- [ ] Run `/sc`, `/sc status`, `/sc rules`, `/sc log`, `/sc violations`, `/sc gear`, `/sc dungeons`, `/sc runlabel`, `/sc sound test list`, and `/sc export`.
+- [ ] Run `/sc`, `/sc commands`, `/sc status`, `/sc rules`, `/sc log`, `/sc violations`, `/sc gear`, `/sc dungeons`, `/sc sound test list`, `/sc export`, and `/sc bug`.
 - [ ] Start a solo run, reload, and confirm run state, HUD, minimap button, logs, rules, and active time remain sane.
 - [ ] Trigger or inspect representative rule checks where practical: gear, mailbox/bank/auction/trade access, mount/flying/flight-path rules, dungeon tracking, and violation clear.
 - [ ] Verify inactive/no-run states do not nil-error after reset with `/sc reset confirm end run`.
@@ -275,7 +279,7 @@ Two-client party test setup:
 - [ ] Start each test with `/reload` on both clients, then `/sc dc <test name>` on both clients.
 - [ ] Use `/sc reset confirm end run` on both clients when a clean inactive state is required.
 - [ ] After each sync-heavy action, wait 10-30 seconds for addon-message queue settling.
-- [ ] After each pass, collect `/sc syncdebug`, `/sc debuglog`, and `/sc dl` from both clients if anything looks wrong.
+- [ ] After each pass, collect `/sc syncdebug` and `/sc bug` from both clients if anything looks wrong.
 
 Two-client multiplayer checklist:
 
@@ -314,6 +318,7 @@ Two-client multiplayer checklist:
 Useful in-game checks:
 
 - `/reload`
+- `/sc commands`
 - `/sc status`
 - `/sc rules`
 - `/sc log`
@@ -322,7 +327,8 @@ Useful in-game checks:
 - `/sc conflicts`
 - `/sc gear`
 - `/sc dungeons`
-- `/sc resync`
+- `/sc sync`
+- `/sc bug`
 
 Look for:
 

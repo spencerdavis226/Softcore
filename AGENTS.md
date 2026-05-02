@@ -16,7 +16,7 @@ The master menu is the primary interface. Group run proposals, run sync proposal
 
 Current menu tabs:
 
-- `Overview`: dynamic run label based only on the current rule signature: four exact preset rule shapes plus 25 hidden custom rule profiles, all ending in "Run"; anything else shows **Custom Run**. It also shows an unmodified/last-modified-level rules detail, local run status, party status, elapsed time, deaths, active violation count, recent meaningful activity with character labels when space allows, and a compact five-member party ledger with current/start level, class-colored badge, status, and violation count (no Overview resync control; use `/sc resync` or Charter tab Party Sync)
+- `Overview`: dynamic run label based only on the current rule signature: four exact preset rule shapes plus 25 hidden custom rule profiles, all ending in "Run"; anything else shows **Custom Run**. It also shows an unmodified/last-modified-level rules detail, local run status, party status, elapsed time, deaths, active violation count, recent meaningful activity with character labels when space allows, and a compact five-member party ledger with current/start level, class-colored badge, status, and violation count (no Overview resync control; use `/sc sync` or Charter tab Party Sync)
 - `Charter`: start a run, review locked active rules in lightweight native-WoW styled rule groups on a consistent two-column grid, review highlighted rule amendment proposals in the normal rules layout, stop/reset a run, and use one shared action slot that shows Party Sync while party sync work/blockers exist or Modify Rules when the party is synced/local-only; keep travel rule tooltips specific about mount-like racial/class movement such as Worgen Running Wild, Druid Travel/Flight Form, and Dracthyr Soar; keep the self-crafted gear exemption as a subordinate gear toggle that only applies while gear restriction is enabled, and lock it off for the Ironman and Iron Vigil presets; keep the Casual preset as the low-restriction grouped baseline (economy access allowed, no gear restriction, no level-gap enforcement, instanced PvP blocked); keep Chef's Special as the creator's personal preferred preset (grouped white/gray limits, mailbox/trade/bank allowed, auction/warband/guild banks blocked, flying mounts blocked, enchants enabled); keep Iron Vigil as the stricter Ironman preset with no flight paths and cinematic camera enforced; do not use a top detail banner to explain run/proposal state
 - `Violations`: active issues in a virtualized compact list with one-click Clear where allowed, counts for active/clearable/shared rows, and full-detail tooltips for long rows
 - `Log`: audit history, newest first, in a virtualized compact list capped to the newest 1000 displayable rows for menu responsiveness. The Log tab always exposes CSV export; full rows remain in SavedVariables and the full `/sc export` CSV, while `/sc dl`/`/sc bug` is a bounded diagnostic export for bug reports. UI and `/sc log` hide low-value rows that do not apply to the current ruleset: pet battle start/end; taxi forced-movement audit unless flight paths are tracked; vehicle/override-bar forced-movement audit unless mounts or flying are tracked; instance enter unless repeated-dungeon or unsynced-instance rules are tracked; level-gap notices unless max level gap is tracked. Applied rule amendments write one **Rules Amended** log row per changed rule (`RULE_AMENDMENT_SUMMARY`) with plain-language names and values (for example `Auction house: restricted (was allowed)`); solo Charter-tab apply and slash `SetRule` skip redundant propose/accept log lines; amendments that apply no real diffs write nothing and do not bump ruleset version.
@@ -88,7 +88,7 @@ There is no separate HTTP or server “backend.” All multiplayer behavior is *
 **Where to look in code**
 
 - `Sync.lua`: prefix registration, inbound `CHAT_MSG_ADDON`, compact wire key/type aliases, **chunk reassembly** (per-sender buffers that **expire** without applying partial state, with timeout scaled by chunk count), **outbound send queue** (token-budget pacing, priority insertion, send failure retries), compact fast status nudges, targeted full-state/proposal/amendment detail request-response metadata, queued status coalescing before higher-priority traffic, delayed bulk party-log sends, **stale send drops** for obsolete queued items, sender-derived identity for authorization, and serialization/chunking to the 255-byte body limit.
-- `Core.lua`: slash commands; **`/sc dc`** (`ClearDebugTrace`) clears the capped in-memory **debug trace** and resets **test-oriented `db.sync` counters** (stale send drops, coalesced status drops, last drop metadata, send failure count/last error, expired chunk buffer count/last expiry). **`/sc dl`** / **`/sc bug`** builds the bounded CSV-style bug report export that includes those fields, pending governance state, peer/participant/conflict state, newest audit rows, newest violations, and the capped trace; **`/sc export`** remains the full run CSV.
+- `Core.lua`: slash commands; default **`/sc`** help shows only everyday commands, while **`/sc commands`** prints the useful support/testing list without exposing every internal endpoint. **`/sc dc`** (`ClearDebugTrace`) clears the capped in-memory **debug trace** and resets **test-oriented `db.sync` counters** (stale send drops, coalesced status drops, last drop metadata, send failure count/last error, expired chunk buffer count/last expiry). **`/sc dl`** / **`/sc bug`** / **`/sc report`** builds the bounded CSV-style bug report export that includes those fields, pending governance state, peer/participant/conflict state, newest audit rows, newest violations, and the capped trace; **`/sc export`** remains the full run CSV.
 - `Events.lua`: game events that drive periodic **STATUS** heartbeats and other local hooks.
 - `ProposalUI.lua` / `MasterUI.lua`: Charter-tab proposal UX; user actions enqueue outbound payloads through `Sync` rather than calling `SendAddonMessage` directly. Party Sync treats pending governance and just-applied rule changes as settling states, and detail-loading accept buttons become retry actions instead of dead ends.
 
@@ -238,7 +238,7 @@ After any feature, bug fix, or sync/UI behavior change, give the user exact A/B 
 - expected UI/HUD/menu state on both computers
 - expected lifecycle events or audit/debug entries on both computers
 - when to wait for sync settling, usually 10-30 seconds because addon messages are queued/throttled
-- what commands to run after the test, especially `/sc syncdebug` and `/sc debuglog`
+- what commands to run after the test, especially `/sc syncdebug` and `/sc bug`
 - what exports or lines the user should paste back into chat for diagnosis
 
 Prefer test scripts that cover lifecycle and whole-app state, not just the specific button changed. For proposal/sync changes, always verify run ID, ruleset hash, pending proposal state, participant rows, party status, HUD lamp, active violations, conflicts, and absence of unexpected audit spam.
@@ -252,9 +252,11 @@ Useful commands:
 - `/sc violations`
 - `/sc participants`
 - `/sc conflicts`
+- `/sc commands`
 - `/sc debuglog`
 - `/sc dl`
 - `/sc bug`
+- `/sc report`
 - `/sc debugclear`
 - `/sc dc`
 - `/sc syncdebug`
@@ -262,6 +264,7 @@ Useful commands:
 - `/sc runlabel`
 - `/sc gear`
 - `/sc dungeons`
+- `/sc sync`
 - `/sc resync`
 - `/sc reset confirm end run`
 - `/sc sound on|off|test [event]`
@@ -314,7 +317,7 @@ Required release test passes:
 - raid conversion: Softcore becomes local-only and expires pending group governance without resetting local runs
 - remote safety: remote death, reset, failure, mismatch, stale message, or violation clear never mutates local authoritative validity, rules, logs, deaths, or violations
 
-For each multiplayer release test, start with `/reload` and `/sc dc <test name>` on both computers, wait 10-30 seconds after sync-heavy actions, and collect `/sc syncdebug`, `/sc debuglog`, and `/sc dl` from both clients when diagnosing.
+For each multiplayer release test, start with `/reload` and `/sc dc <test name>` on both computers, wait 10-30 seconds after sync-heavy actions, and collect `/sc syncdebug` and `/sc bug` from both clients when diagnosing.
 
 ## Rolling documentation updates
 
