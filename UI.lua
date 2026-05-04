@@ -90,6 +90,14 @@ local function IsCurrentPartyMember(playerKey)
     return not SC.IsParticipantInCurrentParty or SC:IsParticipantInCurrentParty(playerKey)
 end
 
+local function AllowsUnsyncedPartyMembers(run)
+    local ruleset = run and run.ruleset
+    if SC.AllowsUnsyncedPartyMembers then
+        return SC:AllowsUnsyncedPartyMembers(ruleset)
+    end
+    return ruleset and ruleset.groupingMode ~= "SOLO_SELF_FOUND" and ruleset.unsyncedMembers == "ALLOWED"
+end
+
 local function ConflictHUDLabel(conflictType)
     if conflictType == "ADDON_VERSION_MISMATCH" then
         return "Version"
@@ -132,9 +140,13 @@ local function GetPartyEdgeHUDState(db, syncRows, partyStatus)
         return "YELLOW", "Level Gap", "OVERVIEW"
     end
 
-    for _, conflict in pairs(run.conflicts or {}) do
-        if conflict.active and not conflict.dismissed and IsCurrentPartyMember(conflict.playerKey) then
-            return "YELLOW", ConflictHUDLabel(conflict.type), "RUN"
+    local allowsUnsyncedParty = AllowsUnsyncedPartyMembers(run)
+
+    if not allowsUnsyncedParty then
+        for _, conflict in pairs(run.conflicts or {}) do
+            if conflict.active and not conflict.dismissed and IsCurrentPartyMember(conflict.playerKey) then
+                return "YELLOW", ConflictHUDLabel(conflict.type), "RUN"
+            end
         end
     end
 
@@ -142,8 +154,10 @@ local function GetPartyEdgeHUDState(db, syncRows, partyStatus)
         if playerKey ~= SC:GetPlayerKey() and IsCurrentPartyMember(playerKey) then
             local label = ParticipantHUDLabel(participant.status)
             if label then
-                local color = participant.status == "FAILED" and "ORANGE" or "YELLOW"
-                return color, label, label == "Party Fail" and "OVERVIEW" or "RUN"
+                if participant.status == "FAILED" or not allowsUnsyncedParty then
+                    local color = participant.status == "FAILED" and "ORANGE" or "YELLOW"
+                    return color, label, label == "Party Fail" and "OVERVIEW" or "RUN"
+                end
             end
         end
     end
@@ -152,7 +166,11 @@ local function GetPartyEdgeHUDState(db, syncRows, partyStatus)
     for _, peer in ipairs(syncRows or {}) do
         local status = tostring(peer.participantStatus or "")
         local hasNeverSeenAddon = not peer.lastSeen or peer.lastSeen <= 0
-        if hasNeverSeenAddon then
+        if peer.participantStatus == "FAILED" or peer.failed then
+            return "ORANGE", "Party Fail", "OVERVIEW"
+        elseif allowsUnsyncedParty then
+            -- Mixed-party play is allowed; keep HUD quiet unless a real failed member is reported.
+        elseif hasNeverSeenAddon then
             local rosterAge = now - (tonumber(peer.rosterSeen) or now)
             if rosterAge >= NO_ADDON_GRACE_SECONDS then
                 return "YELLOW", "No Addon", "RUN"

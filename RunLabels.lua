@@ -16,6 +16,8 @@ local SEVERITY_RULE_KEYS = {
     mounts = true,
     flying = true,
     flightPaths = true,
+    unsyncedMembers = true,
+    instanceWithUnsyncedPlayers = true,
     maxLevelGap = true,
     dungeonRepeat = true,
     heirlooms = true,
@@ -30,6 +32,8 @@ local SEVERITY_RULE_KEYS = {
 
 local RUN_LABEL_RULE_KEYS = {
     "groupingMode",
+    "unsyncedMembers",
+    "instanceWithUnsyncedPlayers",
     "auctionHouse",
     "mailbox",
     "trade",
@@ -82,6 +86,11 @@ local function SetRules(rules, keys, value)
     end
 end
 
+local function SetUnsyncedPartyAllowed(rules, allowed)
+    rules.unsyncedMembers = allowed and "ALLOWED" or DISALLOWED_OUTCOME
+    rules.instanceWithUnsyncedPlayers = allowed and "ALLOWED" or DISALLOWED_OUTCOME
+end
+
 local function ApplyPresetProfile(rules, preset)
     local ironman = preset == "IRONMAN" or preset == "IRON_VIGIL"
     local ironVigil = preset == "IRON_VIGIL"
@@ -102,8 +111,7 @@ local function ApplyPresetProfile(rules, preset)
     rules.heirlooms = DISALLOWED_OUTCOME
     rules.enchants = ironman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.dungeonRepeat = ironman and DISALLOWED_OUTCOME or "ALLOWED"
-    rules.instanceWithUnsyncedPlayers = "ALLOWED"
-    rules.unsyncedMembers = ironman and "ALLOWED" or DISALLOWED_OUTCOME
+    SetUnsyncedPartyAllowed(rules, ironman or not chef)
 
     SetRules(rules, ECONOMY_RULE_KEYS, DISALLOWED_OUTCOME)
     SetRules(rules, MOVEMENT_RULE_KEYS, ironman and DISALLOWED_OUTCOME or "ALLOWED")

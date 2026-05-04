@@ -60,6 +60,8 @@ end
 
 local PLAYER_RULE_CHANGE_KEYS = {
     groupingMode = true,
+    unsyncedMembers = true,
+    instanceWithUnsyncedPlayers = true,
     auctionHouse = true,
     mailbox = true,
     trade = true,
@@ -314,7 +316,7 @@ function SC:GetAchievementDefinitions()
     AddDefinition(result, "char_camera_max_level", "ACCOUNT", "Max Level", "Locked Perspective", "Reach max level after starting at level 10 or lower with Cinematic Camera enforced from run start.", "CAMERA_MAX")
     AddDefinition(result, "char_camera_ironman_no_flight_paths_max_level", "ACCOUNT", "Max Level", "Iron Vigil", "Reach max level after starting at level 10 or lower using the Iron Vigil preset with no rule amendments.", "CAMERA_IRONMAN_NO_FLIGHT_PATHS_MAX")
     AddDefinition(result, "char_original_terms", "ACCOUNT", "Max Level", "Original Terms", "Reach max level after starting at level 10 or lower with no rule amendments applied.", "RULE_UNCHANGED_MAX")
-    AddDefinition(result, "char_party_survivor", "ACCOUNT", "Max Level", "Party Survivor", "Reach max level after starting at level 10 or lower in group mode.", "GROUPED_MAX")
+    AddDefinition(result, "char_party_survivor", "ACCOUNT", "Max Level", "Party Survivor", "Reach max level after starting at level 10 or lower in group mode. Unsynced-party play may be allowed by your run rules.", "GROUPED_MAX")
 
     for _, spec in ipairs(CLASS_MAX_ACHIEVEMENTS) do
         AddDefinition(result, "char_max_class_" .. string.lower(spec.class), "ACCOUNT", "Classes", spec.name, "Reach max level as a " .. spec.label .. " after starting the run at level 10 or below.", "CLASS_MAX", nil, spec.class)

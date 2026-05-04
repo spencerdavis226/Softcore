@@ -1271,6 +1271,15 @@ function SC:ShouldApplyGroupViolationLocally(reason)
     return false, ruleName
 end
 
+function SC:AllowsUnsyncedPartyMembers(ruleset)
+    if not ruleset then
+        local db = EnsureDatabase()
+        ruleset = db.run and db.run.ruleset or {}
+    end
+
+    return ruleset.groupingMode ~= "SOLO_SELF_FOUND" and ruleset.unsyncedMembers == "ALLOWED"
+end
+
 function SC:MarkParticipantFailed(playerKey, reason)
     local db = EnsureDatabase()
     local participant = self:GetOrCreateParticipant(playerKey)
@@ -1418,6 +1427,7 @@ function SC:GetDerivedPartyStatus()
     local hasWarning = false
     local hasUnsynced = false
     local hasConflict = false
+    local allowsUnsyncedParty = self.AllowsUnsyncedPartyMembers and self:AllowsUnsyncedPartyMembers(db.run.ruleset)
     local localStatus = self:GetLocalPlayerStatus()
 
     if localStatus.participantStatus == "FAILED" and db.run.ruleset.failedMemberBlocksParty then
@@ -1435,12 +1445,18 @@ function SC:GetDerivedPartyStatus()
                 db.run.partyStatus = "BLOCKED"
                 return db.run.partyStatus
             elseif participant.status == "RUN_MISMATCH" or participant.status == "RULESET_MISMATCH" or participant.status == "ADDON_VERSION_MISMATCH" then
-                hasConflict = true
+                if allowsUnsyncedParty then
+                    -- Allowed mixed-party play keeps compatibility data for Party Sync without making party health noisy.
+                else
+                    hasConflict = true
+                end
             elseif participant.status == "WARNING" then
                 hasWarning = true
             elseif participant.status == "PENDING" or participant.status == "UNSYNCED" or participant.status == "NOT_IN_RUN" then
-                db.run.partyStatus = "BLOCKED"
-                return db.run.partyStatus
+                if not allowsUnsyncedParty then
+                    db.run.partyStatus = "BLOCKED"
+                    return db.run.partyStatus
+                end
             end
         end
     end
@@ -1452,8 +1468,10 @@ function SC:GetDerivedPartyStatus()
             local compatible, reason = self:IsRemoteStateCompatible(peer)
             if not compatible then
                 if reason == "RUN_MISMATCH" or reason == "RULESET_MISMATCH" or reason == "ADDON_VERSION_MISMATCH" then
-                    hasConflict = true
-                else
+                    if not allowsUnsyncedParty then
+                        hasConflict = true
+                    end
+                elseif not allowsUnsyncedParty then
                     db.run.partyStatus = "BLOCKED"
                     return db.run.partyStatus
                 end
@@ -1467,14 +1485,16 @@ function SC:GetDerivedPartyStatus()
             elseif (tonumber(peer.activeViolations) or 0) > 0 then
                 hasWarning = true
             elseif peer.participantStatus == "PENDING" or peer.participantStatus == "UNSYNCED" or peer.participantStatus == "NOT_IN_RUN" then
-                db.run.partyStatus = "BLOCKED"
-                return db.run.partyStatus
+                if not allowsUnsyncedParty then
+                    db.run.partyStatus = "BLOCKED"
+                    return db.run.partyStatus
+                end
             end
         end
     end
 
     for _, conflict in pairs(db.run.conflicts) do
-        if conflict.active and self:IsParticipantInCurrentParty(conflict.playerKey) then
+        if conflict.active and (not allowsUnsyncedParty) and self:IsParticipantInCurrentParty(conflict.playerKey) then
             hasConflict = true
         end
     end

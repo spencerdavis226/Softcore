@@ -251,8 +251,12 @@ local MOVEMENT_RULES = {
     { label = "Allow Flight Paths", key = "flightPaths" },
 }
 
+local UNSYNCED_PARTY_TOOLTIP = "Allows normal party play with real players who are not synced to your Softcore run, including open-world groups, questing, queued Dungeon Finder, and manual dungeon groups. Those players are not added to your run unless you use Party Sync or accept a sync/invite proposal. If unchecked, gain XP, level, and enter dungeons only with Softcore-synced run members. Follower dungeon NPCs do not count as unsynced players."
+
 local EDITABLE_RULE_ORDER = {
     "groupingMode",
+    "unsyncedMembers",
+    "instanceWithUnsyncedPlayers",
     "auctionHouse",
     "mailbox",
     "trade",
@@ -1491,6 +1495,7 @@ end
 local STATUS_RGB = {
     VALID = GREEN_TEXT,
     ACTIVE = GREEN_TEXT,
+    PARTY = GREEN_TEXT,
     FAILED = RED_TEXT,
     BLOCKED = GOLD_TEXT,
     CONFLICT = GOLD_TEXT,
@@ -1510,6 +1515,7 @@ local STATUS_RGB = {
 local STATUS_LABELS = {
     VALID = "Valid",
     ACTIVE = "Valid",
+    PARTY = "Party",
     FAILED = "Failed",
     BLOCKED = "Blocked",
     CONFLICT = "Conflict",
@@ -1583,6 +1589,17 @@ end
 
 local function SetDisallowedRule(rules, key, checked)
     rules[key] = checked and "ALLOWED" or DISALLOWED_OUTCOME
+end
+
+local function SetUnsyncedPartyAllowed(rules, allowed)
+    rules.unsyncedMembers = allowed and "ALLOWED" or DISALLOWED_OUTCOME
+    rules.instanceWithUnsyncedPlayers = allowed and "ALLOWED" or DISALLOWED_OUTCOME
+end
+
+local function IsUnsyncedPartyAllowed(rules)
+    return rules
+        and not IsDisallowed(rules.unsyncedMembers)
+        and not IsDisallowed(rules.instanceWithUnsyncedPlayers)
 end
 
 local function IsCameraRuleEnforced(rules)
@@ -1684,8 +1701,7 @@ local function ConfigureRulesForPreset(rules, preset)
     rules.heirlooms = DISALLOWED_OUTCOME
     rules.enchants = ironman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.dungeonRepeat = ironman and DISALLOWED_OUTCOME or "ALLOWED"
-    rules.instanceWithUnsyncedPlayers = "ALLOWED"
-    rules.unsyncedMembers = ironman and "ALLOWED" or DISALLOWED_OUTCOME
+    SetUnsyncedPartyAllowed(rules, ironman or not chef)
 
     for _, spec in ipairs(ECONOMY_RULES) do
         SetDisallowedRule(rules, spec.key, not (ironman or spec.key == "auctionHouse" or spec.key == "mailbox" or spec.key == "trade" or spec.key == "bank" or spec.key == "warbandBank" or spec.key == "guildBank"))
@@ -1819,6 +1835,8 @@ local RULE_DISPLAY_NAMES = {
     selfCraftedGearAllowed = "Self-crafted Gear Exemption",
     heirlooms      = "Heirlooms",
     enchants       = "Enchants",
+    unsyncedMembers = "Unsynced Party Members",
+    instanceWithUnsyncedPlayers = "Dungeons With Unsynced Members",
     maxLevelGap    = "Level Gap Enforcement",
     maxLevelGapValue = "Max Level Gap",
     dungeonRepeat  = "Repeated Dungeons",
@@ -1924,6 +1942,7 @@ local function GetPartyDisplayRows()
     local participantOrder = db and db.run and db.run.participantOrder or {}
     local participants = db and db.run and db.run.participants or {}
     local localKey = SC:GetPlayerKey()
+    local allowsUnsyncedParty = SC.AllowsUnsyncedPartyMembers and SC:AllowsUnsyncedPartyMembers(db and db.run and db.run.ruleset)
     local displayRows = {}
     local seen = {}
 
@@ -1948,7 +1967,9 @@ local function GetPartyDisplayRows()
     for _, peer in ipairs(syncRows) do
         local peerKey = peer.playerKey or peer.name
         local displayStatus = tostring(SC.Sync_GetDisplayStatus and SC:Sync_GetDisplayStatus(peer) or peer.participantStatus or "UNKNOWN")
-        if (peer.activeViolations or 0) > 0 then
+        if allowsUnsyncedParty and displayStatus ~= "FAILED" and not ((peer.activeViolations or 0) > 0) then
+            displayStatus = "PARTY"
+        elseif (peer.activeViolations or 0) > 0 then
             local violationType = peer.latestViolation and peer.latestViolation.type
             if violationType and violationType ~= "" then
                 displayStatus = "VIOLATION (" .. tostring(violationType) .. ")"
@@ -1977,12 +1998,19 @@ local function GetPartyDisplayRows()
         if participantKey ~= localKey and not seen[participantKey] and #displayRows < OVERVIEW_PARTY_ROWS then
             local participant = participants[participantKey]
             if participant then
+                local participantStatus = tostring(participant.status or "UNKNOWN")
+                if allowsUnsyncedParty
+                    and participantStatus ~= "FAILED"
+                    and participantStatus ~= "WARNING"
+                    and participantStatus ~= "VIOLATION" then
+                    participantStatus = "PARTY"
+                end
                 table.insert(displayRows, {
                     name = participant.playerKey,
                     level = participant.currentLevel,
                     startLevel = participant.levelAtJoin,
                     class = participant.class,
-                    status = tostring(participant.status or "UNKNOWN"),
+                    status = participantStatus,
                     totalViolations = CountAllViolations(participantKey),
                 })
                 seen[participantKey] = true
@@ -3798,8 +3826,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.panels[TAB_RUN] = startPanel
     frame.start = { panel = startPanel, controls = {}, selectedRules = SC:GetDefaultRuleset(), selectedPreset = "CASUAL" }
     frame.start.selectedRules.dungeonRepeat = "ALLOWED"
-    frame.start.selectedRules.instanceWithUnsyncedPlayers = "ALLOWED"
-    frame.start.selectedRules.unsyncedMembers = DISALLOWED_OUTCOME
+    SetUnsyncedPartyAllowed(frame.start.selectedRules, true)
     frame.start.inactiveText = CreateField(startPanel, 0, 0, 620)
     frame.start.inactiveText:SetText("Choose a ruleset, review the rules, then start your run.")
     frame.start.inactiveText:Hide()
@@ -3813,7 +3840,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.accessSection = CreateRunSection(startPanel, "Access and Economy", 0, 0, runLayout.COLUMN_WIDTH, runLayout:SectionHeight(#ECONOMY_RULES))
     frame.start.travelSection = CreateRunSection(startPanel, "Travel and Camera", 0, 0, runLayout.COLUMN_WIDTH, runLayout:SectionHeight(#MOVEMENT_RULES + 1))
     frame.start.gearSection = CreateRunSection(startPanel, "Gear and Items", runLayout.RIGHT_COLUMN_X, 0, runLayout.COLUMN_WIDTH, runLayout:SectionHeight(5))
-    frame.start.partyDungeonSection = CreateRunSection(startPanel, "Party and Dungeons", runLayout.RIGHT_COLUMN_X, 0, runLayout.COLUMN_WIDTH, runLayout:SectionHeight(3, 8))
+    frame.start.partyDungeonSection = CreateRunSection(startPanel, "Party and Dungeons", runLayout.RIGHT_COLUMN_X, 0, runLayout.COLUMN_WIDTH, runLayout:SectionHeight(4, 8))
     table.insert(frame.start.sections, frame.start.charterSection)
     table.insert(frame.start.sections, frame.start.accessSection)
     table.insert(frame.start.sections, frame.start.travelSection)
@@ -4019,20 +4046,25 @@ function SC:OpenMasterWindow(focusTab)
         SC:MasterUI_Refresh()
     end)
     RegisterRunControl(frame.start, frame.start.maxGapBox, frame.start.partyDungeonSection)
-    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(frame.start.partyDungeonSection.content, frame.start.selectedRules, { label = "Allow Repeated Dungeons", key = "dungeonRepeat" }, 0, -runLayout.ROW_HEIGHT)
+    frame.start.unsyncedPartyCheck = CreateAllowCheckbox(frame.start.partyDungeonSection.content, frame.start.selectedRules, {
+        label = "Allow Unsynced Party Members",
+        key = "unsyncedMembers",
+        tooltip = UNSYNCED_PARTY_TOOLTIP,
+    }, 0, -runLayout.ROW_HEIGHT)
+    frame.start.unsyncedPartyCheck:SetScript("OnClick", function(self)
+        SetUnsyncedPartyAllowed(frame.start.selectedRules, self:GetChecked())
+        SC:MasterUI_Refresh()
+    end)
+    RegisterRunControl(frame.start, frame.start.unsyncedPartyCheck, frame.start.partyDungeonSection)
+    frame.start.dungeonRepeatCheck = CreateAllowCheckbox(frame.start.partyDungeonSection.content, frame.start.selectedRules, { label = "Allow Repeated Dungeons", key = "dungeonRepeat" }, 0, -(runLayout.ROW_HEIGHT * 2))
     RegisterRunControl(frame.start, frame.start.dungeonRepeatCheck, frame.start.partyDungeonSection)
-    frame.start.instancedPvPCheck = CreateAllowCheckbox(frame.start.partyDungeonSection.content, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 0, -(runLayout.ROW_HEIGHT * 2))
+    frame.start.instancedPvPCheck = CreateAllowCheckbox(frame.start.partyDungeonSection.content, frame.start.selectedRules, { label = "Allow Instanced PvP", key = "instancedPvP" }, 0, -(runLayout.ROW_HEIGHT * 3))
     RegisterRunControl(frame.start, frame.start.instancedPvPCheck, frame.start.partyDungeonSection)
 
     function frame.start:RefreshControls()
         if SC.ApplyGroupingMode then
             SC:ApplyGroupingMode(self.selectedRules)
         end
-        if not IsActiveRun() and not self.isReviewingRuleAmendment then
-            self.selectedRules.instanceWithUnsyncedPlayers = "ALLOWED"
-            self.selectedRules.unsyncedMembers = self.selectedRules.groupingMode == "SOLO_SELF_FOUND" and "ALLOWED" or DISALLOWED_OUTCOME
-        end
-
         SetDropdownSelected(self.groupingDropdown, GROUPING_OPTIONS, self.selectedRules.groupingMode)
         if SC.IsDeathAnnouncementChannelEnabled then
             self.deathAnnounceChatCheck:SetChecked(SC:IsDeathAnnouncementChannelEnabled("CHAT"))
@@ -4151,6 +4183,19 @@ function SC:OpenMasterWindow(focusTab)
         end
         self.heirloomCheck:SetChecked(not IsDisallowed(self.selectedRules.heirlooms))
         self.enchantsCheck:SetChecked(not IsDisallowed(self.selectedRules.enchants))
+        local unsyncedPartyAllowed = IsUnsyncedPartyAllowed(self.selectedRules)
+        self.unsyncedPartyCheck:SetChecked(unsyncedPartyAllowed)
+        self.unsyncedPartyCheck:SetEnabled(canEdit and not isSolo)
+        if self.unsyncedPartyCheck.label then
+            if isSolo then
+                SetFontStringRGB(self.unsyncedPartyCheck.label, MUTED_TEXT)
+            elseif highlightingRuleChanges and (tostring(self.draftBaseRules.unsyncedMembers) ~= tostring(self.selectedRules.unsyncedMembers)
+                or tostring(self.draftBaseRules.instanceWithUnsyncedPlayers) ~= tostring(self.selectedRules.instanceWithUnsyncedPlayers)) then
+                SetFontStringRGB(self.unsyncedPartyCheck.label, unsyncedPartyAllowed and GREEN_TEXT or RED_TEXT)
+            else
+                SetFontStringRGB(self.unsyncedPartyCheck.label, BODY_TEXT)
+            end
+        end
         self.dungeonRepeatCheck:SetChecked(not IsDisallowed(self.selectedRules.dungeonRepeat))
         self.consumablesCheck:SetChecked(not IsDisallowed(self.selectedRules.consumables))
         self.instancedPvPCheck:SetChecked(not IsDisallowed(self.selectedRules.instancedPvP))
@@ -4192,8 +4237,6 @@ function SC:OpenMasterWindow(focusTab)
         if SC.ApplyGroupingMode then
             SC:ApplyGroupingMode(ruleset)
         end
-        ruleset.instanceWithUnsyncedPlayers = "ALLOWED"
-        ruleset.unsyncedMembers = ruleset.groupingMode == "SOLO_SELF_FOUND" and "ALLOWED" or DISALLOWED_OUTCOME
         ruleset.achievementPreset = (SC.DetectRulesetPreset and SC:DetectRulesetPreset(ruleset)) or "CUSTOM"
         if IsInGroup() and not IsInRaid() then
             if SC.CreateRunProposal then
