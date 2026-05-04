@@ -265,10 +265,10 @@ Package contents:
 
 Single-client smoke test:
 
-- [ ] Log in with only Softcore plus normal debugging addons enabled.
-- [ ] Confirm no BugSack errors on login, `/reload`, opening the menu, and switching all tabs.
-- [ ] Run `/sc`, `/sc commands`, `/sc status`, `/sc rules`, `/sc log`, `/sc violations`, `/sc gear`, `/sc dungeons`, `/sc sound test list`, `/sc export`, and `/sc bug`.
-- [ ] Start a solo run, reload, and confirm run state, HUD, minimap button, logs, rules, and active time remain sane.
+- [x] Log in with only Softcore plus normal debugging addons enabled.
+- [x] Confirm no BugSack errors on login, `/reload`, opening the menu, and switching all tabs.
+- [x] Run `/sc`, `/sc commands`, `/sc status`, `/sc rules`, `/sc log`, `/sc violations`, `/sc gear`, `/sc dungeons`, `/sc sound test list`, `/sc export`, and `/sc bug`.
+- [x] Start a solo run, reload, and confirm run state, HUD, minimap button, logs, rules, and active time remain sane.
 - [ ] Trigger or inspect representative rule checks where practical: gear, mailbox/bank/auction/trade access, mount/flying/flight-path rules, dungeon tracking, and violation clear.
 - [ ] Verify inactive/no-run states do not nil-error after reset with `/sc reset confirm end run`.
 
