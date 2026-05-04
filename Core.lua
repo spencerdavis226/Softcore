@@ -1545,9 +1545,6 @@ function SC:ClearViolation(violationId, clearedBy, clearReason)
                     self:Sync_BroadcastViolationClear(violation)
                 end
                 self:PlayUISound("VIOLATION_CLEARED")
-                if self.MasterUI_Refresh then
-                    self:MasterUI_Refresh()
-                end
 
                 local ownerKey = violation.playerKey
                 local ownerParticipant = ownerKey and db.run.participants and db.run.participants[ownerKey]
@@ -1562,6 +1559,14 @@ function SC:ClearViolation(violationId, clearedBy, clearReason)
                     if not hasActiveViolation then
                         ownerParticipant.status = "ACTIVE"
                     end
+                end
+
+                if self.RecheckClearedViolationState then
+                    self:RecheckClearedViolationState(violation)
+                end
+
+                if self.MasterUI_Refresh then
+                    self:MasterUI_Refresh()
                 end
             end
 

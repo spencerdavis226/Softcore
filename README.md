@@ -201,7 +201,7 @@ Death is permanent for the character.
 
 Non-death disallowed actions generally create violations. Examples include disallowed bank/auction access, sending mail or taking inbox contents, accepting a trade or trade-window enchant, movement rules, equipped gear rules, permanently enchanted gear when enchants are disallowed, and gaining XP or leveling while grouped with a party member who is invalid for the current run. Opening a mailbox or trade window alone is allowed so accidental clicks or another player initiating trade cannot force violations. Repeated access-window and party-progress events are throttled so UI reopen or XP tick spam does not flood the ledger.
 
-Clearing a violation marks it cleared, records who cleared it and when, and preserves the audit trail. Death and fatal/character-fail violations are not clearable.
+Clearing a violation marks it cleared, records who cleared it and when, and preserves the audit trail. Death and fatal/character-fail violations are not clearable. If a live access window, equipped-item rule, or active movement rule is still being broken when its violation is cleared, Softcore immediately rechecks that state and creates a fresh active violation as needed.
 
 Remote violations may be displayed and shared as audit records for the same synced run, but they do not directly mutate local character validity.
 

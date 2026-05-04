@@ -291,6 +291,38 @@ local function ShouldThrottle(key, seconds)
     return false
 end
 
+local function HasActiveLocalViolation(ruleName, detail)
+    local db = GetDB()
+    local playerKey = SC:GetPlayerKey()
+
+    for _, violation in ipairs(db and db.violations or {}) do
+        if violation.status ~= "CLEARED"
+            and violation.shared ~= true
+            and violation.playerKey == playerKey
+            and violation.type == ruleName
+            and violation.detail == detail then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function BuildEquippedItemViolationDetail(invalid)
+    local item = invalid and invalid.item
+    local link = item and item.link
+
+    if invalid.rule == "heirlooms" then
+        return "Heirloom equipped: " .. tostring(link)
+    end
+
+    if invalid.rule == "enchants" then
+        return "Enchanted item equipped: " .. tostring(link)
+    end
+
+    return "Invalid equipped item: " .. tostring(link)
+end
+
 function SC:ResetGearScanTracking()
     lastGearScanAt = 0
     lastPendingGearRescanAt = 0
@@ -334,10 +366,11 @@ function SC:GetInvalidEquippedItems()
     return invalid
 end
 
-function SC:ScanEquippedGear(force)
+function SC:ScanEquippedGear(force, options)
     if not IsRunActive() then
         return
     end
+    options = options or {}
 
     local now = time()
     if not force and now - lastGearScanAt < GEAR_SCAN_THROTTLE then
@@ -364,17 +397,19 @@ function SC:ScanEquippedGear(force)
     for _, invalid in ipairs(self:GetInvalidEquippedItems()) do
         local item = invalid.item
         local key = invalid.rule .. ":" .. tostring(item.link)
+        local detail = BuildEquippedItemViolationDetail(invalid)
 
-        if not ShouldThrottle(key, GEAR_VIOLATION_THROTTLE) then
+        if not HasActiveLocalViolation(invalid.rule, detail)
+            and (options.ignoreViolationThrottle or not ShouldThrottle(key, GEAR_VIOLATION_THROTTLE)) then
             if invalid.rule == "heirlooms" then
                 self:ApplyRuleOutcome("heirlooms", {
                     playerKey = self:GetPlayerKey(),
-                    detail = "Heirloom equipped: " .. tostring(item.link),
+                    detail = detail,
                 })
             elseif invalid.rule == "enchants" then
                 self:ApplyRuleOutcome("enchants", {
                     playerKey = self:GetPlayerKey(),
-                    detail = "Enchanted item equipped: " .. tostring(item.link),
+                    detail = detail,
                 })
             else
                 local db = GetDB()
@@ -385,9 +420,25 @@ function SC:ScanEquippedGear(force)
                 if participant.status == "ACTIVE" then
                     participant.status = "WARNING"
                 end
-                self:AddViolation("gearQuality", "Invalid equipped item: " .. tostring(item.link), "WARNING", self:GetPlayerKey())
+                self:AddViolation("gearQuality", detail, "WARNING", self:GetPlayerKey())
             end
         end
+    end
+end
+
+function SC:RecheckClearedViolationState(violation)
+    if not violation or violation.shared == true or violation.playerKey ~= self:GetPlayerKey() then
+        return
+    end
+
+    if violation.type == "gearQuality" or violation.type == "heirlooms" or violation.type == "enchants" then
+        self:ScanEquippedGear(true, { ignoreViolationThrottle = true })
+    elseif violation.type == "mounts" or violation.type == "flying" then
+        if self.CheckMovementRules then
+            self:CheckMovementRules(true)
+        end
+    elseif self.RecheckAccessRuleState then
+        self:RecheckAccessRuleState(violation.type)
     end
 end
 

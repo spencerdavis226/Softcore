@@ -318,14 +318,34 @@ local function HandleWarning(event)
     Broadcast(event)
 end
 
-local function ApplyAccessRule(ruleName, detail)
+local function HasActiveLocalViolation(ruleName, detail)
+    local db = SC.db or SoftcoreDB
+    local playerKey = SC:GetPlayerKey()
+
+    for _, violation in ipairs(db and db.violations or {}) do
+        if violation.status ~= "CLEARED"
+            and violation.shared ~= true
+            and violation.playerKey == playerKey
+            and violation.type == ruleName
+            and violation.detail == detail then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function ApplyAccessRule(ruleName, detail, force)
     local db = SC.db or SoftcoreDB
     if not db or not db.run or not db.run.active or (SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed()) then
         return
     end
+    if HasActiveLocalViolation(ruleName, detail) then
+        return
+    end
 
     local now = time()
-    if now - (accessWarnedAt[ruleName] or 0) < ACCESS_WARNING_THROTTLE then
+    if not force and now - (accessWarnedAt[ruleName] or 0) < ACCESS_WARNING_THROTTLE then
         return
     end
 
@@ -392,6 +412,43 @@ local function IsWarbandBankAccessEvent(event, ...)
     return false
 end
 
+local function IsFrameShown(frameName)
+    local frame = _G[frameName]
+    return frame and frame.IsShown and frame:IsShown()
+end
+
+local ACCESS_RECHECKS = {
+    auctionHouse = function()
+        return IsFrameShown("AuctionHouseFrame") and "Auction house opened."
+    end,
+    bank = function()
+        return IsFrameShown("BankFrame") and "Player bank opened."
+    end,
+    guildBank = function()
+        return IsFrameShown("GuildBankFrame") and "Guild bank opened."
+    end,
+    vendor = function()
+        return IsFrameShown("MerchantFrame") and "Vendor opened."
+    end,
+    voidStorage = function()
+        return IsFrameShown("VoidStorageFrame") and "Void storage opened."
+    end,
+    craftingOrders = function()
+        return (IsFrameShown("ProfessionsCustomerOrdersFrame") or IsFrameShown("CraftingOrderFrame")) and "Crafting orders opened."
+    end,
+    warbandBank = function()
+        return IsWarbandBankUIVisible() and "Warband bank opened or accessed."
+    end,
+}
+
+function SC:RecheckAccessRuleState(ruleName)
+    local recheck = ACCESS_RECHECKS[ruleName]
+    local detail = recheck and recheck()
+    if detail then
+        ApplyAccessRule(ruleName, detail, true)
+    end
+end
+
 local function SafeRegisterEvent(frame, event)
     -- Some storage APIs are expansion/client-version sensitive. pcall keeps older clients
     -- from failing addon load while still allowing /etrace verification on Retail.
@@ -453,13 +510,16 @@ local function IsDracthyrSoarActive()
     return IsPlayerAuraBySpellIdActive(DRACTHYR_SOAR_SPELL_ID)
 end
 
-local function ApplyMovementRule(ruleName, detail, throttleField)
+local function ApplyMovementRule(ruleName, detail, throttleField, force)
     if not IsRunActiveForLocalAudit() then
+        return
+    end
+    if HasActiveLocalViolation(ruleName, detail) then
         return
     end
 
     local now = time()
-    if now - (movementState[throttleField] or 0) < MOVEMENT_WARNING_THROTTLE then
+    if not force and now - (movementState[throttleField] or 0) < MOVEMENT_WARNING_THROTTLE then
         return
     end
 
@@ -471,7 +531,7 @@ local function ApplyMovementRule(ruleName, detail, throttleField)
     Broadcast(ruleName)
 end
 
-local function CheckMovementRules()
+local function CheckMovementRules(force)
     local db = SC.db or SoftcoreDB
     if not db or not db.run or not db.run.active then
         return
@@ -510,17 +570,17 @@ local function CheckMovementRules()
     local runningWild = IsWorgenRunningWildActive()
     local dracthyrSoar = IsDracthyrSoarActive()
 
-    if (mounted or druidGroundTravelForm or runningWild) and not movementState.mounted then
+    if (mounted or druidGroundTravelForm or runningWild) and (force or not movementState.mounted) then
         local detail = runningWild
             and "Used Worgen Running Wild while on a Softcore run."
             or druidGroundTravelForm
             and "Used Druid land Travel Form while on a Softcore run."
             or "Mounted while on a Softcore run."
-        ApplyMovementRule("mounts", detail, "mountWarnedAt")
+        ApplyMovementRule("mounts", detail, "mountWarnedAt", force)
     end
 
-    if (flying or dracthyrSoar) and not movementState.flying then
-        ApplyMovementRule("flying", dracthyrSoar and "Used Dracthyr Soar while on a Softcore run." or "Flying while on a Softcore run.", "flyingWarnedAt")
+    if (flying or dracthyrSoar) and (force or not movementState.flying) then
+        ApplyMovementRule("flying", dracthyrSoar and "Used Dracthyr Soar while on a Softcore run." or "Flying while on a Softcore run.", "flyingWarnedAt", force)
     end
 
     movementState.mounted = (mounted or druidGroundTravelForm or runningWild) and true or false
@@ -694,8 +754,8 @@ local function HandlePetBattleEnded()
     })
 end
 
-function SC:CheckMovementRules()
-    CheckMovementRules()
+function SC:CheckMovementRules(force)
+    CheckMovementRules(force)
 end
 
 function SC:Events_Register()

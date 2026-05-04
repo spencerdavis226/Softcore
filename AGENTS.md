@@ -186,7 +186,7 @@ Blockers and conflicts affect party status and display. They should not mutate i
 
 Preserve audit history.
 
-Do not delete important history. Clearing a violation should mark it cleared and log the clear event. Death and fatal/character-fail violations are not clearable.
+Do not delete important history. Clearing a violation should mark it cleared and log the clear event. Death and fatal/character-fail violations are not clearable. Live-state rules such as open access windows, equipped gear/heirlooms/enchants, and active mount/flying states should be rechecked after clearing so unresolved current behavior creates a fresh active violation instead of staying hidden until reload.
 
 Remote violation-clear messages may clear imported shared violations only. They must not clear local authoritative violations. Shared violation clears are accepted only from the peer that owns the shared violation, and heartbeat snapshots must not reactivate an imported shared violation that was already cleared locally.
 
