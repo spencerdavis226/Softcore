@@ -545,9 +545,18 @@ function SC:SetRule(ruleName, value)
         return true, "rule updated: " .. ruleName .. " = " .. tostring(normalized)
     end
 
-    local amendment = self:ProposeRuleAmendment({
+    local changes = {
         [ruleName] = normalized,
-    }, "Local slash command rule change.", { suppressProposalAcceptLogs = true })
+    }
+
+    if IsInGroup() and not IsInRaid() then
+        self:ProposeRuleAmendment(changes, "Slash command rule change.")
+        return true, "rule amendment proposed: " .. ruleName .. " = " .. tostring(normalized)
+    end
+
+    local amendment = self:ProposeRuleAmendment(changes, "Local slash command rule change.", {
+        suppressProposalAcceptLogs = true,
+    })
 
     self:AcceptRuleAmendment(amendment.id)
     self:ApplyRuleAmendment(amendment.id)
