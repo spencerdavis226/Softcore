@@ -454,6 +454,7 @@ local LOG_VIOLATION_LABELS = {
     death = "Death",
     enchants = "Enchant",
     flying = "Flying",
+    failedMemberBlocksParty = "Failed Party Member",
     gearQuality = "Gear",
     guildBank = "Guild Bank",
     mailbox = "Mailbox",
@@ -1926,10 +1927,17 @@ local function CountAllViolations(playerKey)
     return count
 end
 
+local PASSIVE_UNSYNCED_CONFLICTS = {
+    RUN_MISMATCH = true,
+    RULESET_MISMATCH = true,
+    ADDON_VERSION_MISMATCH = true,
+}
+
 local function CountActiveConflicts(run)
     local count = 0
+    local allowsUnsyncedParty = SC.AllowsUnsyncedPartyMembers and SC:AllowsUnsyncedPartyMembers(run and run.ruleset)
     for _, conflict in pairs(run and run.conflicts or {}) do
-        if conflict.active then
+        if conflict.active and not (allowsUnsyncedParty and PASSIVE_UNSYNCED_CONFLICTS[conflict.type]) then
             count = count + 1
         end
     end
@@ -1967,7 +1975,8 @@ local function GetPartyDisplayRows()
     for _, peer in ipairs(syncRows) do
         local peerKey = peer.playerKey or peer.name
         local displayStatus = tostring(SC.Sync_GetDisplayStatus and SC:Sync_GetDisplayStatus(peer) or peer.participantStatus or "UNKNOWN")
-        if allowsUnsyncedParty and displayStatus ~= "FAILED" and not ((peer.activeViolations or 0) > 0) then
+        local sameRunPeer = db and db.run and db.run.runId and peer.runId and db.run.runId == peer.runId
+        if allowsUnsyncedParty and (displayStatus ~= "FAILED" or not sameRunPeer) and not ((peer.activeViolations or 0) > 0) then
             displayStatus = "PARTY"
         elseif (peer.activeViolations or 0) > 0 then
             local violationType = peer.latestViolation and peer.latestViolation.type

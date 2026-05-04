@@ -418,7 +418,11 @@ local function GetCurrentPartyKeys()
         return keys
     elseif IsInGroup() then
         for index = 1, GetNumSubgroupMembers() do
-            local name, realm = UnitFullName("party" .. index)
+            local unit = "party" .. index
+            local name, realm
+            if not UnitIsPlayer or UnitIsPlayer(unit) then
+                name, realm = UnitFullName(unit)
+            end
             if name then
                 keys[BuildPlayerKey(name, realm)] = true
             end
@@ -1277,7 +1281,9 @@ function SC:AllowsUnsyncedPartyMembers(ruleset)
         ruleset = db.run and db.run.ruleset or {}
     end
 
-    return ruleset.groupingMode ~= "SOLO_SELF_FOUND" and ruleset.unsyncedMembers == "ALLOWED"
+    return ruleset.groupingMode ~= "SOLO_SELF_FOUND"
+        and ruleset.unsyncedMembers == "ALLOWED"
+        and ruleset.instanceWithUnsyncedPlayers == "ALLOWED"
 end
 
 function SC:MarkParticipantFailed(playerKey, reason)
@@ -1476,7 +1482,8 @@ function SC:GetDerivedPartyStatus()
                     return db.run.partyStatus
                 end
             elseif peer.participantStatus == "FAILED" or peer.failed then
-                if db.run.ruleset.failedMemberBlocksParty then
+                local sameRunPeer = db.run.runId and peer.runId and db.run.runId == peer.runId
+                if db.run.ruleset.failedMemberBlocksParty and (sameRunPeer or not allowsUnsyncedParty) then
                     db.run.partyStatus = "BLOCKED"
                     return db.run.partyStatus
                 end
@@ -1982,6 +1989,7 @@ end
 
 -- Violation types that represent party compatibility blockers, not clearable run events.
 local BLOCKER_VIOLATION_TYPES = {
+    failedMemberBlocksParty = true,
     unsyncedMembers = true,
     maxLevelGap = true,
     instanceWithUnsyncedPlayers = true,

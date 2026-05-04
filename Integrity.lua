@@ -454,9 +454,12 @@ local function GetCurrentPartyLevels()
         return levels
     elseif IsInGroup() then
         for index = 1, GetNumSubgroupMembers() do
-            local level = UnitLevel("party" .. index)
-            if level and level > 0 then
-                table.insert(levels, level)
+            local unit = "party" .. index
+            if not UnitIsPlayer or UnitIsPlayer(unit) then
+                local level = UnitLevel(unit)
+                if level and level > 0 then
+                    table.insert(levels, level)
+                end
             end
         end
     end
@@ -524,7 +527,11 @@ local function GetCurrentPartyMemberKeys()
     end
 
     for index = 1, GetNumSubgroupMembers() do
-        local name, realm = UnitFullName("party" .. index)
+        local unit = "party" .. index
+        local name, realm
+        if not UnitIsPlayer or UnitIsPlayer(unit) then
+            name, realm = UnitFullName(unit)
+        end
         if name then
             table.insert(keys, BuildPlayerKey(name, realm))
         end
@@ -587,14 +594,30 @@ local function ApplyProgressRule(ruleName, detail)
     })
 end
 
+local function ApplyFailedMemberProgressRule(detail)
+    local ruleName = "failedMemberBlocksParty"
+    if HasActiveProgressViolation(ruleName, detail) then
+        return
+    end
+    if ShouldThrottleGroupProgress(ruleName, detail) then
+        return
+    end
+    if SC.AddViolation then
+        SC:AddViolation(ruleName, detail, "WARNING", SC:GetPlayerKey())
+    end
+end
+
 local function GetInvalidProgressPartyDetails()
     local db = GetDB()
     local ruleset = db and db.run and db.run.ruleset or {}
     local details = {}
+    local failedDetails = {}
     local seen = {}
+    local failedSeen = {}
+    local allowsUnsyncedParty = SC.AllowsUnsyncedPartyMembers and SC:AllowsUnsyncedPartyMembers(ruleset)
 
     if not IsInGroup() or IsInRaid() then
-        return details
+        return details, failedDetails
     end
 
     for _, playerKey in ipairs(GetCurrentPartyMemberKeys()) do
@@ -604,7 +627,7 @@ local function GetInvalidProgressPartyDetails()
         elseif not participant then
             AddUniqueDetail(details, seen, playerKey, "not in this run")
         elseif participant.status == "FAILED" and ruleset.failedMemberBlocksParty then
-            AddUniqueDetail(details, seen, playerKey, "failed run member")
+            AddUniqueDetail(failedDetails, failedSeen, playerKey, "failed run member")
         elseif participant.status == "PENDING" or participant.status == "UNSYNCED" or participant.status == "NOT_IN_RUN" then
             AddUniqueDetail(details, seen, playerKey, string.lower(tostring(participant.status)))
         elseif participant.status == "RUN_MISMATCH" or participant.status == "RULESET_MISMATCH" or participant.status == "ADDON_VERSION_MISMATCH" then
@@ -622,7 +645,10 @@ local function GetInvalidProgressPartyDetails()
                 elseif not compatible then
                     AddUniqueDetail(details, seen, peerKey, string.lower(tostring(reason or "sync blocker")))
                 elseif (peer.participantStatus == "FAILED" or peer.failed) and ruleset.failedMemberBlocksParty then
-                    AddUniqueDetail(details, seen, peerKey, "failed run member")
+                    local sameRunPeer = db and db.run and db.run.runId and peer.runId and db.run.runId == peer.runId
+                    if sameRunPeer or not allowsUnsyncedParty then
+                        AddUniqueDetail(failedDetails, failedSeen, peerKey, "failed run member")
+                    end
                 end
             end
         end
@@ -634,7 +660,7 @@ local function GetInvalidProgressPartyDetails()
         end
     end
 
-    return details
+    return details, failedDetails
 end
 
 function SC:CheckPartyProgressIntegrity(progressLabel)
@@ -656,7 +682,10 @@ function SC:CheckPartyProgressIntegrity(progressLabel)
         ApplyProgressRule("maxLevelGap", tostring(progressLabel) .. " while party level gap was blocked.")
     end
 
-    local invalidDetails = GetInvalidProgressPartyDetails()
+    local invalidDetails, failedDetails = GetInvalidProgressPartyDetails()
+    if #failedDetails > 0 and db.run.ruleset and db.run.ruleset.failedMemberBlocksParty then
+        ApplyFailedMemberProgressRule(tostring(progressLabel) .. " while grouped with failed run member(s): " .. table.concat(failedDetails, ", ") .. ".")
+    end
     if #invalidDetails == 0 then
         return
     end
@@ -672,7 +701,13 @@ local function HasUnsyncedPartyMembers()
 
     local rows = SC.Sync_GetGroupRows and SC:Sync_GetGroupRows() or {}
     for _, status in ipairs(rows) do
-        if status.unsynced or status.participantStatus == "UNSYNCED" or status.participantStatus == "NOT_IN_RUN" or status.participantStatus == "PENDING" or status.participantStatus == "RUN_MISMATCH" then
+        if status.unsynced
+            or status.participantStatus == "UNSYNCED"
+            or status.participantStatus == "NOT_IN_RUN"
+            or status.participantStatus == "PENDING"
+            or status.participantStatus == "RUN_MISMATCH"
+            or status.participantStatus == "RULESET_MISMATCH"
+            or status.participantStatus == "ADDON_VERSION_MISMATCH" then
             return true
         end
     end

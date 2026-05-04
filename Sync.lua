@@ -682,6 +682,10 @@ local function RegisterPrefix()
 end
 
 local function GetUnitFullName(unit)
+    if UnitIsPlayer and not UnitIsPlayer(unit) then
+        return nil
+    end
+
     local name, realm = UnitFullName(unit)
 
     if not name then

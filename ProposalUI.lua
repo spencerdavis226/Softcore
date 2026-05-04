@@ -176,7 +176,11 @@ local function GetCurrentPartyKeys()
         return keys
     elseif IsInGroup() then
         for i = 1, GetNumSubgroupMembers() do
-            local n, r = UnitFullName("party" .. i)
+            local unit = "party" .. i
+            local n, r
+            if not UnitIsPlayer or UnitIsPlayer(unit) then
+                n, r = UnitFullName(unit)
+            end
             if n then
                 if not r or r == "" then r = GetRealmName() end
                 keys[n .. "-" .. r] = true

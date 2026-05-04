@@ -95,7 +95,10 @@ local function AllowsUnsyncedPartyMembers(run)
     if SC.AllowsUnsyncedPartyMembers then
         return SC:AllowsUnsyncedPartyMembers(ruleset)
     end
-    return ruleset and ruleset.groupingMode ~= "SOLO_SELF_FOUND" and ruleset.unsyncedMembers == "ALLOWED"
+    return ruleset
+        and ruleset.groupingMode ~= "SOLO_SELF_FOUND"
+        and ruleset.unsyncedMembers == "ALLOWED"
+        and ruleset.instanceWithUnsyncedPlayers == "ALLOWED"
 end
 
 local function ConflictHUDLabel(conflictType)
@@ -167,9 +170,16 @@ local function GetPartyEdgeHUDState(db, syncRows, partyStatus)
         local status = tostring(peer.participantStatus or "")
         local hasNeverSeenAddon = not peer.lastSeen or peer.lastSeen <= 0
         if peer.participantStatus == "FAILED" or peer.failed then
-            return "ORANGE", "Party Fail", "OVERVIEW"
+            local sameRunPeer = run.runId and peer.runId and run.runId == peer.runId
+            if allowsUnsyncedParty and not sameRunPeer then
+                -- Failed state from a different unsynced run is diagnostic only.
+                status = ""
+            else
+                return "ORANGE", "Party Fail", "OVERVIEW"
+            end
         elseif allowsUnsyncedParty then
             -- Mixed-party play is allowed; keep HUD quiet unless a real failed member is reported.
+            status = ""
         elseif hasNeverSeenAddon then
             local rosterAge = now - (tonumber(peer.rosterSeen) or now)
             if rosterAge >= NO_ADDON_GRACE_SECONDS then
