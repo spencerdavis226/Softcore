@@ -33,6 +33,8 @@ local accessWarnedAt = {}
 local warningWarnedAt = {}
 local petBattleActive = false
 local pendingConsumableUse = nil
+local lastKnownXP = nil
+local lastKnownXPLevel = nil
 local DRUID_TRAVEL_FORM_ID = 3
 local WORGEN_RUNNING_WILD_SPELL_ID = 87840
 local DRACTHYR_SOAR_SPELL_ID = 369536
@@ -114,6 +116,39 @@ local function HandleLevelUp(level)
     Broadcast("PLAYER_LEVEL_UP")
 end
 
+local function CapturePlayerXP()
+    lastKnownXP = UnitXP and UnitXP("player") or nil
+    lastKnownXPLevel = UnitLevel and UnitLevel("player") or nil
+end
+
+local function HandlePlayerXPUpdate(unit)
+    if unit and unit ~= "player" then
+        return
+    end
+
+    local currentXP = UnitXP and UnitXP("player") or nil
+    local currentLevel = UnitLevel and UnitLevel("player") or nil
+    if currentXP == nil or currentLevel == nil then
+        return
+    end
+
+    local gained = false
+    if lastKnownXP ~= nil and lastKnownXPLevel ~= nil then
+        gained = currentLevel > lastKnownXPLevel or (currentLevel == lastKnownXPLevel and currentXP > lastKnownXP)
+    end
+
+    lastKnownXP = currentXP
+    lastKnownXPLevel = currentLevel
+
+    if not gained then
+        return
+    end
+
+    if SC.CheckPartyProgressIntegrity then
+        SC:CheckPartyProgressIntegrity("Gained XP")
+    end
+end
+
 local function HandleZoneChanged()
     local db = SC.db or SoftcoreDB
     if not db then return end
@@ -143,6 +178,7 @@ function SC:ResetEventTracking()
     pvpAdvisoryWarnedAt = {}
     pendingConsumableUse = nil
     petBattleActive = false
+    CapturePlayerXP()
 end
 
 local function IsRunActiveForPvpAdvisory()
@@ -670,6 +706,7 @@ function SC:Events_Register()
     eventFrame = CreateFrame("Frame")
     eventFrame:RegisterEvent("PLAYER_DEAD")
     eventFrame:RegisterEvent("PLAYER_LEVEL_UP")
+    SafeRegisterEvent(eventFrame, "PLAYER_XP_UPDATE")
     eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
     eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
     eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
@@ -714,6 +751,12 @@ function SC:Events_Register()
             if SC.CheckMaxLevelGap then
                 SC:CheckMaxLevelGap(true)
             end
+            if SC.CheckPartyProgressIntegrity then
+                SC:CheckPartyProgressIntegrity("Leveled up")
+            end
+            CapturePlayerXP()
+        elseif event == "PLAYER_XP_UPDATE" then
+            HandlePlayerXPUpdate(...)
         elseif event == "ZONE_CHANGED_NEW_AREA" then
             HandleZoneChanged()
             CheckInstancedPvP()
@@ -817,6 +860,7 @@ function SC:Events_Register()
             end
             CheckPlayerPvpAdvisory()
             CheckTargetPvpAdvisory()
+            CapturePlayerXP()
             Broadcast("PLAYER_ENTERING_WORLD")
         end
 

@@ -1685,7 +1685,7 @@ local function ConfigureRulesForPreset(rules, preset)
     rules.enchants = ironman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.dungeonRepeat = ironman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.instanceWithUnsyncedPlayers = "ALLOWED"
-    rules.unsyncedMembers = "ALLOWED"
+    rules.unsyncedMembers = ironman and "ALLOWED" or DISALLOWED_OUTCOME
 
     for _, spec in ipairs(ECONOMY_RULES) do
         SetDisallowedRule(rules, spec.key, not (ironman or spec.key == "auctionHouse" or spec.key == "mailbox" or spec.key == "trade" or spec.key == "bank" or spec.key == "warbandBank" or spec.key == "guildBank"))
@@ -3799,7 +3799,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.start = { panel = startPanel, controls = {}, selectedRules = SC:GetDefaultRuleset(), selectedPreset = "CASUAL" }
     frame.start.selectedRules.dungeonRepeat = "ALLOWED"
     frame.start.selectedRules.instanceWithUnsyncedPlayers = "ALLOWED"
-    frame.start.selectedRules.unsyncedMembers = "ALLOWED"
+    frame.start.selectedRules.unsyncedMembers = DISALLOWED_OUTCOME
     frame.start.inactiveText = CreateField(startPanel, 0, 0, 620)
     frame.start.inactiveText:SetText("Choose a ruleset, review the rules, then start your run.")
     frame.start.inactiveText:Hide()
@@ -4028,8 +4028,10 @@ function SC:OpenMasterWindow(focusTab)
         if SC.ApplyGroupingMode then
             SC:ApplyGroupingMode(self.selectedRules)
         end
-        self.selectedRules.instanceWithUnsyncedPlayers = "ALLOWED"
-        self.selectedRules.unsyncedMembers = "ALLOWED"
+        if not IsActiveRun() and not self.isReviewingRuleAmendment then
+            self.selectedRules.instanceWithUnsyncedPlayers = "ALLOWED"
+            self.selectedRules.unsyncedMembers = self.selectedRules.groupingMode == "SOLO_SELF_FOUND" and "ALLOWED" or DISALLOWED_OUTCOME
+        end
 
         SetDropdownSelected(self.groupingDropdown, GROUPING_OPTIONS, self.selectedRules.groupingMode)
         if SC.IsDeathAnnouncementChannelEnabled then
@@ -4191,7 +4193,7 @@ function SC:OpenMasterWindow(focusTab)
             SC:ApplyGroupingMode(ruleset)
         end
         ruleset.instanceWithUnsyncedPlayers = "ALLOWED"
-        ruleset.unsyncedMembers = "ALLOWED"
+        ruleset.unsyncedMembers = ruleset.groupingMode == "SOLO_SELF_FOUND" and "ALLOWED" or DISALLOWED_OUTCOME
         ruleset.achievementPreset = (SC.DetectRulesetPreset and SC:DetectRulesetPreset(ruleset)) or "CUSTOM"
         if IsInGroup() and not IsInRaid() then
             if SC.CreateRunProposal then

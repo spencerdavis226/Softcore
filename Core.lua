@@ -375,7 +375,7 @@ local function CreateDefaultRuleset()
         flying = "ALLOWED",
         flightPaths = "ALLOWED",
         outsiderGrouping = "WARNING",
-        unsyncedMembers = "ALLOWED",
+        unsyncedMembers = "WARNING",
         maxLevelGap = "ALLOWED",
         maxLevelGapValue = 3,
         dungeonRepeat = "LOG_ONLY",

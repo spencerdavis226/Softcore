@@ -169,6 +169,7 @@ Examples of violations:
 - equipping disallowed gear
 - equipping permanently enchanted gear when enchants are disallowed
 - successfully using a disallowed consumable; failed item clicks or cooldown/context failures should not create consumable violations when the client exposes item-spell success events
+- gaining XP or leveling while grouped with a party member who is invalid for the current run, such as an outsider during solo mode or an unsynced/not-in-run/conflicting member during grouped mode
 
 Examples of group blockers/conflicts:
 
@@ -179,7 +180,7 @@ Examples of group blockers/conflicts:
 - failed character still grouped
 - max level gap exceeded, if enabled
 
-Blockers and conflicts affect party status and display. They should not mutate individual character validity.
+Blockers and conflicts affect party status and display. They should not mutate individual character validity by merely existing; if the local player gains XP or levels while grouped with a blocker, Softcore records the matching local rule violation.
 
 ## Logging And Violations
 

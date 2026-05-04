@@ -103,7 +103,7 @@ local function ApplyPresetProfile(rules, preset)
     rules.enchants = ironman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.dungeonRepeat = ironman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.instanceWithUnsyncedPlayers = "ALLOWED"
-    rules.unsyncedMembers = "ALLOWED"
+    rules.unsyncedMembers = ironman and "ALLOWED" or DISALLOWED_OUTCOME
 
     SetRules(rules, ECONOMY_RULE_KEYS, DISALLOWED_OUTCOME)
     SetRules(rules, MOVEMENT_RULE_KEYS, ironman and DISALLOWED_OUTCOME or "ALLOWED")

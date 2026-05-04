@@ -9,12 +9,14 @@ end
 local GEAR_SCAN_THROTTLE = 10
 local GEAR_VIOLATION_THROTTLE = 60
 local LEVEL_GAP_THROTTLE = 20
+local GROUP_PROGRESS_VIOLATION_THROTTLE = 60
 
 local lastGearScanAt = 0
 local lastPendingGearRescanAt = 0
 local lastLevelGapCheckAt = 0
 local currentInstanceName
 local gearViolationTimes = {}
+local groupProgressViolationTimes = {}
 
 local EQUIPMENT_SLOTS = {}
 
@@ -293,6 +295,7 @@ function SC:ResetGearScanTracking()
     lastGearScanAt = 0
     lastPendingGearRescanAt = 0
     gearViolationTimes = {}
+    groupProgressViolationTimes = {}
 end
 
 function SC:GetInvalidEquippedItems()
@@ -453,6 +456,162 @@ function SC:CheckMaxLevelGap(force)
     else
         db.run.levelGapBlocked = false
     end
+end
+
+local function BuildPlayerKey(name, realm)
+    if not realm or realm == "" then
+        realm = GetRealmName and GetRealmName() or nil
+    end
+    return tostring(name or "Unknown") .. "-" .. tostring(realm or "Unknown")
+end
+
+local function GetCurrentPartyMemberKeys()
+    local keys = {}
+
+    if not IsInGroup() or IsInRaid() then
+        return keys
+    end
+
+    for index = 1, GetNumSubgroupMembers() do
+        local name, realm = UnitFullName("party" .. index)
+        if name then
+            table.insert(keys, BuildPlayerKey(name, realm))
+        end
+    end
+
+    return keys
+end
+
+local function AddUniqueDetail(details, seen, playerKey, reason)
+    local text = tostring(playerKey or "Unknown") .. " (" .. tostring(reason or "invalid") .. ")"
+    if seen[text] then
+        return
+    end
+    seen[text] = true
+    table.insert(details, text)
+end
+
+local function ShouldThrottleGroupProgress(ruleName, detail)
+    local key = tostring(ruleName or "?") .. ":" .. tostring(detail or "?")
+    local now = time()
+
+    if now - (groupProgressViolationTimes[key] or 0) < GROUP_PROGRESS_VIOLATION_THROTTLE then
+        return true
+    end
+
+    groupProgressViolationTimes[key] = now
+    return false
+end
+
+local function HasActiveProgressViolation(ruleName, detail)
+    local db = GetDB()
+    local playerKey = SC:GetPlayerKey()
+
+    for _, violation in ipairs(db and db.violations or {}) do
+        if violation.status ~= "CLEARED"
+            and violation.playerKey == playerKey
+            and violation.type == ruleName
+            and violation.detail == detail then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function ApplyProgressRule(ruleName, detail)
+    if SC:GetRule(ruleName) == "ALLOWED" then
+        return
+    end
+    if HasActiveProgressViolation(ruleName, detail) then
+        return
+    end
+    if ShouldThrottleGroupProgress(ruleName, detail) then
+        return
+    end
+
+    SC:ApplyRuleOutcome(ruleName, {
+        playerKey = SC:GetPlayerKey(),
+        detail = detail,
+    })
+end
+
+local function GetInvalidProgressPartyDetails()
+    local db = GetDB()
+    local ruleset = db and db.run and db.run.ruleset or {}
+    local details = {}
+    local seen = {}
+
+    if not IsInGroup() or IsInRaid() then
+        return details
+    end
+
+    for _, playerKey in ipairs(GetCurrentPartyMemberKeys()) do
+        local participant = db and db.run and db.run.participants and db.run.participants[playerKey]
+        if ruleset.groupingMode == "SOLO_SELF_FOUND" then
+            AddUniqueDetail(details, seen, playerKey, "outside solo run")
+        elseif not participant then
+            AddUniqueDetail(details, seen, playerKey, "not in this run")
+        elseif participant.status == "FAILED" and ruleset.failedMemberBlocksParty then
+            AddUniqueDetail(details, seen, playerKey, "failed run member")
+        elseif participant.status == "PENDING" or participant.status == "UNSYNCED" or participant.status == "NOT_IN_RUN" then
+            AddUniqueDetail(details, seen, playerKey, string.lower(tostring(participant.status)))
+        elseif participant.status == "RUN_MISMATCH" or participant.status == "RULESET_MISMATCH" or participant.status == "ADDON_VERSION_MISMATCH" then
+            AddUniqueDetail(details, seen, playerKey, string.lower(tostring(participant.status)))
+        end
+    end
+
+    if SC.Sync_GetGroupRows then
+        for _, peer in ipairs(SC:Sync_GetGroupRows()) do
+            local peerKey = peer and peer.playerKey
+            if peerKey then
+                local compatible, reason = SC.IsRemoteStateCompatible and SC:IsRemoteStateCompatible(peer)
+                if peer.unsynced then
+                    AddUniqueDetail(details, seen, peerKey, "no addon response")
+                elseif not compatible then
+                    AddUniqueDetail(details, seen, peerKey, string.lower(tostring(reason or "sync blocker")))
+                elseif (peer.participantStatus == "FAILED" or peer.failed) and ruleset.failedMemberBlocksParty then
+                    AddUniqueDetail(details, seen, peerKey, "failed run member")
+                end
+            end
+        end
+    end
+
+    for _, conflict in pairs(db and db.run and db.run.conflicts or {}) do
+        if conflict.active and SC.IsParticipantInCurrentParty and SC:IsParticipantInCurrentParty(conflict.playerKey) then
+            AddUniqueDetail(details, seen, conflict.playerKey, string.lower(tostring(conflict.type or "conflict")))
+        end
+    end
+
+    return details
+end
+
+function SC:CheckPartyProgressIntegrity(progressLabel)
+    local db = GetDB()
+    if not IsRunActive() or not db or not db.run then
+        return
+    end
+
+    if not IsInGroup() or IsInRaid() then
+        return
+    end
+
+    progressLabel = progressLabel or "Gained XP"
+
+    if self.CheckMaxLevelGap then
+        self:CheckMaxLevelGap(false)
+    end
+    if db.run.levelGapBlocked and self:GetRule("maxLevelGap") ~= "ALLOWED" then
+        ApplyProgressRule("maxLevelGap", tostring(progressLabel) .. " while party level gap was blocked.")
+    end
+
+    local invalidDetails = GetInvalidProgressPartyDetails()
+    if #invalidDetails == 0 then
+        return
+    end
+
+    local ruleName = (db.run.ruleset and db.run.ruleset.groupingMode) == "SOLO_SELF_FOUND" and "outsiderGrouping" or "unsyncedMembers"
+    ApplyProgressRule(ruleName, tostring(progressLabel) .. " while grouped with invalid party member(s): " .. table.concat(invalidDetails, ", ") .. ".")
 end
 
 local function HasUnsyncedPartyMembers()
