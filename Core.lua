@@ -9,6 +9,11 @@ local SC = Softcore
 SC.name = "Softcore"
 SC.version = "0.5.0"
 
+-- CODEx/maintenance: local-only full violation forgiveness escape hatch.
+-- Rotate this token after use; keep the command hidden from help, README, and AGENTS.md.
+local CLEAN_RUN_FORGIVENESS_COMMAND = "forgive-clean-run"
+local CLEAN_RUN_FORGIVENESS_TOKEN = "may-2026-clean-ledger"
+
 local function Print(message)
     DEFAULT_CHAT_FRAME:AddMessage("|cff4ade80Softcore:|r " .. tostring(message))
 end
@@ -1567,6 +1572,154 @@ function SC:ClearViolation(violationId, clearedBy, clearReason)
     return nil
 end
 
+local function IsForgivableLocalViolation(violation, playerKey)
+    return violation
+        and violation.playerKey == playerKey
+        and violation.shared ~= true
+        and violation.type ~= "death"
+end
+
+local function RecomputeLocalViolationState(db, playerKey)
+    local activeWarnings = 0
+    local achievementFailed = false
+    local activeFatalFailure = false
+    local ruleViolations = {}
+    local hadViolation = false
+
+    for _, violation in ipairs(db.violations or {}) do
+        if violation and violation.playerKey == playerKey and violation.shared ~= true then
+            hadViolation = true
+            if violation.type then
+                ruleViolations[violation.type] = true
+            end
+            if violation.status ~= "CLEARED" then
+                if violation.severity == "FATAL" or violation.severity == "CHARACTER_FAIL" or violation.type == "death" then
+                    achievementFailed = true
+                end
+                if violation.severity == "FATAL" or violation.severity == "CHARACTER_FAIL" then
+                    activeFatalFailure = true
+                else
+                    activeWarnings = activeWarnings + 1
+                end
+            end
+        end
+    end
+
+    return hadViolation, ruleViolations, activeWarnings, achievementFailed, activeFatalFailure
+end
+
+function SC:ForgiveCleanRun(token)
+    if strtrim(tostring(token or "")) ~= CLEAN_RUN_FORGIVENESS_TOKEN then
+        Print("forgiveness token rejected.")
+        return false
+    end
+
+    local db = EnsureDatabase()
+    local playerKey = GetPlayerKey(db.character)
+    local removedIds = {}
+    local removedCount = 0
+    local removedFatal = 0
+    local kept = {}
+
+    for _, violation in ipairs(db.violations or {}) do
+        if IsForgivableLocalViolation(violation, playerKey) then
+            removedIds[violation.id] = true
+            if violation.violationId then
+                removedIds[violation.violationId] = true
+            end
+            removedCount = removedCount + 1
+            if violation.severity == "FATAL" or violation.severity == "CHARACTER_FAIL" then
+                removedFatal = removedFatal + 1
+            end
+        else
+            table.insert(kept, violation)
+        end
+    end
+
+    if removedCount == 0 then
+        Print("no local non-death violations to forgive.")
+        return false
+    end
+
+    db.violations = kept
+    if db.sync and db.sync.seenViolationIds then
+        for id in pairs(removedIds) do
+            db.sync.seenViolationIds[id] = nil
+        end
+    end
+
+    local filteredLog = {}
+    local removedLogCount = 0
+    for _, entry in ipairs(db.eventLog or {}) do
+        local removeEntry = false
+        if entry.violationId and removedIds[entry.violationId] then
+            removeEntry = true
+        elseif removedFatal > 0 and entry.kind == "PARTICIPANT_FAILED" and (entry.playerKey == playerKey or entry.actorKey == playerKey) then
+            removeEntry = true
+        end
+
+        if removeEntry then
+            removedLogCount = removedLogCount + 1
+            if db.sync and db.sync.seenAuditIds and entry.id then
+                db.sync.seenAuditIds[entry.id] = nil
+            end
+        else
+            table.insert(filteredLog, entry)
+        end
+    end
+    db.eventLog = filteredLog
+
+    local hadViolation, ruleViolations, activeWarnings, achievementFailed, activeFatalFailure = RecomputeLocalViolationState(db, playerKey)
+    db.run.warningCount = activeWarnings
+
+    local participant = db.run.participants and db.run.participants[playerKey]
+    if removedFatal > 0 and not activeFatalFailure then
+        db.run.failed = false
+        db.run.valid = true
+        if participant and participant.status == "FAILED" then
+            participant.status = activeWarnings > 0 and "WARNING" or "ACTIVE"
+            participant.failedAt = nil
+            participant.failReason = nil
+        end
+    elseif participant and participant.status == "ACTIVE" and activeWarnings > 0 then
+        participant.status = "WARNING"
+    elseif participant and participant.status == "WARNING" and activeWarnings == 0 then
+        participant.status = "ACTIVE"
+    end
+
+    if self.Achievements_ForgiveLocalViolations then
+        self:Achievements_ForgiveLocalViolations(hadViolation, ruleViolations, achievementFailed)
+    end
+    if self.Achievements_OnLevelChanged and db.run and db.run.active and not achievementFailed then
+        self:Achievements_OnLevelChanged(db.character and db.character.level)
+    end
+
+    if self.TraceDebug then
+        self:TraceDebug("FORGIVE_CLEAN_RUN", {
+            runId = db.run and db.run.runId,
+            playerKey = playerKey,
+            removedViolations = removedCount,
+            removedAuditRows = removedLogCount,
+            activeWarnings = activeWarnings,
+            achievementFailed = achievementFailed,
+            activeFatalFailure = activeFatalFailure,
+        })
+    end
+
+    if self.HUD_Refresh then
+        self:HUD_Refresh()
+    end
+    if self.MasterUI_Refresh then
+        self:MasterUI_Refresh()
+    end
+    if self.Sync_BroadcastStatus then
+        self:Sync_BroadcastStatus("STATUS_REFRESH", { fast = true })
+    end
+
+    Print("local non-death violations forgiven: " .. tostring(removedCount) .. ".")
+    return true
+end
+
 function SC:ImportSharedLog(entry)
     if type(entry) ~= "table" or not entry.id then
         return nil
@@ -2962,6 +3115,8 @@ function SC:HandleSlash(input)
         else
             Print("debug trace is not available.")
         end
+    elseif command == CLEAN_RUN_FORGIVENESS_COMMAND then
+        self:ForgiveCleanRun(rest)
     elseif command == "awardtest" or command == "sampleaward" then
         self:ShowSampleCompletionAward()
     elseif command == "announce" or command == "deathannounce" then

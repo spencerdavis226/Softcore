@@ -806,6 +806,15 @@ function SC:Achievements_OnViolationAdded(violation)
     end
 end
 
+function SC:Achievements_ForgiveLocalViolations(hadViolation, ruleViolations, failed)
+    local eligibility = CurrentEligibility()
+    if not eligibility then return end
+
+    eligibility.hadViolation = hadViolation == true
+    eligibility.ruleViolations = ruleViolations or {}
+    eligibility.failed = failed == true
+end
+
 function SC:Achievements_OnParticipantFailed(playerKey)
     if playerKey ~= (self.GetPlayerKey and self:GetPlayerKey()) then return end
 
