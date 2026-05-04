@@ -859,7 +859,6 @@ function SC:Events_Register()
                 SC:EnforceActionCamSettings()
             end
             CheckPlayerPvpAdvisory()
-            CheckTargetPvpAdvisory()
             CapturePlayerXP()
             Broadcast("PLAYER_ENTERING_WORLD")
         end
