@@ -331,7 +331,7 @@ function SC:GetAchievementDefinitions()
         AddDefinition(result, "char_max_" .. spec.id, "ACCOUNT", "Rules", spec.name, spec.description or ("Reach max level after starting at level 10 or lower with " .. spec.label .. " disallowed from run start through max level."), "RULE_MAX", nil, spec.rule)
     end
 
-    AddDefinition(result, "char_max_synced_party_only", "ACCOUNT", "Rules", "Closed Circle", "Reach max level after starting at level 10 or lower with Unsynced Party Members disabled from run start through max level.", "UNSYNCED_PARTY_DISABLED_MAX", nil, "unsyncedMembers")
+    AddDefinition(result, "char_max_synced_party_only", "ACCOUNT", "Rules", "Closed Circle", "Reach max level after starting at level 10 or lower with Unsynced Party Members and dungeons with unsynced members disabled from run start through max level.", "UNSYNCED_PARTY_DISABLED_MAX", nil, "unsyncedMembers")
     AddDefinition(result, "char_white_knuckles", "ACCOUNT", "Rules", "White Knuckles", "Reach max level after starting at level 10 or lower with white/gray gear quality enforced from run start.", "GEAR_QUALITY_MAX", nil, "WHITE_GRAY_ONLY")
     AddDefinition(result, "char_self_forged", "ACCOUNT", "Rules", "Self-Forged", "Reach max level after starting at level 10 or lower with white/gray gear quality and self-crafted gear exemption from run start.", "GEAR_QUALITY_CRAFTED_MAX", nil, "WHITE_GRAY_ONLY")
 

@@ -411,6 +411,10 @@ local function CopyRules(rules)
     return copy
 end
 
+local function IsUnsyncedPartyRule(ruleName)
+    return ruleName == "unsyncedMembers" or ruleName == "instanceWithUnsyncedPlayers"
+end
+
 local function IsValidRuleValue(ruleName, value)
     if ruleName == "maxLevelGapValue" or ruleName == "maxDeathsValue" then
         return tonumber(value) ~= nil
@@ -535,26 +539,52 @@ function SC:SetRule(ruleName, value)
         return false, "invalid value for " .. tostring(ruleName) .. ": " .. tostring(value)
     end
 
-    if self:GetRule(ruleName) == normalized then
+    local pairedUnsyncedRule = IsUnsyncedPartyRule(ruleName)
+    if pairedUnsyncedRule
+        and self:GetRule("unsyncedMembers") == normalized
+        and self:GetRule("instanceWithUnsyncedPlayers") == normalized then
+        return true, "rule unchanged: Allow Unsynced Party Members is already " .. tostring(normalized)
+    end
+
+    if (not pairedUnsyncedRule) and self:GetRule(ruleName) == normalized then
         return true, "rule unchanged: " .. ruleName .. " is already " .. tostring(normalized)
     end
 
     local db = GetDB()
     if not db.run.active then
-        db.run.ruleset[ruleName] = normalized
+        if pairedUnsyncedRule then
+            db.run.ruleset.unsyncedMembers = normalized
+            db.run.ruleset.instanceWithUnsyncedPlayers = normalized
+        else
+            db.run.ruleset[ruleName] = normalized
+        end
         if self.ApplyGroupingMode then
             self:ApplyGroupingMode(db.run.ruleset)
         end
         db.run.ruleset.version = (tonumber(db.run.ruleset.version) or 1) + 1
+        if pairedUnsyncedRule then
+            return true, "rule updated: Allow Unsynced Party Members = " .. tostring(normalized)
+        end
         return true, "rule updated: " .. ruleName .. " = " .. tostring(normalized)
     end
 
-    local changes = {
-        [ruleName] = normalized,
-    }
+    local changes
+    if pairedUnsyncedRule then
+        changes = {
+            unsyncedMembers = normalized,
+            instanceWithUnsyncedPlayers = normalized,
+        }
+    else
+        changes = {
+            [ruleName] = normalized,
+        }
+    end
 
     if IsInGroup() and not IsInRaid() then
         self:ProposeRuleAmendment(changes, "Slash command rule change.")
+        if pairedUnsyncedRule then
+            return true, "rule amendment proposed: Allow Unsynced Party Members = " .. tostring(normalized)
+        end
         return true, "rule amendment proposed: " .. ruleName .. " = " .. tostring(normalized)
     end
 
@@ -565,6 +595,9 @@ function SC:SetRule(ruleName, value)
     self:AcceptRuleAmendment(amendment.id)
     self:ApplyRuleAmendment(amendment.id)
 
+    if pairedUnsyncedRule then
+        return true, "rule updated: Allow Unsynced Party Members = " .. tostring(normalized)
+    end
     return true, "rule updated: " .. ruleName .. " = " .. tostring(normalized)
 end
 

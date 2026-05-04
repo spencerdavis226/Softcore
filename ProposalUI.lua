@@ -336,6 +336,7 @@ local function ProposalSummary(proposal)
     return "Death: Permanent"
         .. "\nGrouping: " .. FriendlyGroupingMode(proposal.ruleset.groupingMode)
         .. "  Unsynced Party: " .. FriendlyAllowed(proposal.ruleset.unsyncedMembers)
+        .. "  Unsynced Dungeons: " .. FriendlyAllowed(proposal.ruleset.instanceWithUnsyncedPlayers)
         .. "\nAH: " .. FriendlyAllowed(proposal.ruleset.auctionHouse)
         .. "  Mail: " .. FriendlyAllowed(proposal.ruleset.mailbox)
         .. "  Trade: " .. FriendlyAllowed(proposal.ruleset.trade)

@@ -1281,9 +1281,13 @@ function SC:AllowsUnsyncedPartyMembers(ruleset)
         ruleset = db.run and db.run.ruleset or {}
     end
 
+    local function IsNonRestrictive(value)
+        return value == "ALLOWED" or value == "LOG_ONLY"
+    end
+
     return ruleset.groupingMode ~= "SOLO_SELF_FOUND"
-        and ruleset.unsyncedMembers == "ALLOWED"
-        and ruleset.instanceWithUnsyncedPlayers == "ALLOWED"
+        and IsNonRestrictive(ruleset.unsyncedMembers)
+        and IsNonRestrictive(ruleset.instanceWithUnsyncedPlayers)
 end
 
 function SC:MarkParticipantFailed(playerKey, reason)

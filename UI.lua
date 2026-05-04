@@ -65,7 +65,13 @@ end
 
 local function HasRemoteFailure(syncRows)
     local db = SC.db or SoftcoreDB
+    local run = db and db.run or {}
     local localKey = SC:GetPlayerKey()
+    local ruleset = run and run.ruleset or {}
+    local allowsUnsyncedParty = ruleset
+        and ruleset.groupingMode ~= "SOLO_SELF_FOUND"
+        and (ruleset.unsyncedMembers == "ALLOWED" or ruleset.unsyncedMembers == "LOG_ONLY")
+        and (ruleset.instanceWithUnsyncedPlayers == "ALLOWED" or ruleset.instanceWithUnsyncedPlayers == "LOG_ONLY")
 
     for playerKey, participant in pairs(db and db.run and db.run.participants or {}) do
         if playerKey ~= localKey and participant.status == "FAILED" then
@@ -77,7 +83,10 @@ local function HasRemoteFailure(syncRows)
 
     for _, peer in ipairs(syncRows or {}) do
         if peer.participantStatus == "FAILED" or peer.failed or peer.valid == false then
-            return true
+            local sameRunPeer = run.runId and peer.runId and run.runId == peer.runId
+            if sameRunPeer or not allowsUnsyncedParty then
+                return true
+            end
         end
     end
     return false
@@ -97,8 +106,8 @@ local function AllowsUnsyncedPartyMembers(run)
     end
     return ruleset
         and ruleset.groupingMode ~= "SOLO_SELF_FOUND"
-        and ruleset.unsyncedMembers == "ALLOWED"
-        and ruleset.instanceWithUnsyncedPlayers == "ALLOWED"
+        and (ruleset.unsyncedMembers == "ALLOWED" or ruleset.unsyncedMembers == "LOG_ONLY")
+        and (ruleset.instanceWithUnsyncedPlayers == "ALLOWED" or ruleset.instanceWithUnsyncedPlayers == "LOG_ONLY")
 end
 
 local function ConflictHUDLabel(conflictType)
