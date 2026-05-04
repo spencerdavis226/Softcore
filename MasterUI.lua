@@ -198,6 +198,7 @@ local ACHIEVEMENT_RULE_ICONS = {
     maxLevelGap = "Interface\\Icons\\Achievement_GuildPerk_WorkingOvertime_Rank2",
     mounts = "Interface\\Icons\\Ability_Mount_RidingHorse",
     trade = "Interface\\Icons\\INV_Misc_Bag_10",
+    unsyncedMembers = "Interface\\Icons\\Achievement_GuildPerk_EverybodysFriend",
     warbandBank = "Interface\\Icons\\INV_Misc_EngGizmos_17",
     WHITE_GRAY_ONLY = "Interface\\Icons\\INV_Chest_Cloth_17",
 }
@@ -3195,7 +3196,7 @@ local function GetAchievementIcon(achievement)
         return ACHIEVEMENT_CLASS_ICONS[ruleName]
     end
 
-    if progressKind == "RULE_MAX" and ACHIEVEMENT_RULE_ICONS[ruleName] then
+    if (progressKind == "RULE_MAX" or progressKind == "UNSYNCED_PARTY_DISABLED_MAX") and ACHIEVEMENT_RULE_ICONS[ruleName] then
         return ACHIEVEMENT_RULE_ICONS[ruleName]
     end
 

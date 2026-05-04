@@ -201,6 +201,11 @@ local function RequirementStayedLocked(eligibility, ruleset, ruleName)
     return IsDisallowed(ruleset and ruleset[ruleName])
 end
 
+local function UnsyncedPartyStayedLocked(eligibility, ruleset)
+    return RequirementStayedLocked(eligibility, ruleset, "unsyncedMembers")
+        and RequirementStayedLocked(eligibility, ruleset, "instanceWithUnsyncedPlayers")
+end
+
 local function IsIronmanRules(rules)
     if not rules then return false end
     if rules.groupingMode ~= "SOLO_SELF_FOUND" then return false end
@@ -326,6 +331,7 @@ function SC:GetAchievementDefinitions()
         AddDefinition(result, "char_max_" .. spec.id, "ACCOUNT", "Rules", spec.name, spec.description or ("Reach max level after starting at level 10 or lower with " .. spec.label .. " disallowed from run start through max level."), "RULE_MAX", nil, spec.rule)
     end
 
+    AddDefinition(result, "char_max_synced_party_only", "ACCOUNT", "Rules", "Closed Circle", "Reach max level after starting at level 10 or lower with Unsynced Party Members disabled from run start through max level.", "UNSYNCED_PARTY_DISABLED_MAX", nil, "unsyncedMembers")
     AddDefinition(result, "char_white_knuckles", "ACCOUNT", "Rules", "White Knuckles", "Reach max level after starting at level 10 or lower with white/gray gear quality enforced from run start.", "GEAR_QUALITY_MAX", nil, "WHITE_GRAY_ONLY")
     AddDefinition(result, "char_self_forged", "ACCOUNT", "Rules", "Self-Forged", "Reach max level after starting at level 10 or lower with white/gray gear quality and self-crafted gear exemption from run start.", "GEAR_QUALITY_CRAFTED_MAX", nil, "WHITE_GRAY_ONLY")
 
@@ -572,6 +578,22 @@ local function BuildProgress(definition, earned)
         return math.min(currentLevel / maxLevel, 1), "Eligible: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
     end
 
+    if definition.progressKind == "UNSYNCED_PARTY_DISABLED_MAX" then
+        if not eligibility.startedAtOrBelow10 then
+            return 0, "Started above level 10"
+        end
+        if RuleChanged(eligibility, "unsyncedMembers") or RuleChanged(eligibility, "instanceWithUnsyncedPlayers") then
+            return 0, "Rule changed"
+        end
+        if eligibility.ruleViolations and (eligibility.ruleViolations.unsyncedMembers or eligibility.ruleViolations.instanceWithUnsyncedPlayers) then
+            return 0, "Rule violated"
+        end
+        if not UnsyncedPartyStayedLocked(eligibility, db and db.run and db.run.ruleset) then
+            return 0, "Unsynced party allowed"
+        end
+        return math.min(currentLevel / maxLevel, 1), "Synced party: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
+    end
+
     return 0, "Not earned"
 end
 
@@ -785,6 +807,10 @@ function SC:Achievements_OnLevelChanged(level)
         if RequirementStayedLocked(eligibility, db.run.ruleset, spec.rule) then
             Earn("char_max_" .. spec.id, "CHARACTER", spec.name)
         end
+    end
+
+    if UnsyncedPartyStayedLocked(eligibility, db.run.ruleset) then
+        Earn("char_max_synced_party_only", "CHARACTER", "Closed Circle")
     end
 
     if self.CompleteRunAtMaxLevel then
