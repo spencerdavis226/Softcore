@@ -5,7 +5,6 @@ local SC = Softcore
 local eventFrame
 
 local WARNING_EVENTS = {
-    MAIL_SHOW = { rule = "mailbox", detail = "Mailbox opened." },
     AUCTION_HOUSE_SHOW = { rule = "auctionHouse", detail = "Auction house opened." },
 }
 
@@ -308,6 +307,10 @@ local function HandleTradeAcceptUpdate(playerAccepted)
     end
 
     ApplyAccessRule("trade", "Trade accepted.")
+end
+
+local function ApplyMailboxAction(detail)
+    ApplyAccessRule("mailbox", detail)
 end
 
 local function HandleAccessEvent(event)
@@ -672,7 +675,6 @@ function SC:Events_Register()
     eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
     SafeRegisterEvent(eventFrame, "GET_ITEM_INFO_RECEIVED")
     eventFrame:RegisterEvent("TRADE_ACCEPT_UPDATE")
-    eventFrame:RegisterEvent("MAIL_SHOW")
     eventFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
     eventFrame:RegisterEvent("BANKFRAME_OPENED")
     eventFrame:RegisterEvent("GUILDBANKFRAME_OPENED")
@@ -847,6 +849,67 @@ function SC:Events_Register()
     if C_Item and C_Item.UseItem then
         hooksecurefunc(C_Item, "UseItem", function(itemRef)
             QueueConsumableRule(itemRef)
+        end)
+    end
+
+    if SendMail then
+        hooksecurefunc("SendMail", function()
+            ApplyMailboxAction("Mail sent.")
+        end)
+    end
+    if C_Mail and C_Mail.SendMail then
+        hooksecurefunc(C_Mail, "SendMail", function()
+            ApplyMailboxAction("Mail sent.")
+        end)
+    end
+    if TakeInboxItem then
+        hooksecurefunc("TakeInboxItem", function()
+            ApplyMailboxAction("Inbox item taken.")
+        end)
+    end
+    if C_Mail and C_Mail.TakeInboxItem then
+        hooksecurefunc(C_Mail, "TakeInboxItem", function()
+            ApplyMailboxAction("Inbox item taken.")
+        end)
+    end
+    if TakeInboxTextItem then
+        hooksecurefunc("TakeInboxTextItem", function()
+            ApplyMailboxAction("Inbox item taken.")
+        end)
+    end
+    if C_Mail and C_Mail.TakeInboxTextItem then
+        hooksecurefunc(C_Mail, "TakeInboxTextItem", function()
+            ApplyMailboxAction("Inbox item taken.")
+        end)
+    end
+    if TakeInboxMoney then
+        hooksecurefunc("TakeInboxMoney", function()
+            ApplyMailboxAction("Inbox money taken.")
+        end)
+    end
+    if C_Mail and C_Mail.TakeInboxMoney then
+        hooksecurefunc(C_Mail, "TakeInboxMoney", function()
+            ApplyMailboxAction("Inbox money taken.")
+        end)
+    end
+    if AutoLootMailItem then
+        hooksecurefunc("AutoLootMailItem", function()
+            ApplyMailboxAction("Inbox attachments taken.")
+        end)
+    end
+    if C_Mail and C_Mail.AutoLootMailItem then
+        hooksecurefunc(C_Mail, "AutoLootMailItem", function()
+            ApplyMailboxAction("Inbox attachments taken.")
+        end)
+    end
+    if ReturnInboxItem then
+        hooksecurefunc("ReturnInboxItem", function()
+            ApplyMailboxAction("Mail returned.")
+        end)
+    end
+    if C_Mail and C_Mail.ReturnInboxItem then
+        hooksecurefunc(C_Mail, "ReturnInboxItem", function()
+            ApplyMailboxAction("Mail returned.")
         end)
     end
 

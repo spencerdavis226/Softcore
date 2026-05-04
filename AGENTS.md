@@ -161,9 +161,9 @@ Non-death rule breaks generally create violations rather than directly failing t
 
 Examples of violations:
 
-- opening a disallowed mailbox
 - opening a disallowed bank
 - opening the auction house when disallowed
+- sending mail or taking inbox contents when mailbox is disallowed; opening the mailbox alone is allowed to forgive accidental clicks
 - accepting a trade or trade-window enchant when trade is disallowed; opening the trade window alone is allowed so another player cannot force a violation
 - using disallowed mounts, Druid land Travel/Mount Form, or flying forms such as Druid Flight Form or Dracthyr Soar
 - equipping disallowed gear
