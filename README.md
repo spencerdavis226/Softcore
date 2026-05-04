@@ -199,7 +199,7 @@ Pending amendments expire after 30 minutes. Late amendment messages are ignored 
 
 Death is permanent for the character.
 
-Non-death disallowed actions generally create violations. Examples include disallowed bank/mail/auction/trade access, movement rules, equipped gear rules, and permanently enchanted gear when enchants are disallowed. Repeated access-window events are throttled so UI reopen spam does not flood the ledger.
+Non-death disallowed actions generally create violations. Examples include disallowed bank/mail/auction access, accepting a trade or trade-window enchant, movement rules, equipped gear rules, and permanently enchanted gear when enchants are disallowed. Opening a trade window alone is allowed so other players cannot force violations by initiating trade. Repeated access-window events are throttled so UI reopen spam does not flood the ledger.
 
 Clearing a violation marks it cleared, records who cleared it and when, and preserves the audit trail. Death and fatal/character-fail violations are not clearable.
 

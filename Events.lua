@@ -5,7 +5,6 @@ local SC = Softcore
 local eventFrame
 
 local WARNING_EVENTS = {
-    TRADE_SHOW = { rule = "trade", detail = "Trade window opened." },
     MAIL_SHOW = { rule = "mailbox", detail = "Mailbox opened." },
     AUCTION_HOUSE_SHOW = { rule = "auctionHouse", detail = "Auction house opened." },
 }
@@ -301,6 +300,14 @@ local function ApplyAccessRule(ruleName, detail)
         detail = detail,
     })
     Broadcast(ruleName)
+end
+
+local function HandleTradeAcceptUpdate(playerAccepted)
+    if playerAccepted ~= 1 and playerAccepted ~= true then
+        return
+    end
+
+    ApplyAccessRule("trade", "Trade accepted.")
 end
 
 local function HandleAccessEvent(event)
@@ -664,7 +671,7 @@ function SC:Events_Register()
     eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
     eventFrame:RegisterEvent("BAG_UPDATE_DELAYED")
     SafeRegisterEvent(eventFrame, "GET_ITEM_INFO_RECEIVED")
-    eventFrame:RegisterEvent("TRADE_SHOW")
+    eventFrame:RegisterEvent("TRADE_ACCEPT_UPDATE")
     eventFrame:RegisterEvent("MAIL_SHOW")
     eventFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
     eventFrame:RegisterEvent("BANKFRAME_OPENED")
@@ -724,6 +731,8 @@ function SC:Events_Register()
             if SC.ScanEquippedGear then
                 SC:ScanEquippedGear(true)
             end
+        elseif event == "TRADE_ACCEPT_UPDATE" then
+            HandleTradeAcceptUpdate(...)
         elseif WARNING_EVENTS[event] then
             HandleWarning(event)
         elseif ACCESS_EVENTS[event] then

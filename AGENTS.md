@@ -164,7 +164,7 @@ Examples of violations:
 - opening a disallowed mailbox
 - opening a disallowed bank
 - opening the auction house when disallowed
-- opening a trade window when disallowed
+- accepting a trade or trade-window enchant when trade is disallowed; opening the trade window alone is allowed so another player cannot force a violation
 - using disallowed mounts, Druid land Travel/Mount Form, or flying forms such as Druid Flight Form or Dracthyr Soar
 - equipping disallowed gear
 - equipping permanently enchanted gear when enchants are disallowed
