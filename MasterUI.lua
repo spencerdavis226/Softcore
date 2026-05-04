@@ -1702,7 +1702,7 @@ local function ConfigureRulesForPreset(rules, preset)
     rules.heirlooms = DISALLOWED_OUTCOME
     rules.enchants = ironman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.dungeonRepeat = ironman and DISALLOWED_OUTCOME or "ALLOWED"
-    SetUnsyncedPartyAllowed(rules, ironman or not chef)
+    SetUnsyncedPartyAllowed(rules, preset == "CASUAL")
 
     for _, spec in ipairs(ECONOMY_RULES) do
         SetDisallowedRule(rules, spec.key, not (ironman or spec.key == "auctionHouse" or spec.key == "mailbox" or spec.key == "trade" or spec.key == "bank" or spec.key == "warbandBank" or spec.key == "guildBank"))

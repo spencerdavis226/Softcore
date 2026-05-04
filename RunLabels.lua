@@ -111,7 +111,7 @@ local function ApplyPresetProfile(rules, preset)
     rules.heirlooms = DISALLOWED_OUTCOME
     rules.enchants = ironman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.dungeonRepeat = ironman and DISALLOWED_OUTCOME or "ALLOWED"
-    SetUnsyncedPartyAllowed(rules, ironman or not chef)
+    SetUnsyncedPartyAllowed(rules, preset == "CASUAL")
 
     SetRules(rules, ECONOMY_RULE_KEYS, DISALLOWED_OUTCOME)
     SetRules(rules, MOVEMENT_RULE_KEYS, ironman and DISALLOWED_OUTCOME or "ALLOWED")
