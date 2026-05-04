@@ -1026,20 +1026,6 @@ local function SetCVarIfChanged(key, value)
     end
 end
 
-local function IsNpcInteractionActive()
-    return (GossipFrame and GossipFrame:IsShown())
-        or (MerchantFrame and MerchantFrame:IsShown())
-        or (QuestFrame and QuestFrame:IsShown())
-        or (ItemTextFrame and ItemTextFrame:IsShown())
-        or (ClassTrainerFrame and ClassTrainerFrame:IsShown())
-        or (TaxiFrame and TaxiFrame:IsShown())
-        or (GuildRegistrarFrame and GuildRegistrarFrame:IsShown())
-end
-
-local function HasHostileCameraTarget()
-    return UnitExists("target") and UnitCanAttack("player", "target")
-end
-
 local function IsFirstPersonZoomedIn()
     if not GetCameraZoom then
         return false
@@ -1116,12 +1102,10 @@ local function ApplyActionCamProfileSettings(profile)
         and profile.headMovementFirstPerson
         or profile.headMovement)
 
-    if not IsNpcInteractionActive() and not HasHostileCameraTarget() then
-        local target = (mounted and profile.mountedZoom) or profile.zoom
-        local current = GetCameraZoom and GetCameraZoom() or target
-        if current - target > 0.5 then
-            CameraZoomIn(current - target)
-        end
+    local target = (mounted and profile.mountedZoom) or profile.zoom
+    local current = GetCameraZoom and GetCameraZoom() or target
+    if current - target > 0.5 then
+        CameraZoomIn(current - target)
     end
 end
 
