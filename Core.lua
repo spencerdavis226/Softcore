@@ -1669,6 +1669,19 @@ function SC:ForgiveCleanRun(token)
     end
     db.eventLog = filteredLog
 
+    if self.ResetGearScanTracking then
+        self:ResetGearScanTracking()
+    end
+    if self.ResetEventTracking then
+        self:ResetEventTracking()
+    end
+    if self.ScanEquippedGear then
+        self:ScanEquippedGear(true)
+    end
+    if self.CheckMovementRules then
+        self:CheckMovementRules()
+    end
+
     local hadViolation, ruleViolations, activeWarnings, achievementFailed, activeFatalFailure = RecomputeLocalViolationState(db, playerKey)
     db.run.warningCount = activeWarnings
 
