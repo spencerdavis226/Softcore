@@ -26,7 +26,7 @@ Beta candidate for first public CurseForge upload.
 - `/sc bug` export window sizing is compatible with clients where edit boxes do not expose string-height helpers.
 - `/sc rules chat` hides legacy death-limit internals that are not part of the current player-facing rules.
 - Warband bank access is detected on current Retail bank panels and account-bank interactions.
-- Visible logs hide redundant forced-movement audit rows when the matching mount, flying, or flight-path violation already exists.
+- Visible logs hide forced-movement start/end audit rows while keeping the stored history available to exports.
 - TOC-loaded Lua files pass syntax checks for this release candidate.
 
 ### Known Limitations

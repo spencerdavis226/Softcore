@@ -893,40 +893,6 @@ local function IsRuleRestrictiveForLogDisplay(ruleset, ruleKey)
     return v ~= nil and v ~= "ALLOWED" and v ~= "LOG_ONLY" and v ~= false
 end
 
-local function GetForcedMovementLogReason(entry)
-    local r = entry and entry.reason
-    if r == "taxi" or r == "vehicle" or r == "override" then
-        return r
-    end
-    local msg = tostring(entry and entry.message or "")
-    if string.find(msg, "taxi or forced", 1, true) then
-        return "taxi"
-    end
-    if string.find(msg, "override action bar", 1, true) then
-        return "override"
-    end
-    if string.find(msg, "Vehicle or forced movement active:", 1, true) then
-        return "vehicle"
-    end
-    return nil
-end
-
-local function HasLocalViolationForRule(ruleName)
-    local db = SoftcoreDB
-    if not db then
-        return false
-    end
-    local playerKey = db.character and GetPlayerKey(db.character) or nil
-    for _, violation in ipairs(db.violations or {}) do
-        if violation.shared ~= true
-            and violation.type == ruleName
-            and (not playerKey or violation.playerKey == playerKey) then
-            return true
-        end
-    end
-    return false
-end
-
 --- Whether a stored log entry should appear in the master menu Log tab and /sc log chat output.
 --- Full history remains in SavedVariables and CSV/debug exports.
 function SC:ShouldDisplayLogEntryInUI(entry)
@@ -939,28 +905,7 @@ function SC:ShouldDisplayLogEntryInUI(entry)
     end
 
     if kind == "FORCED_MOVEMENT" or kind == "FORCED_MOVEMENT_ENDED" then
-        local reason = GetForcedMovementLogReason(entry)
-        if reason == "taxi" then
-            if HasLocalViolationForRule("flightPaths") then
-                return false
-            end
-            return IsRuleRestrictiveForLogDisplay(ruleset, "flightPaths")
-        end
-        if reason == "vehicle" or reason == "override" then
-            if HasLocalViolationForRule("mounts") or HasLocalViolationForRule("flying") then
-                return false
-            end
-            return IsRuleRestrictiveForLogDisplay(ruleset, "mounts")
-                or IsRuleRestrictiveForLogDisplay(ruleset, "flying")
-        end
-        if HasLocalViolationForRule("flightPaths")
-            or HasLocalViolationForRule("mounts")
-            or HasLocalViolationForRule("flying") then
-            return false
-        end
-        return IsRuleRestrictiveForLogDisplay(ruleset, "flightPaths")
-            or IsRuleRestrictiveForLogDisplay(ruleset, "mounts")
-            or IsRuleRestrictiveForLogDisplay(ruleset, "flying")
+        return false
     end
 
     if kind == "LEVEL_GAP_EXCEEDED" then

@@ -29,7 +29,7 @@ Open the menu with `/sc menu`, the minimap button, or by clicking the HUD.
 | Overview | Current run label, local status, party status, deaths, violations, active time, recent meaningful activity, and a compact party ledger. |
 | Charter | Start runs, choose presets, review active rules, use Party Sync, modify rules, and respond to proposals or amendments. |
 | Violations | Active issues with compact rows, counts, tooltips, and one-click Clear where allowed. |
-| Log | Newest-first audit history with low-value rows filtered from display unless the matching rule is restrictive; CSV export always remains available. |
+| Log | Newest-first audit history with low-value rows filtered from display; CSV export always remains available. |
 | Achievements | Account-level milestones, rule and class achievements, max-level progress, and earned completion awards. |
 
 The Overview run label comes from the current rule signature. Exact known profiles show their run names; anything else is shown as **Custom Run**.
