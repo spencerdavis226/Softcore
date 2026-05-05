@@ -885,12 +885,12 @@ function SC:CreateProposalId()
     return CreateStableId("proposal")
 end
 
-local function IsRuleTrackedInRunRuleset(ruleset, ruleKey)
+local function IsRuleRestrictiveForLogDisplay(ruleset, ruleKey)
     if not ruleset or not ruleKey then
         return false
     end
     local v = ruleset[ruleKey]
-    return v ~= nil and v ~= "ALLOWED" and v ~= false
+    return v ~= nil and v ~= "ALLOWED" and v ~= "LOG_ONLY" and v ~= false
 end
 
 local function GetForcedMovementLogReason(entry)
@@ -925,24 +925,24 @@ function SC:ShouldDisplayLogEntryInUI(entry)
     if kind == "FORCED_MOVEMENT" or kind == "FORCED_MOVEMENT_ENDED" then
         local reason = GetForcedMovementLogReason(entry)
         if reason == "taxi" then
-            return IsRuleTrackedInRunRuleset(ruleset, "flightPaths")
+            return IsRuleRestrictiveForLogDisplay(ruleset, "flightPaths")
         end
         if reason == "vehicle" or reason == "override" then
-            return IsRuleTrackedInRunRuleset(ruleset, "mounts")
-                or IsRuleTrackedInRunRuleset(ruleset, "flying")
+            return IsRuleRestrictiveForLogDisplay(ruleset, "mounts")
+                or IsRuleRestrictiveForLogDisplay(ruleset, "flying")
         end
-        return IsRuleTrackedInRunRuleset(ruleset, "flightPaths")
-            or IsRuleTrackedInRunRuleset(ruleset, "mounts")
-            or IsRuleTrackedInRunRuleset(ruleset, "flying")
+        return IsRuleRestrictiveForLogDisplay(ruleset, "flightPaths")
+            or IsRuleRestrictiveForLogDisplay(ruleset, "mounts")
+            or IsRuleRestrictiveForLogDisplay(ruleset, "flying")
     end
 
     if kind == "LEVEL_GAP_EXCEEDED" then
-        return IsRuleTrackedInRunRuleset(ruleset, "maxLevelGap")
+        return IsRuleRestrictiveForLogDisplay(ruleset, "maxLevelGap")
     end
 
     if kind == "INSTANCE_ENTERED" then
-        return IsRuleTrackedInRunRuleset(ruleset, "dungeonRepeat")
-            or IsRuleTrackedInRunRuleset(ruleset, "instanceWithUnsyncedPlayers")
+        return IsRuleRestrictiveForLogDisplay(ruleset, "dungeonRepeat")
+            or IsRuleRestrictiveForLogDisplay(ruleset, "instanceWithUnsyncedPlayers")
     end
 
     return true
