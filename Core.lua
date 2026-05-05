@@ -911,6 +911,23 @@ local function GetForcedMovementLogReason(entry)
     return nil
 end
 
+local function HasActiveLocalViolationForRule(ruleName)
+    local db = SoftcoreDB
+    if not db then
+        return false
+    end
+    local playerKey = db.character and GetPlayerKey(db.character) or nil
+    for _, violation in ipairs(db.violations or {}) do
+        if violation.status ~= "CLEARED"
+            and violation.shared ~= true
+            and violation.type == ruleName
+            and (not playerKey or violation.playerKey == playerKey) then
+            return true
+        end
+    end
+    return false
+end
+
 --- Whether a stored log entry should appear in the master menu Log tab and /sc log chat output.
 --- Full history remains in SavedVariables and CSV/debug exports.
 function SC:ShouldDisplayLogEntryInUI(entry)
@@ -925,11 +942,22 @@ function SC:ShouldDisplayLogEntryInUI(entry)
     if kind == "FORCED_MOVEMENT" or kind == "FORCED_MOVEMENT_ENDED" then
         local reason = GetForcedMovementLogReason(entry)
         if reason == "taxi" then
+            if HasActiveLocalViolationForRule("flightPaths") then
+                return false
+            end
             return IsRuleRestrictiveForLogDisplay(ruleset, "flightPaths")
         end
         if reason == "vehicle" or reason == "override" then
+            if HasActiveLocalViolationForRule("mounts") or HasActiveLocalViolationForRule("flying") then
+                return false
+            end
             return IsRuleRestrictiveForLogDisplay(ruleset, "mounts")
                 or IsRuleRestrictiveForLogDisplay(ruleset, "flying")
+        end
+        if HasActiveLocalViolationForRule("flightPaths")
+            or HasActiveLocalViolationForRule("mounts")
+            or HasActiveLocalViolationForRule("flying") then
+            return false
         end
         return IsRuleRestrictiveForLogDisplay(ruleset, "flightPaths")
             or IsRuleRestrictiveForLogDisplay(ruleset, "mounts")
@@ -2856,7 +2884,10 @@ local function EnsureRunExportFrame()
         editBox:ClearFocus()
     end)
     frame.editBox:SetScript("OnTextChanged", function(editBox)
-        local height = editBox:GetStringHeight() + 20
+        local _, fontHeight = editBox:GetFont()
+        local lineHeight = tonumber(fontHeight) or 14
+        local lineCount = editBox.GetNumLines and editBox:GetNumLines() or 1
+        local height = (math.max(1, lineCount) * lineHeight) + 24
         if height < frame.scroll:GetHeight() then
             height = frame.scroll:GetHeight()
         end

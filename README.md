@@ -246,7 +246,7 @@ Single-client smoke:
 - [x] Login, `/reload`, open menu, switch all tabs, HUD, and minimap button.
 - [x] Run `/sc`, `/sc commands`, `/sc status`, `/sc rules`, `/sc log`, `/sc violations`, `/sc gear`, `/sc dungeons`, `/sc sound test list`, `/sc export`, and `/sc bug`.
 - [x] Start a solo run, reload, and confirm run state, HUD, minimap button, logs, rules, and active time remain sane.
-- [ ] Trigger or inspect representative rule checks: gear, mailbox/bank/auction/trade access, mount/flying/flight-path rules, dungeon tracking, and violation clear.
+- [x] Trigger or inspect representative rule checks: gear, mailbox/bank/auction/trade access, mount/flying/flight-path rules, dungeon tracking, and violation clear.
 - [x] Verify inactive/no-run states do not nil-error after `/sc reset confirm end run`.
 
 Required multiplayer release passes:
