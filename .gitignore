@@ -1,0 +1,25 @@
+# Local editor and agent state
+.claude/
+.cursor/
+.vscode/
+
+# Release/package artifacts
+*.zip
+*.7z
+*.tar
+*.tar.gz
+*.tgz
+*.log
+
+# Common temporary files
+*.tmp
+*.bak
+*.old
+*.orig
+*.rej
+*~
+
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
