@@ -157,6 +157,8 @@ Quest vehicles, vehicle UI, override action bars, taxis, and forced movement are
 
 Consumable restrictions are recorded after the client confirms the item spell succeeded when that spell data is available, so failed clicks, cooldown attempts, and unusable-context attempts should not create accidental violations. Bag, action-bar, and direct item-use paths are watched where the Retail client exposes stable hooks.
 
+Item tooltips show a concise red Softcore warning when the hovered item is not allowed by the active run's item rules, including restricted consumables, item enhancements when enchants are restricted, gear quality limits, heirlooms, and permanently enchanted gear. This is advisory only; enforcement still happens through the normal violation checks.
+
 Summons, portals, quest teleports, Chromie Time, Timewalking, level scaling, and similar world systems are treated as normal game context unless a future rule explicitly governs them.
 
 ## Separate Runs

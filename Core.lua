@@ -3338,6 +3338,9 @@ function SC:Initialize()
     if self.Events_Register then
         self:Events_Register()
     end
+    if self.ItemTooltips_Register then
+        self:ItemTooltips_Register()
+    end
 
     if self.Sync_Initialize then
         self:Sync_Initialize()

@@ -209,7 +209,7 @@ local function GetItemInfoCompat(itemLink)
     return GetItemInfo(itemLink)
 end
 
-local function GetPermanentEnchantId(itemLink)
+function SC:GetPermanentEnchantIdFromItemLink(itemLink)
     local itemString = string.match(tostring(itemLink or ""), "item:([^|]+)")
     if not itemString then return nil end
 
@@ -224,6 +224,10 @@ local function GetPermanentEnchantId(itemLink)
     end
 
     return enchantId
+end
+
+local function GetPermanentEnchantId(itemLink)
+    return SC:GetPermanentEnchantIdFromItemLink(itemLink)
 end
 
 local function GetEquippedItems()
@@ -248,7 +252,7 @@ local function GetEquippedItems()
     return items
 end
 
-local function IsGearQualityInvalid(ruleValue, quality)
+function SC:IsGearQualityInvalidForRule(ruleValue, quality)
     if not quality or ruleValue == "ALLOWED" then
         return false
     end
@@ -278,6 +282,10 @@ local function IsGearQualityInvalid(ruleValue, quality)
     end
 
     return false
+end
+
+local function IsGearQualityInvalid(ruleValue, quality)
+    return SC:IsGearQualityInvalidForRule(ruleValue, quality)
 end
 
 local function ShouldThrottle(key, seconds)

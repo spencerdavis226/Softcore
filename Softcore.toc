@@ -12,6 +12,7 @@ RunLabels.lua
 Rules.lua
 Achievements.lua
 Integrity.lua
+ItemTooltips.lua
 Events.lua
 UI.lua
 Sync.lua
