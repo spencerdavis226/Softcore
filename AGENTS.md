@@ -194,7 +194,7 @@ Remote violation-clear messages may clear imported shared violations only. They 
 
 Logs should display newest first in the UI.
 
-Warband bank violations use `ACCOUNT_BANK_PANEL_OPENED` as an unconditional open signal; `PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED` and `BANK_TABS_CHANGED` with account bank type only count when the account bank UI is actually open (`AccountBankPanel` / `C_Bank.IsBankOpen`), so taxi and other flows do not false-flag on background slot sync.
+Warband bank violations use `ACCOUNT_BANK_PANEL_OPENED` as an unconditional open signal; newer Retail `BANKFRAME_OPENED` events also count when the player is interacting with an `AccountBanker`. `PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED` and `BANK_TABS_CHANGED` with account bank type only count when the account bank UI is actually open (`AccountBankPanel`, `BankPanel`, `C_Bank.IsBankOpen`, or active AccountBanker interaction), so taxi and other flows do not false-flag on background slot sync.
 
 ## UI Direction
 

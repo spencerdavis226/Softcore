@@ -381,11 +381,36 @@ local function IsWarbandBankUIVisible()
     if panel and panel.IsShown and panel:IsShown() then
         return true
     end
+    local bankPanel = _G.BankPanel or (_G.BankFrame and _G.BankFrame.BankPanel)
+    if bankPanel and bankPanel.IsShown and bankPanel:IsShown() then
+        if bankPanel.GetActiveBankType and Enum and Enum.BankType and bankPanel:GetActiveBankType() == Enum.BankType.Account then
+            return true
+        end
+        if bankPanel.selectedTabID and Enum and Enum.BagIndex then
+            for key, value in pairs(Enum.BagIndex) do
+                if value == bankPanel.selectedTabID and string.find(tostring(key), "AccountBankTab", 1, true) then
+                    return true
+                end
+            end
+        end
+    end
     if C_Bank and C_Bank.IsBankOpen and Enum and Enum.BankType then
         local ok, open = pcall(C_Bank.IsBankOpen, Enum.BankType.Account)
         if ok and open then
             return true
         end
+    end
+    return false
+end
+
+local function IsAccountBankerInteraction()
+    if C_PlayerInteractionManager
+        and C_PlayerInteractionManager.IsInteractingWithNpcOfType
+        and Enum
+        and Enum.PlayerInteractionType
+        and Enum.PlayerInteractionType.AccountBanker then
+        local ok, interacting = pcall(C_PlayerInteractionManager.IsInteractingWithNpcOfType, Enum.PlayerInteractionType.AccountBanker)
+        return ok and interacting == true
     end
     return false
 end
@@ -401,12 +426,16 @@ local function IsWarbandBankAccessEvent(event, ...)
         return true
     end
 
+    if event == "BANKFRAME_OPENED" then
+        return IsAccountBankerInteraction() or IsWarbandBankUIVisible()
+    end
+
     if event == "PLAYER_ACCOUNT_BANK_TAB_SLOTS_CHANGED" then
-        return IsWarbandBankUIVisible()
+        return IsAccountBankerInteraction() or IsWarbandBankUIVisible()
     end
 
     if Enum and Enum.BankType and bankType == Enum.BankType.Account then
-        return IsWarbandBankUIVisible()
+        return IsAccountBankerInteraction() or IsWarbandBankUIVisible()
     end
 
     return false
@@ -840,10 +869,10 @@ function SC:Events_Register()
             HandleTradeAcceptUpdate(...)
         elseif WARNING_EVENTS[event] then
             HandleWarning(event)
-        elseif ACCESS_EVENTS[event] then
-            HandleAccessEvent(event)
         elseif IsWarbandBankAccessEvent(event, ...) then
             ApplyAccessRule("warbandBank", "Warband bank opened or accessed.")
+        elseif ACCESS_EVENTS[event] then
+            HandleAccessEvent(event)
         elseif event == "PLAYER_MOUNT_DISPLAY_CHANGED" or event == "UNIT_AURA" or event == "UNIT_ENTERING_VEHICLE" or event == "UNIT_ENTERED_VEHICLE" or event == "UNIT_EXITING_VEHICLE" or event == "UNIT_EXITED_VEHICLE" or event == "UPDATE_OVERRIDE_ACTIONBAR" or event == "VEHICLE_UPDATE" or event == "PLAYER_CONTROL_LOST" or event == "PLAYER_CONTROL_GAINED" then
             -- In-game verification note: mount/flying state updates can arrive through either
             -- display, aura, vehicle, or override-bar events depending on client build and quest mechanics.

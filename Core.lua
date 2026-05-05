@@ -2502,8 +2502,6 @@ function SC:PrintRules()
         "consumables",
         "instancedPvP",
         "actionCam",
-        "maxDeaths",
-        "maxDeathsValue",
     }
 
     Print("current rules:")
