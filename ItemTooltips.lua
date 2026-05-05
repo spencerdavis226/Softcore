@@ -149,6 +149,26 @@ local function TooltipAlreadyHasSoftcoreLine(tooltip)
     return false
 end
 
+local function AddSoftcoreTooltipLine(tooltip, itemRef, data)
+    if not tooltip or TooltipAlreadyHasSoftcoreLine(tooltip) then
+        return
+    end
+
+    if not itemRef then
+        local _, itemLink = tooltip.GetItem and tooltip:GetItem()
+        itemRef = itemLink or data and data.hyperlink
+    end
+
+    if not itemRef then
+        return
+    end
+
+    if SC:IsItemRestrictedForRunTooltip(itemRef, tooltip, data) then
+        tooltip:AddLine(SOFTCORE_TOOLTIP_LINE, 1, 0.15, 0.15, false)
+        tooltip:Show()
+    end
+end
+
 local function IsEquippableItem(itemRef)
     local _, _, _, itemEquipLoc = GetItemInfoInstantCompat(itemRef)
     return itemEquipLoc and itemEquipLoc ~= "" and itemEquipLoc ~= "INVTYPE_NON_EQUIP_IGNORE"
@@ -218,24 +238,40 @@ function SC:ItemTooltips_Register()
     end
     self.itemTooltipsRegistered = true
 
-    if not (TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Item) then
-        return
+    if TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType and Enum.TooltipDataType.Item then
+        TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
+            AddSoftcoreTooltipLine(tooltip, nil, data)
+        end)
     end
 
-    TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, function(tooltip, data)
-        if not tooltip or TooltipAlreadyHasSoftcoreLine(tooltip) then
-            return
+    local function GetContainerItemLinkCompat(bag, slot)
+        if C_Container and C_Container.GetContainerItemLink then
+            return C_Container.GetContainerItemLink(bag, slot)
         end
+        if GetContainerItemLink then
+            return GetContainerItemLink(bag, slot)
+        end
+        return nil
+    end
 
-        local _, itemLink = tooltip.GetItem and tooltip:GetItem()
-        itemLink = itemLink or data and data.hyperlink
-        if not itemLink then
-            return
+    local function HookTooltipMethod(tooltip, methodName, callback)
+        if tooltip and tooltip[methodName] and hooksecurefunc then
+            hooksecurefunc(tooltip, methodName, callback)
         end
+    end
 
-        if SC:IsItemRestrictedForRunTooltip(itemLink, tooltip, data) then
-            tooltip:AddLine(SOFTCORE_TOOLTIP_LINE, 1, 0.15, 0.15, false)
-            tooltip:Show()
-        end
-    end)
+    local function HookItemTooltip(tooltip)
+        HookTooltipMethod(tooltip, "SetBagItem", function(frame, bag, slot)
+            AddSoftcoreTooltipLine(frame, GetContainerItemLinkCompat(bag, slot), nil)
+        end)
+        HookTooltipMethod(tooltip, "SetInventoryItem", function(frame, unit, slot)
+            AddSoftcoreTooltipLine(frame, GetInventoryItemLink and GetInventoryItemLink(unit, slot), nil)
+        end)
+        HookTooltipMethod(tooltip, "SetHyperlink", function(frame, link)
+            AddSoftcoreTooltipLine(frame, link, nil)
+        end)
+    end
+
+    HookItemTooltip(GameTooltip)
+    HookItemTooltip(ItemRefTooltip)
 end

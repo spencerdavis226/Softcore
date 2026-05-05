@@ -43,7 +43,8 @@
     "WorldFrame",
     "RAID_CLASS_COLORS",
     "LOCALIZED_CLASS_NAMES_MALE",
-    "TooltipDataProcessor"
+    "TooltipDataProcessor",
+    "ItemRefTooltip"
   ],
   "Lua.type.weakUnionCheck": true
 }
