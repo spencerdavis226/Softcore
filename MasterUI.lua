@@ -252,7 +252,7 @@ local MOVEMENT_RULES = {
     { label = "Allow Flight Paths", key = "flightPaths" },
 }
 
-local UNSYNCED_PARTY_TOOLTIP = "Allows normal party play with real players who are not synced to your Softcore run, including open-world groups, questing, queued Dungeon Finder, and manual dungeon groups. Those players are not added to your run unless you use Party Sync or accept a sync/invite proposal. If unchecked, gain XP, level, and enter dungeons only with Softcore-synced run members. Follower dungeon NPCs do not count as unsynced players."
+local UNSYNCED_PARTY_TOOLTIP = "Checked: You may gain XP, level, and enter dungeons with players outside your Softcore run. They stay outside your run unless you use Party Sync.\n\nUnchecked: XP, leveling, and dungeons require synced run members. Follower dungeon NPCs do not count."
 
 local EDITABLE_RULE_ORDER = {
     "groupingMode",
