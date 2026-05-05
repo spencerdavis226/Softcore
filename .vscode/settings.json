@@ -42,7 +42,8 @@
     "FauxScrollFrame_OnVerticalScroll",
     "WorldFrame",
     "RAID_CLASS_COLORS",
-    "LOCALIZED_CLASS_NAMES_MALE"
+    "LOCALIZED_CLASS_NAMES_MALE",
+    "TooltipDataProcessor"
   ],
   "Lua.type.weakUnionCheck": true
 }
