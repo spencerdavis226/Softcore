@@ -1328,6 +1328,38 @@ function SC:Sync_BroadcastViolation(violation)
     })
 end
 
+function SC:Sync_BroadcastActiveViolations(reason)
+    if not CanShareAudit() then
+        return 0
+    end
+
+    local db = GetDB()
+    local localKey = LocalPlayerKey()
+    local sent = 0
+
+    for _, violation in ipairs(db.violations or {}) do
+        if violation
+            and violation.status ~= "CLEARED"
+            and not violation.shared
+            and violation.playerKey == localKey
+            and violation.runId == db.run.runId
+        then
+            self:Sync_BroadcastViolation(violation)
+            sent = sent + 1
+        end
+    end
+
+    if sent > 0 and self.TraceDebug then
+        self:TraceDebug("SYNC_REPLAY_ACTIVE_VIOLATIONS", {
+            count = sent,
+            reason = reason,
+            runId = db.run.runId,
+        })
+    end
+
+    return sent
+end
+
 function SC:Sync_BroadcastViolationClear(violation)
     if not CanShareAudit() or not violation or not violation.id then
         return

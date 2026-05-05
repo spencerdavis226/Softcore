@@ -1604,6 +1604,9 @@ function SC:ReceiveProposalResponse(payload, playerKey)
                 if self.Sync_SendRunProposalConfirmed then
                     self:Sync_SendRunProposalConfirmed(proposal)
                 end
+                if self.Sync_BroadcastActiveViolations then
+                    self:Sync_BroadcastActiveViolations("PROPOSAL_CONFIRMED")
+                end
 
                 if proposal.proposalType == "SYNC_RUN" then
                     Print("all members accepted. Run sync confirmed.")
@@ -1740,6 +1743,9 @@ function SC:ReceiveRunConfirmed(payload, confirmerKey)
     if self.MasterUI_Refresh then
         self:MasterUI_Refresh()
     end
+    if self.Sync_BroadcastActiveViolations then
+        self:Sync_BroadcastActiveViolations("PROPOSAL_CONFIRMED_RECEIVED")
+    end
 end
 
 function SC:ConfirmAcceptedProposalFromStatus(proposerKey, runId, rulesetHash)
@@ -1801,6 +1807,9 @@ function SC:ConfirmAcceptedProposalFromStatus(proposerKey, runId, rulesetHash)
     end
     if self.HUD_Refresh then self:HUD_Refresh() end
     if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+    if self.Sync_BroadcastActiveViolations then
+        self:Sync_BroadcastActiveViolations("PROPOSAL_CONFIRMED_STATUS")
+    end
     return true
 end
 
