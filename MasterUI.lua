@@ -205,14 +205,14 @@ local ACHIEVEMENT_RULE_ICONS = {
 
 local ACHIEVEMENT_KIND_ICONS = {
     BINARY = "Interface\\Icons\\Achievement_General",
-    CAMERA_IRONMAN_NO_FLIGHT_PATHS_MAX = "Interface\\Icons\\Ability_Mount_Gryphon_01",
+    CAMERA_IRONMAN_NO_FLIGHT_PATHS_MAX = "Interface\\Icons\\Achievement_Zone_IceCrown_01",
     CAMERA_MAX = "Interface\\Icons\\INV_Misc_Spyglass_02",
     CHEF_SPECIAL_MAX = "Interface\\Icons\\INV_Misc_Food_15",
     CLEAN_MAX = "Interface\\Icons\\INV_Misc_Rune_01",
     COMPLETION_AWARD = "Interface\\Icons\\INV_Letter_18",
     GEAR_QUALITY_CRAFTED_MAX = "Interface\\Icons\\Trade_BlackSmithing",
     GEAR_QUALITY_MAX = "Interface\\Icons\\INV_Chest_Cloth_17",
-    GROUPED_MAX = "Interface\\Icons\\Achievement_GuildPerk_EverybodysFriend",
+    GROUPED_MAX = "Interface\\Icons\\Achievement_GuildPerk_HastyHearth",
     IRONMAN_MAX = "Interface\\Icons\\INV_Sword_27",
     MAX_LEVEL = "Interface\\Icons\\INV_Misc_Trophy_Argent",
     RULE_UNCHANGED_MAX = "Interface\\Icons\\INV_Misc_Note_05",
@@ -3200,12 +3200,20 @@ local function GetAchievementIcon(achievement)
         return ACHIEVEMENT_RULE_ICONS[ruleName]
     end
 
+    if progressKind == "GEAR_QUALITY_CRAFTED_MAX" and ACHIEVEMENT_KIND_ICONS[progressKind] then
+        return ACHIEVEMENT_KIND_ICONS[progressKind]
+    end
+
     if (progressKind == "GEAR_QUALITY_MAX" or progressKind == "GEAR_QUALITY_CRAFTED_MAX") and ACHIEVEMENT_RULE_ICONS[ruleName] then
         return ACHIEVEMENT_RULE_ICONS[ruleName]
     end
 
     if progressKind == "LEVEL" or progressKind == "LEVEL_CLEAN" then
         local target = tonumber(achievement.target or 0) or 0
+        if progressKind == "LEVEL_CLEAN" and target >= 30 and target <= 100 then
+            local runeIndex = math.floor(target / 10) - 1
+            return string.format("Interface\\Icons\\INV_Misc_Rune_%02d", runeIndex)
+        end
         if target > 0 then
             return "Interface\\Icons\\Achievement_Level_" .. tostring(target)
         end
