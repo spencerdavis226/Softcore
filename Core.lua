@@ -911,15 +911,14 @@ local function GetForcedMovementLogReason(entry)
     return nil
 end
 
-local function HasActiveLocalViolationForRule(ruleName)
+local function HasLocalViolationForRule(ruleName)
     local db = SoftcoreDB
     if not db then
         return false
     end
     local playerKey = db.character and GetPlayerKey(db.character) or nil
     for _, violation in ipairs(db.violations or {}) do
-        if violation.status ~= "CLEARED"
-            and violation.shared ~= true
+        if violation.shared ~= true
             and violation.type == ruleName
             and (not playerKey or violation.playerKey == playerKey) then
             return true
@@ -942,21 +941,21 @@ function SC:ShouldDisplayLogEntryInUI(entry)
     if kind == "FORCED_MOVEMENT" or kind == "FORCED_MOVEMENT_ENDED" then
         local reason = GetForcedMovementLogReason(entry)
         if reason == "taxi" then
-            if HasActiveLocalViolationForRule("flightPaths") then
+            if HasLocalViolationForRule("flightPaths") then
                 return false
             end
             return IsRuleRestrictiveForLogDisplay(ruleset, "flightPaths")
         end
         if reason == "vehicle" or reason == "override" then
-            if HasActiveLocalViolationForRule("mounts") or HasActiveLocalViolationForRule("flying") then
+            if HasLocalViolationForRule("mounts") or HasLocalViolationForRule("flying") then
                 return false
             end
             return IsRuleRestrictiveForLogDisplay(ruleset, "mounts")
                 or IsRuleRestrictiveForLogDisplay(ruleset, "flying")
         end
-        if HasActiveLocalViolationForRule("flightPaths")
-            or HasActiveLocalViolationForRule("mounts")
-            or HasActiveLocalViolationForRule("flying") then
+        if HasLocalViolationForRule("flightPaths")
+            or HasLocalViolationForRule("mounts")
+            or HasLocalViolationForRule("flying") then
             return false
         end
         return IsRuleRestrictiveForLogDisplay(ruleset, "flightPaths")

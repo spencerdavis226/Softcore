@@ -218,7 +218,7 @@ Release-oriented multiplayer passes:
 - Active-run invite: invite a not-in-run party member without changing existing participant history.
 - Disconnect/reload recovery: stale rows recover through heartbeat/resync without local reset.
 - Non-addon member: Party Sync blocks inclusion after grace period with clear HUD/Charter state.
-- Join/leave during pending governance: no late apply, silent mutation, or audit spam.
+- Join/leave during pending governance: no late apply, no silent mutation, and no audit spam.
 - Proposal and amendment expiry: late accept/confirm/apply messages are ignored.
 - Raid conversion: local-only mode, cleared remote roster display, expired group governance, and preserved local run.
 - Remote safety: remote death, reset, failure, mismatch, stale message, or violation clear never mutates local authoritative validity, rules, logs, deaths, or violations.
@@ -227,18 +227,18 @@ Release-oriented multiplayer passes:
 
 Release readiness:
 
-- [ ] Syntax-check all TOC-loaded Lua files.
-- [ ] Verify the Retail interface number in-game with `/dump select(4, GetBuildInfo())` and update `Softcore.toc` if needed.
-- [ ] Confirm `## Version` in `Softcore.toc` and `SC.version` in `Core.lua` match.
-- [ ] Confirm the project license and keep a local `LICENSE` file when possible.
-- [ ] Prepare CurseForge summary, description, categories, logo, supported Retail version, release type, and changelog.
-- [ ] Prefer a first public `Beta` file unless the full multiplayer checklist has passed cleanly.
+- [x] Syntax-check all TOC-loaded Lua files.
+- [x] Verify the Retail interface number in-game with `/dump select(4, GetBuildInfo())` and update `Softcore.toc` if needed.
+- [x] Confirm `## Version` in `Softcore.toc` and `SC.version` in `Core.lua` match.
+- [x] Confirm the project license and keep a local `LICENSE` file when possible.
+- [x] Prepare CurseForge summary, description, categories, logo, supported Retail version, release type, and changelog.
+- [x] Prefer a first public `Beta` file unless the full multiplayer checklist has passed cleanly.
 
 Package contents:
 
 - [ ] Zip a top-level `Softcore` folder containing `Softcore/Softcore.toc`.
-- [ ] Include TOC-loaded Lua files, `Assets/*.tga`, `README.md`, changelog/release notes, and license.
-- [ ] Exclude `.git`, `.claude`, `.cursor`, `.vscode`, `AGENTS.md`, `DESIGN.md`, editor files, local test files, and unused empty stubs.
+- [x] Include TOC-loaded Lua files, `Assets/*.tga`, `README.md`, changelog/release notes, and license.
+- [x] Exclude `.git`, `.claude`, `.cursor`, `.vscode`, `AGENTS.md`, `DESIGN.md`, editor files, local test files, and unused empty stubs.
 - [ ] Install and smoke-test the exact zip from a clean `Interface/AddOns` folder.
 
 Single-client smoke:
