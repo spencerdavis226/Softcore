@@ -245,9 +245,16 @@ local function IsChefSpecialPreset(preset)
     return preset == "CHEF_SPECIAL"
 end
 
+local function HasRulesSnapshot(rules)
+    return type(rules) == "table" and next(rules) ~= nil
+end
+
 local function InitialDetectedPreset(eligibility)
     if not eligibility then return nil end
-    return (SC.DetectRulesetPreset and SC:DetectRulesetPreset(eligibility.initialRules)) or eligibility.initialPreset
+    if SC.DetectRulesetPreset and HasRulesSnapshot(eligibility.initialRules) then
+        return SC:DetectRulesetPreset(eligibility.initialRules)
+    end
+    return eligibility.initialPreset
 end
 
 local function IsCameraEnforcedRules(rules)

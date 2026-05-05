@@ -41,7 +41,7 @@ Softcore includes four visible presets:
 | Preset | Shape |
 |---|---|
 | Casual | Low-restriction grouped baseline. Unsynced party play, economy access, mounts, flying, flight paths, consumables, heirlooms, enchants, and repeated dungeons are allowed; instanced PvP is blocked. |
-| Chef's Special | Creator-preferred profile. Synced party members are required by default, white/gray gear limits are enabled, trade and bank are allowed, auction/mailbox/warband/guild banks are blocked, flying mounts are blocked, and enchants stay enabled. |
+| Chef's Special | Creator-preferred profile. Synced party members are required by default, white/gray gear limits are enabled, bank is allowed, trade/auction/mailbox/warband/guild banks are blocked, flying mounts are blocked, and enchants stay enabled. |
 | Ironman | Stricter solo-leaning profile following the common WoW Challenges shape, with flight paths allowed and unsynced party play disabled. |
 | Iron Vigil | A harder Ironman variant with no flight paths and cinematic camera enforced. |
 

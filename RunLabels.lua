@@ -129,7 +129,7 @@ local function ApplyPresetProfile(rules, preset)
     if chef then
         rules.auctionHouse = DISALLOWED_OUTCOME
         rules.mailbox = DISALLOWED_OUTCOME
-        rules.trade = "ALLOWED"
+        rules.trade = DISALLOWED_OUTCOME
         rules.bank = "ALLOWED"
         rules.warbandBank = DISALLOWED_OUTCOME
         rules.guildBank = DISALLOWED_OUTCOME
