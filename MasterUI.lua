@@ -1980,12 +1980,7 @@ local function GetPartyDisplayRows()
         if allowsUnsyncedParty and (displayStatus ~= "FAILED" or not sameRunPeer) and not ((peer.activeViolations or 0) > 0) then
             displayStatus = "PARTY"
         elseif (peer.activeViolations or 0) > 0 then
-            local violationType = peer.latestViolation and peer.latestViolation.type
-            if violationType and violationType ~= "" then
-                displayStatus = "VIOLATION (" .. tostring(violationType) .. ")"
-            else
-                displayStatus = "VIOLATION"
-            end
+            displayStatus = "VIOLATION"
         end
 
         if peerKey and not seen[peerKey] and #displayRows < OVERVIEW_PARTY_ROWS then
@@ -2217,12 +2212,13 @@ local function CreateOverviewPartyRow(parent, index, width)
     local badgeHeight = OVERVIEW_LAYOUT.LEDGER_BADGE_HEIGHT
     local badgeGap = OVERVIEW_LAYOUT.LEDGER_BADGE_GAP
     local badgeLeft = width - 14 - (badgeWidth * 3) - (badgeGap * 2)
+    local badgeTop = -10
     row.classBadge = CreateOverviewSmallBadge(row, badgeWidth, badgeHeight)
-    row.classBadge:SetPoint("TOPLEFT", row, "TOPLEFT", badgeLeft, -10)
-    row.statusPill = CreateStatusPill(row, badgeLeft + badgeWidth + badgeGap, -9, badgeWidth)
+    row.classBadge:SetPoint("TOPLEFT", row, "TOPLEFT", badgeLeft, badgeTop)
+    row.statusPill = CreateStatusPill(row, badgeLeft + badgeWidth + badgeGap, badgeTop, badgeWidth)
     row.statusPill:SetHeight(badgeHeight)
     row.totalBadge = CreateOverviewSmallBadge(row, badgeWidth, badgeHeight)
-    row.totalBadge:SetPoint("TOPLEFT", row, "TOPLEFT", badgeLeft + ((badgeWidth + badgeGap) * 2), -10)
+    row.totalBadge:SetPoint("TOPLEFT", row, "TOPLEFT", badgeLeft + ((badgeWidth + badgeGap) * 2), badgeTop)
     row:Hide()
     return row
 end
