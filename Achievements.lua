@@ -712,6 +712,21 @@ function SC:GetAchievementRows()
     return rows
 end
 
+--- Re-evaluate level-based milestones after login/reload when PLAYER_LEVEL_UP may not have fired with the addon ready.
+function SC:Achievements_CatchUp()
+    if not self.Achievements_OnLevelChanged then
+        return
+    end
+    local db = self.db or SoftcoreDB
+    if not db or not db.run or not db.run.active then
+        return
+    end
+    if self.IsLocalCharacterFailed and self:IsLocalCharacterFailed() then
+        return
+    end
+    self:Achievements_OnLevelChanged(db.character and db.character.level)
+end
+
 function SC:Achievements_OnRunStart(runOptions)
     local db = self.db or SoftcoreDB
     if not db or not db.run or not db.run.active then return end

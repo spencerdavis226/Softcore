@@ -97,13 +97,15 @@ local function HandlePlayerDead()
     Broadcast("PLAYER_DEAD")
 end
 
-local function HandleLevelUp(level)
+local function HandleLevelUp(...)
     local db = SC.db or SoftcoreDB
     if not db then
         return
     end
 
-    db.character.level = level or UnitLevel("player") or db.character.level
+    -- PLAYER_LEVEL_UP passes the new level as the first payload; prefer it over UnitLevel in this callback.
+    local newLevel = tonumber(select(1, ...)) or UnitLevel("player") or db.character.level
+    db.character.level = newLevel
     if not db.run or not db.run.active or (SC.IsLocalCharacterFailed and SC:IsLocalCharacterFailed()) then
         return
     end
@@ -933,6 +935,12 @@ function SC:Events_Register()
             end
             if SC.ClearStaleRuleAmendments then
                 SC:ClearStaleRuleAmendments()
+            end
+            if SC.RefreshCharacter then
+                SC:RefreshCharacter()
+            end
+            if SC.Achievements_CatchUp then
+                SC:Achievements_CatchUp()
             end
             if SC.ScanEquippedGear then
                 SC:ScanEquippedGear(true)
