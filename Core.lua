@@ -1020,6 +1020,10 @@ function SC:ShouldDisplayLogEntryInUI(entry)
         return false
     end
 
+    if kind == "EXPLORER_MODE_ENABLED" or kind == "EXPLORER_MODE_RESTORED" then
+        return false
+    end
+
     if kind == "LEVEL_GAP_EXCEEDED" then
         return IsRuleRestrictiveForLogDisplay(ruleset, "maxLevelGap")
     end
