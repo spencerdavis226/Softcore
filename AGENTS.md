@@ -30,7 +30,7 @@ Item tooltip warnings are advisory and lightweight. The shared tooltip line shou
 
 Temporary cinematic camera profile testing is exposed through `/sc camera status|next|soft|cinematic|dramatic|off`. It is a local tuning helper for comparing ActionCam CVars in game and must not change run rules, proposal payloads, achievements, or synced state.
 
-Explorer Mode is a synced run rule for reducing Blizzard quest guidance. While enforced, Softcore saves and sets `questPOI`, `autoQuestWatch`, and `autoQuestProgress` to `0`, clears super-tracked quest/user/map-pin guidance, hides the Blizzard minimap cluster, and shows a small Softcore tray button so the menu remains reachable. Restore the saved values when no active run requires Explorer Mode. Do not forcibly reparent arbitrary third-party minimap buttons or disable quest-helper addons; document that third-party arrows/pins may still appear.
+Explorer Mode is a synced run rule for reducing Blizzard quest guidance. While enforced, Softcore saves and sets `questPOI`, `autoQuestWatch`, and `autoQuestProgress` to `0`, clears super-tracked quest/user/map-pin guidance, hides the minimap display, and keeps surrounding Blizzard controls such as location, clock, calendar, and addon compartment available when possible. Restore the saved values when no active run requires Explorer Mode. Do not forcibly reparent arbitrary third-party minimap buttons or disable quest-helper addons; document that third-party arrows/pins may still appear.
 
 ## Core Safety Principle
 

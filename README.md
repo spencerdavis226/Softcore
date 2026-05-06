@@ -86,7 +86,7 @@ Opening a mailbox or trade window alone is allowed so accidental clicks or anoth
 
 Clearing a violation preserves the audit trail and logs the clear event. Death and fatal/character-fail violations are not clearable. Live-state checks, such as equipped gear or active movement forms, are rechecked after clearing so unresolved behavior can create a fresh active violation.
 
-Explorer Mode is an immersion rule. While active, Softcore hides Blizzard quest guidance such as quest objective blobs, super-tracked arrows, auto quest watch, and the minimap, then restores the prior settings when the rule no longer applies. Third-party quest helpers may still draw their own arrows or pins.
+Explorer Mode is an immersion rule. While active, Softcore hides Blizzard quest guidance such as quest objective blobs, super-tracked arrows, auto quest watch, and the minimap display, then restores the prior settings when the rule no longer applies. Third-party quest helpers may still draw their own arrows or pins.
 
 ## Achievements And Completion
 
@@ -100,7 +100,7 @@ The HUD is a small status strip for the active run, party state, and pending gov
 
 HUD text is intentionally short, using labels such as `Review`, `Waiting`, `Settling`, `Syncing`, `Invite`, `Run Sync`, `No Addon`, `Offline`, `Raid Local`, `Version`, `Rules`, `Run ID`, `Not In Run`, and `Level Gap`.
 
-Explorer Mode hides the minimap during active runs, but Softcore remains available through the HUD, addon compartment, and a small Explorer tray button.
+Explorer Mode hides the minimap display during active runs while preserving surrounding Blizzard controls such as the addon compartment, location, clock, and calendar when possible. Softcore remains available through the HUD, addon compartment, and a small Explorer tray button.
 
 Softcore UI sounds are restrained and limited to important moments such as run start/completion, achievements, local deaths or violations, incoming review, accepted or applied governance, cancellations, and violation clears. Use `/sc sound off` to mute them or `/sc sound test list` to inspect available cues.
 

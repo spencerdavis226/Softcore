@@ -1342,6 +1342,10 @@ local questGuidanceOriginals = nil
 local questGuidanceTray = nil
 local questGuidanceSuperTrackGraceUntil = 0
 
+local QUEST_GUIDANCE_MINIMAP_FRAME_NAMES = {
+    "Minimap",
+}
+
 local function GetQuestGuidanceBackup()
     local db = GetDB()
     return db and db.questGuidanceBackup
@@ -1352,8 +1356,51 @@ local function IsQuestGuidanceRequired()
     return IsRunActive() and IsExplorerModeRequired(db and db.run and db.run.ruleset)
 end
 
-local function GetMinimapFrame()
-    return _G.MinimapCluster or _G.Minimap
+local function GetMinimapCluster()
+    return _G.MinimapCluster
+end
+
+local function GetMinimapDisplayFrame()
+    return _G.Minimap
+end
+
+local function CaptureMinimapFrameVisibility()
+    local states = {}
+    for _, name in ipairs(QUEST_GUIDANCE_MINIMAP_FRAME_NAMES) do
+        local frame = _G[name]
+        if frame and frame.IsShown then
+            states[name] = frame:IsShown() and true or false
+        end
+    end
+    return states
+end
+
+local function RestoreMinimapFrameVisibility(states, fallbackShown)
+    for _, name in ipairs(QUEST_GUIDANCE_MINIMAP_FRAME_NAMES) do
+        local frame = _G[name]
+        if frame then
+            local shouldShow = states and states[name]
+            if shouldShow == nil then
+                shouldShow = fallbackShown
+            end
+            if shouldShow == false then
+                if frame.Hide then
+                    frame:Hide()
+                end
+            elseif frame.Show then
+                frame:Show()
+            end
+        end
+    end
+end
+
+local function HideMinimapDisplay()
+    for _, name in ipairs(QUEST_GUIDANCE_MINIMAP_FRAME_NAMES) do
+        local frame = _G[name]
+        if frame and frame.Hide then
+            frame:Hide()
+        end
+    end
 end
 
 local function CreateQuestGuidanceTray()
@@ -1421,7 +1468,9 @@ local function CaptureQuestGuidanceOriginals()
     if db and db.questGuidanceBackup then
         questGuidanceOriginals = {
             cvars = {},
+            clusterShown = db.questGuidanceBackup.clusterShown,
             minimapShown = db.questGuidanceBackup.minimapShown,
+            minimapFrames = db.questGuidanceBackup.minimapFrames,
         }
         for _, key in ipairs(QUEST_GUIDANCE_CVARS) do
             questGuidanceOriginals.cvars[key] = db.questGuidanceBackup.cvars and db.questGuidanceBackup.cvars[key]
@@ -1431,7 +1480,9 @@ local function CaptureQuestGuidanceOriginals()
 
     questGuidanceOriginals = {
         cvars = {},
-        minimapShown = not GetMinimapFrame() or GetMinimapFrame():IsShown(),
+        clusterShown = not GetMinimapCluster() or GetMinimapCluster():IsShown(),
+        minimapShown = not GetMinimapDisplayFrame() or GetMinimapDisplayFrame():IsShown(),
+        minimapFrames = CaptureMinimapFrameVisibility(),
     }
     for _, key in ipairs(QUEST_GUIDANCE_CVARS) do
         questGuidanceOriginals.cvars[key] = GetCVarCompat(key)
@@ -1440,7 +1491,9 @@ local function CaptureQuestGuidanceOriginals()
     if db then
         db.questGuidanceBackup = {
             cvars = {},
+            clusterShown = questGuidanceOriginals.clusterShown,
             minimapShown = questGuidanceOriginals.minimapShown,
+            minimapFrames = questGuidanceOriginals.minimapFrames,
         }
         for _, key in ipairs(QUEST_GUIDANCE_CVARS) do
             db.questGuidanceBackup.cvars[key] = questGuidanceOriginals.cvars[key]
@@ -1508,10 +1561,12 @@ local function ApplyQuestGuidanceSettings()
     end
     RefreshQuestGuidanceMap()
 
-    local minimapFrame = GetMinimapFrame()
-    if minimapFrame and minimapFrame.Hide then
-        minimapFrame:Hide()
+    local backup = questGuidanceOriginals or GetQuestGuidanceBackup()
+    local cluster = GetMinimapCluster()
+    if cluster and cluster.Show and (not backup or backup.clusterShown ~= false) then
+        cluster:Show()
     end
+    HideMinimapDisplay()
     ShowQuestGuidanceTray()
 end
 
@@ -1552,9 +1607,17 @@ function SC:RestoreQuestGuidanceSettings()
         end
     end
 
-    local minimapFrame = GetMinimapFrame()
-    if minimapFrame and minimapFrame.Show and backup.minimapShown ~= false then
-        minimapFrame:Show()
+    RestoreMinimapFrameVisibility(backup.minimapFrames, backup.minimapShown ~= false)
+
+    local cluster = GetMinimapCluster()
+    if cluster then
+        if backup.clusterShown == false then
+            if cluster.Hide then
+                cluster:Hide()
+            end
+        elseif cluster.Show then
+            cluster:Show()
+        end
     end
     HideQuestGuidanceTray()
     RefreshQuestGuidanceMap()
