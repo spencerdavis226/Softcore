@@ -208,8 +208,8 @@ Current preset intent:
 
 - Casual: low-restriction grouped baseline
 - Chef's Special: creator-preferred profile
-- Tinman: stricter solo-leaning challenge shape
-- Steelman: stricter Tinman with no flight paths and cinematic camera enforced
+- Bronzeman: stricter solo-leaning challenge shape
+- Bronze Vigil: stricter Bronzeman with no flight paths and cinematic camera enforced
 
 Preset rules must stay aligned with:
 

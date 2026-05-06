@@ -206,7 +206,7 @@ local function UnsyncedPartyStayedLocked(eligibility, ruleset)
         and RequirementStayedLocked(eligibility, ruleset, "instanceWithUnsyncedPlayers")
 end
 
-local function IsTinmanRules(rules)
+local function IsBronzemanRules(rules)
     if not rules then return false end
     if rules.groupingMode ~= "SOLO_SELF_FOUND" then return false end
     if rules.gearQuality ~= "WHITE_GRAY_ONLY" then return false end
@@ -237,9 +237,9 @@ local function IsTinmanRules(rules)
     return true
 end
 
-local function IsTinmanPreset(preset)
+local function IsBronzemanPreset(preset)
     preset = SC.NormalizePresetKey and SC:NormalizePresetKey(preset) or preset
-    return preset == "TINMAN" or preset == "STEELMAN"
+    return preset == "BRONZEMAN" or preset == "BRONZE_VIGIL"
 end
 
 local function IsChefSpecialPreset(preset)
@@ -325,9 +325,9 @@ function SC:GetAchievementDefinitions()
     AddDefinition(result, "char_max_level", "ACCOUNT", "Max Level", "Softcore Champion", "Reach max level after starting the run at level 10 or below.", "MAX_LEVEL")
     AddDefinition(result, "char_clean_max_level", "ACCOUNT", "Max Level", "Clean Finish", "Reach max level after starting at level 10 or lower without any local violations.", "CLEAN_MAX")
     AddDefinition(result, "char_chef_special_max_level", "ACCOUNT", "Max Level", "Chef's Table", "Reach max level after starting at level 10 or lower using the Chef's Special preset with no rule amendments.", "CHEF_SPECIAL_MAX")
-    AddDefinition(result, "char_tinman_max_level", "ACCOUNT", "Max Level", "Tinman", "Reach max level after starting at level 10 or lower using a Tinman-family preset with no rule amendments.", "TINMAN_MAX")
+    AddDefinition(result, "char_bronzeman_max_level", "ACCOUNT", "Max Level", "Bronzeman", "Reach max level after starting at level 10 or lower using a Bronzeman-family preset with no rule amendments.", "BRONZEMAN_MAX")
     AddDefinition(result, "char_camera_max_level", "ACCOUNT", "Max Level", "Locked Perspective", "Reach max level after starting at level 10 or lower with Cinematic Camera enforced from run start.", "CAMERA_MAX")
-    AddDefinition(result, "char_camera_steelman_no_flight_paths_max_level", "ACCOUNT", "Max Level", "Steelman", "Reach max level after starting at level 10 or lower using the Steelman preset with no rule amendments.", "CAMERA_STEELMAN_NO_FLIGHT_PATHS_MAX")
+    AddDefinition(result, "char_camera_bronze_vigil_no_flight_paths_max_level", "ACCOUNT", "Max Level", "Bronze Vigil", "Reach max level after starting at level 10 or lower using the Bronze Vigil preset with no rule amendments.", "CAMERA_BRONZE_VIGIL_NO_FLIGHT_PATHS_MAX")
     AddDefinition(result, "char_original_terms", "ACCOUNT", "Max Level", "Original Terms", "Reach max level after starting at level 10 or lower with no rule amendments applied.", "RULE_UNCHANGED_MAX")
     AddDefinition(result, "char_party_survivor", "ACCOUNT", "Max Level", "Party Survivor", "Reach max level after starting at level 10 or lower in group mode. Unsynced-party play may be allowed by your run rules.", "GROUPED_MAX")
 
@@ -437,17 +437,17 @@ local function BuildProgress(definition, earned)
         return math.min(currentLevel / maxLevel, 1), "Chef's Special: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
     end
 
-    if definition.progressKind == "TINMAN_MAX" then
+    if definition.progressKind == "BRONZEMAN_MAX" then
         if not eligibility.startedAtOrBelow10 then
             return 0, "Started above level 10"
         end
-        if not IsTinmanPreset(InitialDetectedPreset(eligibility)) or not IsTinmanRules(eligibility.initialRules) then
-            return 0, "Not a Tinman start"
+        if not IsBronzemanPreset(InitialDetectedPreset(eligibility)) or not IsBronzemanRules(eligibility.initialRules) then
+            return 0, "Not a Bronzeman start"
         end
         if AnyRuleAmendmentApplied(eligibility) then
             return 0, "Rules amended"
         end
-        return math.min(currentLevel / maxLevel, 1), "Tinman: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
+        return math.min(currentLevel / maxLevel, 1), "Bronzeman: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
     end
 
     if definition.progressKind == "CAMERA_MAX" then
@@ -466,12 +466,12 @@ local function BuildProgress(definition, earned)
         return math.min(currentLevel / maxLevel, 1), "Camera run: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
     end
 
-    if definition.progressKind == "CAMERA_STEELMAN_NO_FLIGHT_PATHS_MAX" then
+    if definition.progressKind == "CAMERA_BRONZE_VIGIL_NO_FLIGHT_PATHS_MAX" then
         if not eligibility.startedAtOrBelow10 then
             return 0, "Started above level 10"
         end
-        if InitialDetectedPreset(eligibility) ~= "STEELMAN" or not IsTinmanRules(eligibility.initialRules) then
-            return 0, "Not a Steelman start"
+        if InitialDetectedPreset(eligibility) ~= "BRONZE_VIGIL" or not IsBronzemanRules(eligibility.initialRules) then
+            return 0, "Not a Bronze Vigil start"
         end
         if not IsCameraEnforcedRules(eligibility.initialRules) then
             return 0, "No camera mode enforced at start"
@@ -485,7 +485,7 @@ local function BuildProgress(definition, earned)
         if not IsCameraEnforcedRules(db and db.run and db.run.ruleset) then
             return 0, "Camera enforcement removed"
         end
-        return math.min(currentLevel / maxLevel, 1), "Steelman: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
+        return math.min(currentLevel / maxLevel, 1), "Bronze Vigil: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
     end
 
     if definition.progressKind == "RULE_UNCHANGED_MAX" then
@@ -767,8 +767,8 @@ function SC:Achievements_OnLevelChanged(level)
         Earn("char_chef_special_max_level", "CHARACTER", "Chef's Table")
     end
 
-    if IsTinmanPreset(InitialDetectedPreset(eligibility)) and IsTinmanRules(eligibility.initialRules) and not AnyRuleAmendmentApplied(eligibility) then
-        Earn("char_tinman_max_level", "CHARACTER", "Tinman")
+    if IsBronzemanPreset(InitialDetectedPreset(eligibility)) and IsBronzemanRules(eligibility.initialRules) and not AnyRuleAmendmentApplied(eligibility) then
+        Earn("char_bronzeman_max_level", "CHARACTER", "Bronzeman")
     end
 
     if IsCameraEnforcedRules(eligibility.initialRules) and IsCameraEnforcedRules(db.run.ruleset) then
@@ -777,14 +777,14 @@ function SC:Achievements_OnLevelChanged(level)
         end
     end
 
-    if InitialDetectedPreset(eligibility) == "STEELMAN"
-       and IsTinmanRules(eligibility.initialRules)
+    if InitialDetectedPreset(eligibility) == "BRONZE_VIGIL"
+       and IsBronzemanRules(eligibility.initialRules)
        and IsCameraEnforcedRules(eligibility.initialRules)
        and IsCameraEnforcedRules(db.run.ruleset)
        and RequirementStayedLocked(eligibility, db.run.ruleset, "flightPaths")
        and not RuleChanged(eligibility, "actionCam")
        and not AnyRuleAmendmentApplied(eligibility) then
-        Earn("char_camera_steelman_no_flight_paths_max_level", "CHARACTER", "Steelman")
+        Earn("char_camera_bronze_vigil_no_flight_paths_max_level", "CHARACTER", "Bronze Vigil")
     end
 
     if not AnyRuleAmendmentApplied(eligibility) then

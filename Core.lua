@@ -10,8 +10,10 @@ SC.name = "Softcore"
 SC.version = "0.5.0"
 
 local PRESET_KEY_ALIASES = {
-    IRONMAN = "TINMAN",
-    IRON_VIGIL = "STEELMAN",
+    IRONMAN = "BRONZEMAN",
+    IRON_VIGIL = "BRONZE_VIGIL",
+    TINMAN = "BRONZEMAN",
+    STEELMAN = "BRONZE_VIGIL",
 }
 
 function SC:NormalizePresetKey(preset)
@@ -468,11 +470,11 @@ end
 local EnsureDatabase
 
 function SC:NormalizePresetLabel(value)
-    if value == "Ironman" then return "Tinman" end
-    if value == "Ironman Run" then return "Tinman Run" end
-    if value == "Iron Vigil" then return "Steelman" end
-    if value == "Iron Vigil Run" then return "Steelman Run" end
-    if value == "Iron Will" then return "Tinman" end
+    if value == "Ironman" or value == "Tinman" then return "Bronzeman" end
+    if value == "Ironman Run" or value == "Tinman Run" then return "Bronzeman Run" end
+    if value == "Iron Vigil" or value == "Steelman" then return "Bronze Vigil" end
+    if value == "Iron Vigil Run" or value == "Steelman Run" then return "Bronze Vigil Run" end
+    if value == "Iron Will" then return "Bronzeman" end
     return value
 end
 
@@ -489,10 +491,10 @@ end
 local function MigrateAchievementEntry(entry, id, detail)
     if type(entry) ~= "table" then return end
     entry.id = id
-    if entry.detail == "Iron Will" or entry.detail == "Ironman" then
-        entry.detail = "Tinman"
-    elseif entry.detail == "Iron Vigil" then
-        entry.detail = "Steelman"
+    if entry.detail == "Iron Will" or entry.detail == "Ironman" or entry.detail == "Tinman" then
+        entry.detail = "Bronzeman"
+    elseif entry.detail == "Iron Vigil" or entry.detail == "Steelman" then
+        entry.detail = "Bronze Vigil"
     elseif detail and (entry.detail == nil or entry.detail == "") then
         entry.detail = detail
     end
@@ -511,8 +513,10 @@ end
 
 local function MigrateAchievementStore(store)
     if type(store) ~= "table" then return end
-    MigrateEarnedAchievementId(store.earned, "char_ironman_max_level", "char_tinman_max_level", "Tinman")
-    MigrateEarnedAchievementId(store.earned, "char_camera_ironman_no_flight_paths_max_level", "char_camera_steelman_no_flight_paths_max_level", "Steelman")
+    MigrateEarnedAchievementId(store.earned, "char_ironman_max_level", "char_bronzeman_max_level", "Bronzeman")
+    MigrateEarnedAchievementId(store.earned, "char_tinman_max_level", "char_bronzeman_max_level", "Bronzeman")
+    MigrateEarnedAchievementId(store.earned, "char_camera_ironman_no_flight_paths_max_level", "char_camera_bronze_vigil_no_flight_paths_max_level", "Bronze Vigil")
+    MigrateEarnedAchievementId(store.earned, "char_camera_steelman_no_flight_paths_max_level", "char_camera_bronze_vigil_no_flight_paths_max_level", "Bronze Vigil")
 
     local eligibility = store.runEligibility
     if type(eligibility) == "table" then
@@ -523,7 +527,7 @@ local function MigrateAchievementStore(store)
     end
 end
 
-function SC:MigrateTinmanSteelmanPresetKeys()
+function SC:MigrateBronzemanPresetKeys()
     local db = EnsureDatabase()
 
     MigrateRulesetPresetKeys(db.run and db.run.ruleset)
@@ -748,8 +752,8 @@ end
 local PRESET_AWARD_LABELS = {
     CASUAL = "Casual",
     CHEF_SPECIAL = "Chef's Special",
-    TINMAN = "Tinman",
-    STEELMAN = "Steelman",
+    BRONZEMAN = "Bronzeman",
+    BRONZE_VIGIL = "Bronze Vigil",
     CUSTOM = "Custom",
 }
 
@@ -3018,8 +3022,8 @@ local SAMPLE_AWARD_CLASSES = {
 local SAMPLE_AWARD_PRESETS = {
     { preset = "CASUAL", label = "Casual" },
     { preset = "CHEF_SPECIAL", label = "Chef's Special" },
-    { preset = "TINMAN", label = "Tinman" },
-    { preset = "STEELMAN", label = "Steelman" },
+    { preset = "BRONZEMAN", label = "Bronzeman" },
+    { preset = "BRONZE_VIGIL", label = "Bronze Vigil" },
     { preset = "CUSTOM", label = "Custom" },
 }
 
@@ -3381,7 +3385,7 @@ end
 function SC:Initialize()
     BindCharacterDatabase()
     EnsureDatabase()
-    self:MigrateTinmanSteelmanPresetKeys()
+    self:MigrateBronzemanPresetKeys()
     self:ResumeActiveRunTimer()
     self:RefreshCharacter()
     if self.ClearStalePendingProposal then

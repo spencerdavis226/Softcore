@@ -12,7 +12,7 @@ Beta candidate for first public CurseForge upload.
 - Per-character Softcore run ledger for deaths, violations, audit history, party state, and current run status.
 - Master menu with Overview, Charter, Violations, Log, and Achievements tabs.
 - Compact HUD and minimap button.
-- Four visible presets: Casual, Chef's Special, Tinman, and Steelman.
+- Four visible presets: Casual, Chef's Special, Bronzeman, and Bronze Vigil.
 - Charter-tab group run proposals, run sync proposals, party invites, and rule amendments.
 - Party Sync over Blizzard addon messages on party and instance-chat channels.
 - Rule violation tracking for gear, enchants, heirlooms, economy access, travel, dungeons, grouped-play blockers, and other run rules.

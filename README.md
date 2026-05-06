@@ -42,8 +42,8 @@ Softcore includes four visible presets:
 |---|---|
 | Casual | Low-restriction grouped baseline. Unsynced party play, economy access, mounts, flying, flight paths, consumables, heirlooms, enchants, and repeated dungeons are allowed; instanced PvP is blocked. |
 | Chef's Special | Creator-preferred profile. Synced party members are required by default, white/gray gear limits are enabled, bank is allowed, trade/auction/mailbox/warband/guild banks are blocked, flying mounts are blocked, and enchants stay enabled. |
-| Tinman | Stricter solo-leaning challenge profile, with flight paths allowed and unsynced party play disabled. |
-| Steelman | A harder Tinman variant with no flight paths and cinematic camera enforced. |
+| Bronzeman | Stricter solo-leaning challenge profile, with flight paths allowed and unsynced party play disabled. |
+| Bronze Vigil | A harder Bronzeman variant with no flight paths and cinematic camera enforced. |
 
 There are also hidden custom rule profiles that can still be recognized by the run-label system when their exact rules match. Any edited or unmatched ruleset becomes **Custom Run**.
 

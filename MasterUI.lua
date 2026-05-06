@@ -205,7 +205,7 @@ local ACHIEVEMENT_RULE_ICONS = {
 
 local ACHIEVEMENT_KIND_ICONS = {
     BINARY = "Interface\\Icons\\Achievement_General",
-    CAMERA_STEELMAN_NO_FLIGHT_PATHS_MAX = "Interface\\Icons\\Achievement_Zone_IceCrown_01",
+    CAMERA_BRONZE_VIGIL_NO_FLIGHT_PATHS_MAX = "Interface\\Icons\\INV_Shield_05",
     CAMERA_MAX = "Interface\\Icons\\INV_Misc_Spyglass_02",
     CHEF_SPECIAL_MAX = "Interface\\Icons\\INV_Misc_Food_15",
     CLEAN_MAX = "Interface\\Icons\\INV_Misc_Rune_01",
@@ -213,7 +213,7 @@ local ACHIEVEMENT_KIND_ICONS = {
     GEAR_QUALITY_CRAFTED_MAX = "Interface\\Icons\\Trade_BlackSmithing",
     GEAR_QUALITY_MAX = "Interface\\Icons\\INV_Chest_Cloth_17",
     GROUPED_MAX = "Interface\\Icons\\Achievement_GuildPerk_HastyHearth",
-    TINMAN_MAX = "Interface\\Icons\\INV_Sword_27",
+    BRONZEMAN_MAX = "Interface\\Icons\\INV_Ingot_02",
     MAX_LEVEL = "Interface\\Icons\\INV_Misc_Trophy_Argent",
     RULE_UNCHANGED_MAX = "Interface\\Icons\\INV_Misc_Note_05",
 }
@@ -1685,14 +1685,14 @@ local function ConfigureRulesForPreset(rules, preset)
     end
 
     preset = SC.NormalizePresetKey and SC:NormalizePresetKey(preset) or preset
-    local tinman = preset == "TINMAN" or preset == "STEELMAN"
-    local steelman = preset == "STEELMAN"
+    local bronzeman = preset == "BRONZEMAN" or preset == "BRONZE_VIGIL"
+    local bronzeVigil = preset == "BRONZE_VIGIL"
     local chef = preset == "CHEF_SPECIAL"
     local selectedCameraMode = nil
 
-    rules.groupingMode = tinman and "SOLO_SELF_FOUND" or "SYNCED_GROUP_ALLOWED"
-    rules.gearQuality = (tinman or chef) and "WHITE_GRAY_ONLY" or "ALLOWED"
-    if tinman then
+    rules.groupingMode = bronzeman and "SOLO_SELF_FOUND" or "SYNCED_GROUP_ALLOWED"
+    rules.gearQuality = (bronzeman or chef) and "WHITE_GRAY_ONLY" or "ALLOWED"
+    if bronzeman then
         rules.selfCraftedGearAllowed = false
     elseif chef then
         rules.selfCraftedGearAllowed = true
@@ -1702,25 +1702,25 @@ local function ConfigureRulesForPreset(rules, preset)
     rules.maxLevelGap = "ALLOWED"
     rules.maxLevelGapValue = 3
     rules.heirlooms = DISALLOWED_OUTCOME
-    rules.enchants = tinman and DISALLOWED_OUTCOME or "ALLOWED"
-    rules.dungeonRepeat = tinman and DISALLOWED_OUTCOME or "ALLOWED"
+    rules.enchants = bronzeman and DISALLOWED_OUTCOME or "ALLOWED"
+    rules.dungeonRepeat = bronzeman and DISALLOWED_OUTCOME or "ALLOWED"
     SetUnsyncedPartyAllowed(rules, preset == "CASUAL")
 
     for _, spec in ipairs(ECONOMY_RULES) do
-        SetDisallowedRule(rules, spec.key, not (tinman or spec.key == "auctionHouse" or spec.key == "mailbox" or spec.key == "trade" or spec.key == "bank" or spec.key == "warbandBank" or spec.key == "guildBank"))
+        SetDisallowedRule(rules, spec.key, not (bronzeman or spec.key == "auctionHouse" or spec.key == "mailbox" or spec.key == "trade" or spec.key == "bank" or spec.key == "warbandBank" or spec.key == "guildBank"))
     end
 
     for _, spec in ipairs(MOVEMENT_RULES) do
-        SetDisallowedRule(rules, spec.key, not tinman)
+        SetDisallowedRule(rules, spec.key, not bronzeman)
     end
-    if tinman then
+    if bronzeman then
         rules.flightPaths = "ALLOWED"
     end
-    if steelman then
+    if bronzeVigil then
         rules.flightPaths = DISALLOWED_OUTCOME
     end
 
-    SetDisallowedRule(rules, "consumables", not tinman)
+    SetDisallowedRule(rules, "consumables", not bronzeman)
     SetDisallowedRule(rules, "instancedPvP", false)
     rules.actionCam = "ALLOWED"
 
@@ -1741,7 +1741,7 @@ local function ConfigureRulesForPreset(rules, preset)
         rules.instancedPvP = DISALLOWED_OUTCOME
         selectedCameraMode = "CINEMATIC"
         SetCameraRules(rules, selectedCameraMode)
-    elseif not tinman then
+    elseif not bronzeman then
         -- Casual: minimal restrictions for a lightweight baseline run.
         rules.auctionHouse = "ALLOWED"
         rules.mailbox = "ALLOWED"
@@ -1753,7 +1753,7 @@ local function ConfigureRulesForPreset(rules, preset)
         rules.selfCraftedGearAllowed = false
     end
 
-    if steelman then
+    if bronzeVigil then
         selectedCameraMode = "CINEMATIC"
         SetCameraRules(rules, selectedCameraMode)
     end
@@ -2506,9 +2506,9 @@ local function SetRunSetupEnabled(frame, enabled)
     start.setupEnabled = enabled
 
     start.casualBtn:SetEnabled(enabled)
-    start.tinmanBtn:SetEnabled(enabled)
+    start.bronzemanBtn:SetEnabled(enabled)
     if start.chefBtn then start.chefBtn:SetEnabled(enabled) end
-    if start.steelmanBtn then start.steelmanBtn:SetEnabled(enabled) end
+    if start.bronzeVigilBtn then start.bronzeVigilBtn:SetEnabled(enabled) end
 
     for _, control in ipairs(start.controls) do
         if control.Enable and control.Disable then
@@ -2618,9 +2618,9 @@ local function RefreshRunPanel(frame)
         for _, control in ipairs(frame.start.controls) do SetRunControlShown(control, true) end
         if frame.start.presetLabel then SetRunControlShown(frame.start.presetLabel, false) end
         SetRunControlShown(frame.start.casualBtn, false)
-        SetRunControlShown(frame.start.tinmanBtn, false)
+        SetRunControlShown(frame.start.bronzemanBtn, false)
         if frame.start.chefBtn then SetRunControlShown(frame.start.chefBtn, false) end
-        if frame.start.steelmanBtn then SetRunControlShown(frame.start.steelmanBtn, false) end
+        if frame.start.bronzeVigilBtn then SetRunControlShown(frame.start.bronzeVigilBtn, false) end
         SetRunSetupEnabled(frame, false)
         frame.start.inactiveText:SetShown(false)
         frame.start.activeText:SetShown(false)
@@ -2715,9 +2715,9 @@ local function RefreshRunPanel(frame)
         for _, control in ipairs(frame.start.controls) do SetRunControlShown(control, true) end
         if frame.start.presetLabel then SetRunControlShown(frame.start.presetLabel, false) end
         SetRunControlShown(frame.start.casualBtn, false)
-        SetRunControlShown(frame.start.tinmanBtn, false)
+        SetRunControlShown(frame.start.bronzemanBtn, false)
         if frame.start.chefBtn then SetRunControlShown(frame.start.chefBtn, false) end
-        if frame.start.steelmanBtn then SetRunControlShown(frame.start.steelmanBtn, false) end
+        if frame.start.bronzeVigilBtn then SetRunControlShown(frame.start.bronzeVigilBtn, false) end
         SetRunSetupEnabled(frame, false)
         frame.start.inactiveText:SetShown(false)
         frame.start.activeText:SetShown(false)
@@ -2811,9 +2811,9 @@ local function RefreshRunPanel(frame)
     frame.start.maxGapBox:SetShown(true)
     if frame.start.presetLabel then frame.start.presetLabel:SetShown(true) end
     frame.start.casualBtn:SetShown(true)
-    frame.start.tinmanBtn:SetShown(true)
+    frame.start.bronzemanBtn:SetShown(true)
     if frame.start.chefBtn then frame.start.chefBtn:SetShown(true) end
-    if frame.start.steelmanBtn then frame.start.steelmanBtn:SetShown(true) end
+    if frame.start.bronzeVigilBtn then frame.start.bronzeVigilBtn:SetShown(true) end
     for _, control in ipairs(frame.start.controls) do
         SetRunControlShown(control, true)
     end
@@ -2879,9 +2879,9 @@ local function RefreshRunPanel(frame)
     SetRunSetupEnabled(frame, (not active) or modifying)
     if active and not modifying then
         frame.start.casualBtn:SetEnabled(false)
-        frame.start.tinmanBtn:SetEnabled(false)
+        frame.start.bronzemanBtn:SetEnabled(false)
         if frame.start.chefBtn then frame.start.chefBtn:SetEnabled(false) end
-        if frame.start.steelmanBtn then frame.start.steelmanBtn:SetEnabled(false) end
+        if frame.start.bronzeVigilBtn then frame.start.bronzeVigilBtn:SetEnabled(false) end
     end
 
     if active then
@@ -3899,21 +3899,21 @@ function SC:OpenMasterWindow(focusTab)
         ApplyStartPreset(frame, "CHEF_SPECIAL")
     end)
 
-    frame.start.tinmanBtn = CreateButton(frame.start.charterSection.content, "Tinman", presetButtonWidth, presetButtonHeight)
-    frame.start.tinmanBtn:SetPoint("TOPLEFT", frame.start.charterSection.content, "TOPLEFT", charterControlX, rowTwoY - 1)
-    frame.start.tinmanBtn:SetScript("OnClick", function()
-        ApplyStartPreset(frame, "TINMAN")
+    frame.start.bronzemanBtn = CreateButton(frame.start.charterSection.content, "Bronzeman", presetButtonWidth, presetButtonHeight)
+    frame.start.bronzemanBtn:SetPoint("TOPLEFT", frame.start.charterSection.content, "TOPLEFT", charterControlX, rowTwoY - 1)
+    frame.start.bronzemanBtn:SetScript("OnClick", function()
+        ApplyStartPreset(frame, "BRONZEMAN")
     end)
-    frame.start.steelmanBtn = CreateButton(frame.start.charterSection.content, "Steelman", presetButtonWidth, presetButtonHeight)
-    frame.start.steelmanBtn:SetPoint("LEFT", frame.start.tinmanBtn, "RIGHT", 6, 0)
-    frame.start.steelmanBtn:SetScript("OnClick", function()
-        ApplyStartPreset(frame, "STEELMAN")
+    frame.start.bronzeVigilBtn = CreateButton(frame.start.charterSection.content, "Bronze Vigil", presetButtonWidth, presetButtonHeight)
+    frame.start.bronzeVigilBtn:SetPoint("LEFT", frame.start.bronzemanBtn, "RIGHT", 6, 0)
+    frame.start.bronzeVigilBtn:SetScript("OnClick", function()
+        ApplyStartPreset(frame, "BRONZE_VIGIL")
     end)
 
     RegisterRunControl(frame.start, frame.start.casualBtn, frame.start.charterSection)
     RegisterRunControl(frame.start, frame.start.chefBtn, frame.start.charterSection)
-    RegisterRunControl(frame.start, frame.start.tinmanBtn, frame.start.charterSection)
-    RegisterRunControl(frame.start, frame.start.steelmanBtn, frame.start.charterSection)
+    RegisterRunControl(frame.start, frame.start.bronzemanBtn, frame.start.charterSection)
+    RegisterRunControl(frame.start, frame.start.bronzeVigilBtn, frame.start.charterSection)
     frame.start.groupingLabel = CreateLabel(frame.start.charterSection.content, "Mode", 0, 0, "GameFontNormalSmall", 90)
     runLayout:PlaceRowLabel(charterModeRow, frame.start.groupingLabel, 0, 120)
     RegisterRunControl(frame.start, frame.start.groupingLabel, frame.start.charterSection)
@@ -4014,8 +4014,8 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.selfCraftedCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
     frame.start.selfCraftedCheck.label:SetText("Allow any self-crafted gear")
     frame.start.selfCraftedCheck:SetScript("OnClick", function(btn)
-        local tinmanSelected = frame.start.selectedPreset == "TINMAN" or frame.start.selectedPreset == "STEELMAN"
-        if tinmanSelected then
+        local bronzemanSelected = frame.start.selectedPreset == "BRONZEMAN" or frame.start.selectedPreset == "BRONZE_VIGIL"
+        if bronzemanSelected then
             frame.start.selectedRules.selfCraftedGearAllowed = false
             btn:SetChecked(false)
             SC:MasterUI_Refresh()
@@ -4218,17 +4218,17 @@ function SC:OpenMasterWindow(focusTab)
         self.dungeonRepeatCheck:SetChecked(not IsDisallowed(self.selectedRules.dungeonRepeat))
         self.consumablesCheck:SetChecked(not IsDisallowed(self.selectedRules.consumables))
         self.instancedPvPCheck:SetChecked(not IsDisallowed(self.selectedRules.instancedPvP))
-        local tinmanSelected = self.selectedPreset == "TINMAN" or self.selectedPreset == "STEELMAN"
-        if tinmanSelected then
+        local bronzemanSelected = self.selectedPreset == "BRONZEMAN" or self.selectedPreset == "BRONZE_VIGIL"
+        if bronzemanSelected then
             self.selectedRules.selfCraftedGearAllowed = false
         end
         local selfCraftedActive = self.selectedRules.selfCraftedGearAllowed == true
         self.selfCraftedCheck:SetChecked(selfCraftedActive)
-        self.selfCraftedCheck:SetEnabled(canEdit and gearRestricted and not tinmanSelected)
+        self.selfCraftedCheck:SetEnabled(canEdit and gearRestricted and not bronzemanSelected)
         if self.selfCraftedCheck.label then
             if highlightingRuleChanges and tostring(self.draftBaseRules.selfCraftedGearAllowed) ~= tostring(self.selectedRules.selfCraftedGearAllowed) then
                 SetFontStringRGB(self.selfCraftedCheck.label, selfCraftedActive and GREEN_TEXT or RED_TEXT)
-            elseif gearRestricted and not tinmanSelected then
+            elseif gearRestricted and not bronzemanSelected then
                 SetFontStringRGB(self.selfCraftedCheck.label, BODY_TEXT)
             else
                 SetFontStringRGB(self.selfCraftedCheck.label, MUTED_TEXT)
