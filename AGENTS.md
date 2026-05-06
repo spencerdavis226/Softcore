@@ -30,7 +30,7 @@ Item tooltip warnings are advisory and lightweight. The shared tooltip line shou
 
 Temporary cinematic camera profile testing is exposed through `/sc camera status|next|soft|cinematic|dramatic|off`. It is a local tuning helper for comparing ActionCam CVars in game and must not change run rules, proposal payloads, achievements, or synced state.
 
-Explorer Mode is a synced run rule for reducing Blizzard quest guidance. While enforced, Softcore saves and sets `questPOI`, `autoQuestWatch`, and `autoQuestProgress` to `0`, clears super-tracked quest/user/map-pin guidance, hides the minimap display, and keeps surrounding Blizzard controls such as location, clock, calendar, and addon compartment available when possible. Restore the saved values when no active run requires Explorer Mode. Do not forcibly reparent arbitrary third-party minimap buttons or disable quest-helper addons; document that third-party arrows/pins may still appear.
+Explorer Mode is a synced run rule for reducing Blizzard quest guidance. While enforced, Softcore saves and sets `questPOI`, `autoQuestWatch`, and `autoQuestProgress` to `0`, clears super-tracked quest/user/map-pin guidance, hides the minimap display, and keeps surrounding Blizzard controls such as location, clock, calendar, and addon compartment available when possible. Restore the saved values when no active run requires Explorer Mode. Those three CVars are account-wide, so Softcore mirrors their pre-Explorer originals in account `SoftcoreAchievementsDB.questGuidanceCvarBackup` in addition to per-character `questGuidanceBackup`, and restoration falls back to the account snapshot when the character has no local backup (for example after playing another character with Explorer Mode). Do not forcibly reparent arbitrary third-party minimap buttons or disable quest-helper addons; document that third-party arrows/pins may still appear.
 
 ## Core Safety Principle
 
@@ -60,6 +60,8 @@ Do not move active run state back to account-wide storage unless there is a very
 The latest max-level completion award is also character-scoped. It is stored with the character ledger so the award can be reopened after reset/start-new-run without becoming account-wide progress.
 
 The active run may also store transient continuity markers, such as the current instance visit, so `/reload` or relog inside the same dungeon does not look like a repeat entry. These markers are character-scoped run context, not account-wide history.
+
+Account `SoftcoreAchievementsDB.questGuidanceCvarBackup` is not achievement data; it exists only so Explorer Mode can restore Blizzard quest-tracking CVars that are stored account-wide. It is cleared when quest guidance is restored.
 
 ## Sync Model
 

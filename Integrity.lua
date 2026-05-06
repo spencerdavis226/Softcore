@@ -1109,7 +1109,10 @@ local function IsCameraModeRequired(ruleset)
 end
 
 local function IsExplorerModeRuleEnforcedValue(value)
-    return value ~= nil and value ~= "ALLOWED" and value ~= "LOG_ONLY" and value ~= false
+    if value == nil or value == false or value == "" then
+        return false
+    end
+    return value ~= "ALLOWED" and value ~= "LOG_ONLY"
 end
 
 local function IsExplorerModeRequired(ruleset)
@@ -1346,9 +1349,50 @@ local QUEST_GUIDANCE_MINIMAP_FRAME_NAMES = {
     "Minimap",
 }
 
+-- Quest guidance CVars are account-wide; per-character questGuidanceBackup alone cannot
+-- restore them after another character/session left them at Explorer-suppressed values.
+local function SyncQuestGuidanceAccountCvarBackup(cvars)
+    if type(cvars) ~= "table" then
+        return
+    end
+    SoftcoreAchievementsDB = SoftcoreAchievementsDB or {}
+    local copy = {}
+    for _, key in ipairs(QUEST_GUIDANCE_CVARS) do
+        copy[key] = cvars[key]
+    end
+    SoftcoreAchievementsDB.questGuidanceCvarBackup = { cvars = copy }
+end
+
+local function GetQuestGuidanceAccountCvarSnapshot()
+    local store = SoftcoreAchievementsDB
+    local entry = store and store.questGuidanceCvarBackup
+    if type(entry) ~= "table" or type(entry.cvars) ~= "table" then
+        return nil
+    end
+    return entry.cvars
+end
+
+local function ClearQuestGuidanceAccountCvarBackup()
+    if type(SoftcoreAchievementsDB) == "table" then
+        SoftcoreAchievementsDB.questGuidanceCvarBackup = nil
+    end
+end
+
 local function GetQuestGuidanceBackup()
     local db = GetDB()
-    return db and db.questGuidanceBackup
+    if db and db.questGuidanceBackup then
+        return db.questGuidanceBackup
+    end
+    local acctCvars = GetQuestGuidanceAccountCvarSnapshot()
+    if acctCvars then
+        return {
+            cvars = acctCvars,
+            clusterShown = true,
+            minimapShown = true,
+            minimapFrames = nil,
+        }
+    end
+    return nil
 end
 
 local function IsQuestGuidanceRequired()
@@ -1475,6 +1519,9 @@ local function CaptureQuestGuidanceOriginals()
         for _, key in ipairs(QUEST_GUIDANCE_CVARS) do
             questGuidanceOriginals.cvars[key] = db.questGuidanceBackup.cvars and db.questGuidanceBackup.cvars[key]
         end
+        if not GetQuestGuidanceAccountCvarSnapshot() and questGuidanceOriginals.cvars then
+            SyncQuestGuidanceAccountCvarBackup(questGuidanceOriginals.cvars)
+        end
         return
     end
 
@@ -1487,6 +1534,8 @@ local function CaptureQuestGuidanceOriginals()
     for _, key in ipairs(QUEST_GUIDANCE_CVARS) do
         questGuidanceOriginals.cvars[key] = GetCVarCompat(key)
     end
+
+    SyncQuestGuidanceAccountCvarBackup(questGuidanceOriginals.cvars)
 
     if db then
         db.questGuidanceBackup = {
@@ -1612,6 +1661,7 @@ function SC:RestoreQuestGuidanceSettings()
 
     if db then
         db.questGuidanceBackup = nil
+        ClearQuestGuidanceAccountCvarBackup()
         if db.run and db.run.questGuidanceLoggedActive and not db.run.questGuidanceLoggedRestored then
             db.run.questGuidanceLoggedRestored = true
             self:AddLog("EXPLORER_MODE_RESTORED", "Explorer Mode restored quest guidance settings.", {
