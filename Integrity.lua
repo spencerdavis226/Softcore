@@ -1501,16 +1501,6 @@ local function CaptureQuestGuidanceOriginals()
     end
 end
 
-local function RefreshQuestGuidanceMap()
-    if WorldMapFrame then
-        if WorldMapFrame.RefreshAllDataProviders then
-            pcall(WorldMapFrame.RefreshAllDataProviders, WorldMapFrame)
-        elseif WorldMapFrame.RefreshOverlayFrames then
-            pcall(WorldMapFrame.RefreshOverlayFrames, WorldMapFrame)
-        end
-    end
-end
-
 local function IsQuestGuidanceBrowserOpen()
     return WorldMapFrame and WorldMapFrame.IsShown and WorldMapFrame:IsShown()
 end
@@ -1559,7 +1549,6 @@ local function ApplyQuestGuidanceSettings()
     if not ShouldDeferQuestGuidanceClear() then
         ClearSuperTracking()
     end
-    RefreshQuestGuidanceMap()
 
     local backup = questGuidanceOriginals or GetQuestGuidanceBackup()
     local cluster = GetMinimapCluster()
@@ -1620,7 +1609,6 @@ function SC:RestoreQuestGuidanceSettings()
         end
     end
     HideQuestGuidanceTray()
-    RefreshQuestGuidanceMap()
 
     if db then
         db.questGuidanceBackup = nil
