@@ -26,7 +26,7 @@ The HUD is compact and glanceable. It shows local run status when solo, party st
 
 Softcore-specific UI sounds are centralized through `SC:PlayUISound`. Keep cues restrained and reserved for milestones, attention states, and resolutions: run start/completion, achievements, local death/violations, incoming governance review, proposal acceptance or confirmation, cancelled governance, applied rules, and violation clears. `/sc sound on|off|test [event]` controls and tests these cues.
 
-Item tooltip warnings are advisory and lightweight. The shared tooltip line should flag items that are not allowed by the active run's item rules (restricted consumables, item enhancements when enchants are restricted, gear quality limits, heirlooms, and permanently enchanted gear) without trying to block protected item use or draw bag-addon-specific overlays.
+Item tooltip warnings are advisory and lightweight. The shared tooltip line should flag items that are not allowed by the active run's item rules (restricted consumables, item enhancements when enchants are restricted, gear quality limits on wearable equipment, heirlooms, and permanently enchanted gear) without trying to block protected item use, flag bags/containers through gear quality rules, or draw bag-addon-specific overlays.
 
 Temporary cinematic camera profile testing is exposed through `/sc camera status|next|soft|cinematic|dramatic|off`. It is a local tuning helper for comparing ActionCam CVars in game and must not change run rules, proposal payloads, achievements, or synced state.
 

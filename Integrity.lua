@@ -209,6 +209,18 @@ local function GetItemInfoCompat(itemLink)
     return GetItemInfo(itemLink)
 end
 
+local function GetItemInfoInstantCompat(itemLink)
+    if C_Item and C_Item.GetItemInfoInstant then
+        return C_Item.GetItemInfoInstant(itemLink)
+    end
+
+    if GetItemInfoInstant then
+        return GetItemInfoInstant(itemLink)
+    end
+
+    return nil
+end
+
 function SC:GetPermanentEnchantIdFromItemLink(itemLink)
     local itemString = string.match(tostring(itemLink or ""), "item:([^|]+)")
     if not itemString then return nil end
@@ -230,6 +242,16 @@ local function GetPermanentEnchantId(itemLink)
     return SC:GetPermanentEnchantIdFromItemLink(itemLink)
 end
 
+function SC:IsItemSubjectToGearQualityRule(itemLink)
+    local _, _, _, itemEquipLoc, _, classID = GetItemInfoInstantCompat(itemLink)
+    local containerClassID = LE_ITEM_CLASS_CONTAINER or 1
+    if classID == containerClassID or itemEquipLoc == "INVTYPE_BAG" then
+        return false
+    end
+
+    return itemEquipLoc and itemEquipLoc ~= "" and itemEquipLoc ~= "INVTYPE_NON_EQUIP_IGNORE"
+end
+
 local function GetEquippedItems()
     local items = {}
 
@@ -245,6 +267,7 @@ local function GetEquippedItems()
                 quality = quality,
                 qualityPending = quality == nil,
                 enchantId = GetPermanentEnchantId(itemLink),
+                subjectToGearQuality = SC:IsItemSubjectToGearQualityRule(itemLink),
             })
         end
     end
@@ -351,7 +374,7 @@ function SC:GetInvalidEquippedItems()
                     reason = "Heirloom equipped",
                 })
             end
-        elseif IsGearQualityInvalid(gearRule, item.quality) then
+        elseif item.subjectToGearQuality and IsGearQualityInvalid(gearRule, item.quality) then
             local selfCraftedAllowed = self:GetRule("selfCraftedGearAllowed") == true
             if not (selfCraftedAllowed and IsItemSelfCrafted(item.slotId)) then
                 table.insert(invalid, {

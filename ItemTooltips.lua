@@ -217,7 +217,8 @@ function SC:IsItemRestrictedForRunTooltip(itemRef, tooltip, data)
         return IsRuleDisallowed(self:GetRule("heirlooms"))
     end
 
-    if self.IsGearQualityInvalidForRule and self:IsGearQualityInvalidForRule(self:GetRule("gearQuality"), quality) then
+    if self.IsItemSubjectToGearQualityRule and self:IsItemSubjectToGearQualityRule(itemRef)
+        and self.IsGearQualityInvalidForRule and self:IsGearQualityInvalidForRule(self:GetRule("gearQuality"), quality) then
         local selfCraftedAllowed = self:GetRule("selfCraftedGearAllowed") == true
         local isSelfCrafted = TooltipDataShowsSelfCrafted(data) or TooltipFrameShowsSelfCrafted(tooltip)
         if not (selfCraftedAllowed and isSelfCrafted) then

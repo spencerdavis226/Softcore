@@ -17,7 +17,7 @@ It keeps a per-character run ledger with deaths, rule violations, party compatib
 - A HUD for quick local or party status.
 - A minimap button for opening the main menu.
 - Party proposals, run sync proposals, party invites, and rule amendments inside the Charter tab, without extra popup windows.
-- Advisory item tooltip warnings for gear, enchants, heirlooms, consumables, and other item restrictions.
+- Advisory item tooltip warnings for wearable gear, enchants, heirlooms, consumables, and other item restrictions.
 - CSV export for the local run ledger and a bounded bug-report export for testing or support.
 
 ## Main Menu
@@ -80,7 +80,7 @@ Remote party state is display and compatibility data. It must not reset, fail, o
 
 Death is permanent for the character.
 
-Most non-death rule breaks create violations instead of directly failing the run. Examples include disallowed bank or auction access, sending mail or taking mail, accepting a trade when trade is restricted, using restricted movement, equipping restricted gear, equipping permanently enchanted gear when enchants are disallowed, and gaining XP with an invalid party member when the active rules block that party state.
+Most non-death rule breaks create violations instead of directly failing the run. Examples include disallowed bank or auction access, sending mail or taking mail, accepting a trade when trade is restricted, using restricted movement, equipping restricted wearable gear, equipping permanently enchanted gear when enchants are disallowed, and gaining XP with an invalid party member when the active rules block that party state.
 
 Opening a mailbox or trade window alone is allowed so accidental clicks or another player initiating trade cannot force a violation.
 
