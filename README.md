@@ -45,7 +45,7 @@ Softcore includes four visible presets:
 | Bronzeman | Stricter solo-leaning challenge profile, with flight paths allowed and unsynced party play disabled. |
 | Bronze Vigil | A harder Bronzeman variant with no flight paths, cinematic camera, and Explorer Mode enforced. |
 
-There are also hidden custom rule profiles that can still be recognized by the run-label system when their exact rules match. Any edited or unmatched ruleset becomes **Custom Run**.
+There are also hidden custom rule profiles that can still be recognized by the run-label system when their exact rules match. Head Chef's Special is recognized as Chef's Special with Explorer Mode enabled. Any edited or unmatched ruleset becomes **Custom Run**.
 
 ## Starting Runs
 
@@ -90,7 +90,7 @@ Explorer Mode is an immersion rule. While active, Softcore hides Blizzard quest 
 
 ## Achievements And Completion
 
-Achievements cover account-level leveling, classes, rule profiles, rule-specific restrictions, and max-level milestones.
+Achievements are grouped by level milestones, max-level runs, preset challenges, class mastery, and rule families for access, travel, gear/items, and party/instance restrictions. Harder preset variants can satisfy their base preset achievement where appropriate: Head Chef's Special counts for Chef's Table, and Bronze Vigil counts for Bronzeman.
 
 Max-level completion uses the same discovered run label shown on Overview. When an active valid run completes, Softcore records the completion, plays restrained feedback, and opens a parchment-style award with concise run statistics. The latest completion award is stored per character and can be reopened from the Achievements tab.
 

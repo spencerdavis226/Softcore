@@ -27,7 +27,28 @@ local RESTRICTION_RULES = {
     { id = "explorer_mode", name = "Explorer's Path", rule = "explorerMode", description = "Reach max level after starting at level 10 or lower with Explorer Mode enabled from run start through max level." },
 }
 
+local RULE_ACHIEVEMENT_GROUPS = {
+    auctionHouse = { category = "Rules: Access", sortOrder = 10 },
+    mailbox = { category = "Rules: Access", sortOrder = 20 },
+    trade = { category = "Rules: Access", sortOrder = 30 },
+    bank = { category = "Rules: Access", sortOrder = 40 },
+    warbandBank = { category = "Rules: Access", sortOrder = 50 },
+    guildBank = { category = "Rules: Access", sortOrder = 60 },
+    mounts = { category = "Rules: Travel", sortOrder = 10 },
+    flying = { category = "Rules: Travel", sortOrder = 20 },
+    flightPaths = { category = "Rules: Travel", sortOrder = 30 },
+    explorerMode = { category = "Rules: Travel", sortOrder = 50 },
+    heirlooms = { category = "Rules: Gear & Items", sortOrder = 10 },
+    enchants = { category = "Rules: Gear & Items", sortOrder = 20 },
+    consumables = { category = "Rules: Gear & Items", sortOrder = 30 },
+    maxLevelGap = { category = "Rules: Party And Instances", sortOrder = 20 },
+    dungeonRepeat = { category = "Rules: Party And Instances", sortOrder = 30 },
+    instancedPvP = { category = "Rules: Party And Instances", sortOrder = 40 },
+}
+
 local CLEAN_LEVEL_NAMES = {
+    [10] = "Clean Start",
+    [20] = "Careful Steps",
     [30] = "Rule Keeper",
     [40] = "Steady Hands",
     [50] = "Unshaken",
@@ -245,7 +266,8 @@ local function IsBronzemanPreset(preset)
 end
 
 local function IsChefSpecialPreset(preset)
-    return preset == "CHEF_SPECIAL"
+    preset = SC.NormalizePresetKey and SC:NormalizePresetKey(preset) or preset
+    return preset == "CHEF_SPECIAL" or preset == "HEAD_CHEF_SPECIAL"
 end
 
 local function HasRulesSnapshot(rules)
@@ -296,8 +318,8 @@ local function CanEarnMaxRunAchievement(eligibility)
     return true
 end
 
-local function AddDefinition(result, id, scope, category, name, description, progressKind, target, ruleName)
-    local sortOrder = #result + 1
+local function AddDefinition(result, id, scope, category, name, description, progressKind, target, ruleName, sortOrder)
+    local naturalOrder = #result + 1
     table.insert(result, {
         id = id,
         scope = scope,
@@ -307,7 +329,7 @@ local function AddDefinition(result, id, scope, category, name, description, pro
         progressKind = progressKind,
         target = target,
         ruleName = ruleName,
-        sortOrder = sortOrder,
+        sortOrder = sortOrder or naturalOrder,
     })
 end
 
@@ -316,34 +338,35 @@ function SC:GetAchievementDefinitions()
     local maxLevel = GetMaxLevel()
 
     for level = 10, maxLevel, 10 do
-        AddDefinition(result, "char_level_" .. tostring(level), "ACCOUNT", "Leveling", "Still Breathing: " .. tostring(level), "Reach level " .. tostring(level) .. " in an active run started at level 10 or below.", "LEVEL", level)
+        AddDefinition(result, "char_level_" .. tostring(level), "ACCOUNT", "Level Milestones", "Still Breathing: " .. tostring(level), "Reach level " .. tostring(level) .. " in an active run started at level 10 or below.", "LEVEL", level)
     end
 
-    for level = 30, maxLevel, 10 do
+    for level = 10, maxLevel, 10 do
         local name = CLEAN_LEVEL_NAMES[level] or ("Clean Climb: " .. tostring(level))
-        AddDefinition(result, "char_clean_level_" .. tostring(level), "ACCOUNT", "Leveling", name, "Reach level " .. tostring(level) .. " with no violations in a run started at level 10 or below.", "LEVEL_CLEAN", level)
+        AddDefinition(result, "char_clean_level_" .. tostring(level), "ACCOUNT", "Level Milestones", name, "Reach level " .. tostring(level) .. " with no violations in a run started at level 10 or below.", "LEVEL_CLEAN", level)
     end
 
-    AddDefinition(result, "char_max_level", "ACCOUNT", "Max Level", "Softcore Champion", "Reach max level after starting the run at level 10 or below.", "MAX_LEVEL")
-    AddDefinition(result, "char_clean_max_level", "ACCOUNT", "Max Level", "Clean Finish", "Reach max level after starting at level 10 or lower without any local violations.", "CLEAN_MAX")
-    AddDefinition(result, "char_chef_special_max_level", "ACCOUNT", "Max Level", "Chef's Table", "Reach max level after starting at level 10 or lower using the Chef's Special preset with no rule amendments.", "CHEF_SPECIAL_MAX")
-    AddDefinition(result, "char_bronzeman_max_level", "ACCOUNT", "Max Level", "Bronzeman", "Reach max level after starting at level 10 or lower using a Bronzeman-family preset with no rule amendments.", "BRONZEMAN_MAX")
-    AddDefinition(result, "char_camera_max_level", "ACCOUNT", "Max Level", "Locked Perspective", "Reach max level after starting at level 10 or lower with Cinematic Camera enforced from run start.", "CAMERA_MAX")
-    AddDefinition(result, "char_camera_bronze_vigil_no_flight_paths_max_level", "ACCOUNT", "Max Level", "Bronze Vigil", "Reach max level after starting at level 10 or lower using the Bronze Vigil preset with no rule amendments.", "CAMERA_BRONZE_VIGIL_NO_FLIGHT_PATHS_MAX")
-    AddDefinition(result, "char_original_terms", "ACCOUNT", "Max Level", "Original Terms", "Reach max level after starting at level 10 or lower with no rule amendments applied.", "RULE_UNCHANGED_MAX")
-    AddDefinition(result, "char_party_survivor", "ACCOUNT", "Max Level", "Party Survivor", "Reach max level after starting at level 10 or lower in group mode. Unsynced-party play may be allowed by your run rules.", "GROUPED_MAX")
+    AddDefinition(result, "char_max_level", "ACCOUNT", "Max Level Runs", "Softcore Champion", "Reach max level after starting the run at level 10 or below.", "MAX_LEVEL", nil, nil, 10)
+    AddDefinition(result, "char_clean_max_level", "ACCOUNT", "Max Level Runs", "Clean Finish", "Reach max level after starting at level 10 or lower without any local violations.", "CLEAN_MAX", nil, nil, 20)
+    AddDefinition(result, "char_original_terms", "ACCOUNT", "Max Level Runs", "Original Terms", "Reach max level after starting at level 10 or lower with no rule amendments applied.", "RULE_UNCHANGED_MAX", nil, nil, 30)
+    AddDefinition(result, "char_party_survivor", "ACCOUNT", "Max Level Runs", "Party Survivor", "Reach max level after starting at level 10 or lower in group mode. Unsynced-party play may be allowed by your run rules.", "GROUPED_MAX", nil, nil, 40)
+    AddDefinition(result, "char_chef_special_max_level", "ACCOUNT", "Preset Challenges", "Chef's Table", "Start at level 10 or below and reach max level on Chef's Special or Head Chef's Special without amending the starting rules.", "CHEF_SPECIAL_MAX", nil, nil, 10)
+    AddDefinition(result, "char_bronzeman_max_level", "ACCOUNT", "Preset Challenges", "Bronzeman", "Start at level 10 or below and reach max level on Bronzeman or Bronze Vigil terms without rule amendments.", "BRONZEMAN_MAX", nil, nil, 20)
+    AddDefinition(result, "char_camera_bronze_vigil_no_flight_paths_max_level", "ACCOUNT", "Preset Challenges", "Bronze Vigil", "Start at level 10 or below and reach max level on Bronze Vigil without amending the starting rules.", "CAMERA_BRONZE_VIGIL_NO_FLIGHT_PATHS_MAX", nil, nil, 30)
 
     for _, spec in ipairs(CLASS_MAX_ACHIEVEMENTS) do
-        AddDefinition(result, "char_max_class_" .. string.lower(spec.class), "ACCOUNT", "Classes", spec.name, "Reach max level as a " .. spec.label .. " after starting the run at level 10 or below.", "CLASS_MAX", nil, spec.class)
+        AddDefinition(result, "char_max_class_" .. string.lower(spec.class), "ACCOUNT", "Class Mastery", spec.name, "Reach max level as a " .. spec.label .. " after starting the run at level 10 or below.", "CLASS_MAX", nil, spec.class)
     end
 
     for _, spec in ipairs(RESTRICTION_RULES) do
-        AddDefinition(result, "char_max_" .. spec.id, "ACCOUNT", "Rules", spec.name, spec.description or ("Reach max level after starting at level 10 or lower with " .. spec.label .. " disallowed from run start through max level."), "RULE_MAX", nil, spec.rule)
+        local group = RULE_ACHIEVEMENT_GROUPS[spec.rule] or { category = "Rules", sortOrder = nil }
+        AddDefinition(result, "char_max_" .. spec.id, "ACCOUNT", group.category, spec.name, spec.description or ("Reach max level after starting at level 10 or lower with " .. spec.label .. " disallowed from run start through max level."), "RULE_MAX", nil, spec.rule, group.sortOrder)
     end
 
-    AddDefinition(result, "char_max_synced_party_only", "ACCOUNT", "Rules", "Closed Circle", "Reach max level after starting at level 10 or lower with Allow Unsynced Party Members disabled from run start through max level.", "UNSYNCED_PARTY_DISABLED_MAX", nil, "unsyncedMembers")
-    AddDefinition(result, "char_white_knuckles", "ACCOUNT", "Rules", "White Knuckles", "Reach max level after starting at level 10 or lower with white/gray gear quality enforced from run start.", "GEAR_QUALITY_MAX", nil, "WHITE_GRAY_ONLY")
-    AddDefinition(result, "char_self_forged", "ACCOUNT", "Rules", "Self-Forged", "Reach max level after starting at level 10 or lower with white/gray gear quality and self-crafted gear exemption from run start.", "GEAR_QUALITY_CRAFTED_MAX", nil, "WHITE_GRAY_ONLY")
+    AddDefinition(result, "char_camera_max_level", "ACCOUNT", "Rules: Travel", "Locked Perspective", "Reach max level after starting at level 10 or lower with Cinematic Camera enforced from run start.", "CAMERA_MAX", nil, nil, 40)
+    AddDefinition(result, "char_max_synced_party_only", "ACCOUNT", "Rules: Party And Instances", "Closed Circle", "Reach max level after starting at level 10 or lower with Allow Unsynced Party Members disabled from run start through max level.", "UNSYNCED_PARTY_DISABLED_MAX", nil, "unsyncedMembers", 10)
+    AddDefinition(result, "char_white_knuckles", "ACCOUNT", "Rules: Gear & Items", "White Knuckles", "Reach max level after starting at level 10 or lower with white/gray gear quality enforced from run start.", "GEAR_QUALITY_MAX", nil, "WHITE_GRAY_ONLY", 40)
+    AddDefinition(result, "char_self_forged", "ACCOUNT", "Rules: Gear & Items", "Self-Forged", "Reach max level after starting at level 10 or lower with white/gray gear quality and self-crafted gear exemption from run start.", "GEAR_QUALITY_CRAFTED_MAX", nil, "WHITE_GRAY_ONLY", 50)
 
     return result
 end
@@ -436,7 +459,7 @@ local function BuildProgress(definition, earned)
         if AnyRuleAmendmentApplied(eligibility) then
             return 0, "Rules amended"
         end
-        return math.min(currentLevel / maxLevel, 1), "Chef's Special: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
+        return math.min(currentLevel / maxLevel, 1), "Chef's Table: " .. tostring(currentLevel) .. " / " .. tostring(maxLevel)
     end
 
     if definition.progressKind == "BRONZEMAN_MAX" then
@@ -739,7 +762,7 @@ function SC:Achievements_OnLevelChanged(level)
         end
     end
 
-    for milestone = 30, maxLevel, 10 do
+    for milestone = 10, maxLevel, 10 do
         if eligibility.startedAtOrBelow10 and level >= milestone and milestone >= startLevel and not eligibility.hadViolation then
             Earn("char_clean_level_" .. tostring(milestone), "CHARACTER", CLEAN_LEVEL_NAMES[milestone] or ("Clean Climb: " .. tostring(milestone)))
         end

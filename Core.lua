@@ -761,6 +761,7 @@ end
 local PRESET_AWARD_LABELS = {
     CASUAL = "Casual",
     CHEF_SPECIAL = "Chef's Special",
+    HEAD_CHEF_SPECIAL = "Head Chef's Special",
     BRONZEMAN = "Bronzeman",
     BRONZE_VIGIL = "Bronze Vigil",
     CUSTOM = "Custom",
@@ -3046,6 +3047,7 @@ local SAMPLE_AWARD_CLASSES = {
 local SAMPLE_AWARD_PRESETS = {
     { preset = "CASUAL", label = "Casual" },
     { preset = "CHEF_SPECIAL", label = "Chef's Special" },
+    { preset = "HEAD_CHEF_SPECIAL", label = "Head Chef's Special" },
     { preset = "BRONZEMAN", label = "Bronzeman" },
     { preset = "BRONZE_VIGIL", label = "Bronze Vigil" },
     { preset = "CUSTOM", label = "Custom" },

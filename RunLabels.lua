@@ -98,13 +98,15 @@ local function ApplyPresetProfile(rules, preset)
     local bronzeman = preset == "BRONZEMAN" or preset == "BRONZE_VIGIL"
     local bronzeVigil = preset == "BRONZE_VIGIL"
     local chef = preset == "CHEF_SPECIAL"
+    local headChef = preset == "HEAD_CHEF_SPECIAL"
+    local chefFamily = chef or headChef
     local selectedCameraMode = nil
 
     rules.groupingMode = bronzeman and "SOLO_SELF_FOUND" or "SYNCED_GROUP_ALLOWED"
-    rules.gearQuality = (bronzeman or chef) and "WHITE_GRAY_ONLY" or "ALLOWED"
+    rules.gearQuality = (bronzeman or chefFamily) and "WHITE_GRAY_ONLY" or "ALLOWED"
     if bronzeman then
         rules.selfCraftedGearAllowed = false
-    elseif chef then
+    elseif chefFamily then
         rules.selfCraftedGearAllowed = true
     else
         rules.selfCraftedGearAllowed = false
@@ -130,7 +132,7 @@ local function ApplyPresetProfile(rules, preset)
     rules.actionCam = "ALLOWED"
     rules.explorerMode = "ALLOWED"
 
-    if chef then
+    if chefFamily then
         rules.auctionHouse = DISALLOWED_OUTCOME
         rules.mailbox = DISALLOWED_OUTCOME
         rules.trade = DISALLOWED_OUTCOME
@@ -147,6 +149,9 @@ local function ApplyPresetProfile(rules, preset)
         rules.instancedPvP = DISALLOWED_OUTCOME
         rules.actionCam = DISALLOWED_OUTCOME
         selectedCameraMode = "CINEMATIC"
+        if headChef then
+            rules.explorerMode = DISALLOWED_OUTCOME
+        end
     elseif not bronzeman then
         SetRules(rules, ECONOMY_RULE_KEYS, "ALLOWED")
         rules.heirlooms = "ALLOWED"
@@ -220,6 +225,7 @@ end
 local RUN_LABEL_SPECS = {
     { label = "Casual", preset = "CASUAL", rules = BuildPresetRuleset("CASUAL") },
     { label = "Chef's Special", preset = "CHEF_SPECIAL", rules = BuildPresetRuleset("CHEF_SPECIAL") },
+    { label = "Head Chef's Special", preset = "HEAD_CHEF_SPECIAL", rules = BuildPresetRuleset("HEAD_CHEF_SPECIAL") },
     { label = "Bronzeman", preset = "BRONZEMAN", rules = BuildPresetRuleset("BRONZEMAN") },
     { label = "Bronze Vigil", preset = "BRONZE_VIGIL", rules = BuildPresetRuleset("BRONZE_VIGIL") },
 
@@ -346,7 +352,7 @@ function SC:GetRunLabelDebugLines(ruleset)
         return lines
     end
 
-    for index = 1, 4 do
+    for index = 1, 5 do
         local spec = RUN_LABEL_SPECS[index]
         if spec then
             local mismatches = {}

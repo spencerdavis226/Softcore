@@ -151,17 +151,26 @@ local CLASS_LABELS = {
 
 local ACHIEVEMENT_CATEGORY_ORDER = {
     "Award",
-    "Leveling",
-    "Max Level",
-    "Classes",
-    "Rules",
+    "Level Milestones",
+    "Max Level Runs",
+    "Preset Challenges",
+    "Rules: Access",
+    "Rules: Travel",
+    "Rules: Gear & Items",
+    "Rules: Party And Instances",
+    "Class Mastery",
 }
 
 local ACHIEVEMENT_CATEGORY_META = {
     Award = { label = "Completion Award", icon = "Interface\\Icons\\INV_Letter_18", color = GOLD_TEXT },
-    Leveling = { label = "Leveling", icon = "Interface\\Icons\\Achievement_Level_10", color = GREEN_TEXT },
-    ["Max Level"] = { label = "Max Level", icon = "Interface\\Icons\\INV_Misc_Trophy_Argent", color = GOLD_TEXT },
-    Classes = { label = "Classes", icon = "Interface\\Icons\\Achievement_Character_Human_Male", color = PURPLE_TEXT },
+    ["Level Milestones"] = { label = "Level Milestones", icon = "Interface\\Icons\\Achievement_Level_10", color = GREEN_TEXT },
+    ["Max Level Runs"] = { label = "Max Level Runs", icon = "Interface\\Icons\\INV_Misc_Trophy_Argent", color = GOLD_TEXT },
+    ["Preset Challenges"] = { label = "Preset Challenges", icon = "Interface\\Icons\\INV_Misc_Food_15", color = PURPLE_TEXT },
+    ["Rules: Access"] = { label = "Rules: Access", icon = "Interface\\Icons\\INV_Misc_Coin_02", color = ORANGE_TEXT },
+    ["Rules: Travel"] = { label = "Rules: Travel", icon = "Interface\\Icons\\Ability_Mount_Gryphon_01", color = BLUE_TEXT },
+    ["Rules: Gear & Items"] = { label = "Rules: Gear & Items", icon = "Interface\\Icons\\INV_Chest_Cloth_17", color = GREEN_TEXT },
+    ["Rules: Party And Instances"] = { label = "Rules: Party & Instances", icon = "Interface\\Icons\\Achievement_GuildPerk_EverybodysFriend", color = GOLD_TEXT },
+    ["Class Mastery"] = { label = "Class Mastery", icon = "Interface\\Icons\\Achievement_Character_Human_Male", color = PURPLE_TEXT },
     Rules = { label = "Rules", icon = "Interface\\Icons\\INV_Misc_Note_03", color = ORANGE_TEXT },
 }
 
@@ -217,6 +226,11 @@ local ACHIEVEMENT_KIND_ICONS = {
     BRONZEMAN_MAX = "Interface\\Icons\\INV_Ingot_02",
     MAX_LEVEL = "Interface\\Icons\\INV_Misc_Trophy_Argent",
     RULE_UNCHANGED_MAX = "Interface\\Icons\\INV_Misc_Note_05",
+}
+
+local ACHIEVEMENT_CLEAN_LEVEL_ICONS = {
+    [10] = "Interface\\Icons\\INV_Misc_Rune_10",
+    [20] = "Interface\\Icons\\INV_Misc_Rune_11",
 }
 
 local GROUPING_OPTIONS = {
@@ -1692,13 +1706,15 @@ local function ConfigureRulesForPreset(rules, preset)
     local bronzeman = preset == "BRONZEMAN" or preset == "BRONZE_VIGIL"
     local bronzeVigil = preset == "BRONZE_VIGIL"
     local chef = preset == "CHEF_SPECIAL"
+    local headChef = preset == "HEAD_CHEF_SPECIAL"
+    local chefFamily = chef or headChef
     local selectedCameraMode = nil
 
     rules.groupingMode = bronzeman and "SOLO_SELF_FOUND" or "SYNCED_GROUP_ALLOWED"
-    rules.gearQuality = (bronzeman or chef) and "WHITE_GRAY_ONLY" or "ALLOWED"
+    rules.gearQuality = (bronzeman or chefFamily) and "WHITE_GRAY_ONLY" or "ALLOWED"
     if bronzeman then
         rules.selfCraftedGearAllowed = false
-    elseif chef then
+    elseif chefFamily then
         rules.selfCraftedGearAllowed = true
     else
         rules.selfCraftedGearAllowed = false
@@ -1729,7 +1745,7 @@ local function ConfigureRulesForPreset(rules, preset)
     rules.actionCam = "ALLOWED"
     rules.explorerMode = "ALLOWED"
 
-    if chef then
+    if chefFamily then
         rules.auctionHouse = DISALLOWED_OUTCOME
         rules.mailbox = DISALLOWED_OUTCOME
         rules.trade = DISALLOWED_OUTCOME
@@ -1746,6 +1762,9 @@ local function ConfigureRulesForPreset(rules, preset)
         rules.instancedPvP = DISALLOWED_OUTCOME
         selectedCameraMode = "CINEMATIC"
         SetCameraRules(rules, selectedCameraMode)
+        if headChef then
+            rules.explorerMode = DISALLOWED_OUTCOME
+        end
     elseif not bronzeman then
         -- Casual: minimal restrictions for a lightweight baseline run.
         rules.auctionHouse = "ALLOWED"
@@ -3214,6 +3233,9 @@ local function GetAchievementIcon(achievement)
 
     if progressKind == "LEVEL" or progressKind == "LEVEL_CLEAN" then
         local target = tonumber(achievement.target or 0) or 0
+        if progressKind == "LEVEL_CLEAN" and ACHIEVEMENT_CLEAN_LEVEL_ICONS[target] then
+            return ACHIEVEMENT_CLEAN_LEVEL_ICONS[target]
+        end
         if progressKind == "LEVEL_CLEAN" and target >= 30 and target <= 100 then
             local runeIndex = math.floor(target / 10) - 1
             return string.format("Interface\\Icons\\INV_Misc_Rune_%02d", runeIndex)
@@ -3479,6 +3501,28 @@ local function BuildAchievementGroups(rows)
         elseif (tonumber(achievement.progressValue or 0) or 0) > 0 then
             group.inProgress = group.inProgress + 1
         end
+    end
+
+    for _, group in ipairs(groups) do
+        table.sort(group.rows, function(left, right)
+            local leftOrder = tonumber(left.sortOrder or 0) or 0
+            local rightOrder = tonumber(right.sortOrder or 0) or 0
+            if leftOrder ~= rightOrder then
+                return leftOrder < rightOrder
+            end
+
+            local leftProgress = tonumber(left.progressValue or 0) or 0
+            local rightProgress = tonumber(right.progressValue or 0) or 0
+            if leftProgress ~= rightProgress then
+                return leftProgress > rightProgress
+            end
+
+            if left.earned ~= right.earned then
+                return not left.earned
+            end
+
+            return tostring(left.name or "") < tostring(right.name or "")
+        end)
     end
 
     table.sort(groups, function(left, right)
