@@ -3764,6 +3764,7 @@ end
 function SC:OpenMasterWindow(focusTab)
     if self.masterFrame then
         self.masterFrame:Show()
+        self.masterFrame:Raise()
         self.masterFrame.activeTab = NormalizeTab(focusTab or self.masterFrame.activeTab)
         self:MasterUI_Refresh()
         return
@@ -3771,6 +3772,8 @@ function SC:OpenMasterWindow(focusTab)
 
     local frame = CreateFrame("Frame", "SoftcoreMasterFrame", UIParent, "BackdropTemplate")
     frame:SetSize(760, 718)
+    frame:SetFrameStrata("DIALOG")
+    frame:SetToplevel(true)
     RestorePosition("master", frame)
     frame:SetMovable(true)
     frame:EnableMouse(true)
@@ -3780,6 +3783,7 @@ function SC:OpenMasterWindow(focusTab)
         f:StopMovingOrSizing()
         SavePosition("master", f)
     end)
+    frame:SetScript("OnShow", frame.Raise)
     if UISpecialFrames then
         table.insert(UISpecialFrames, "SoftcoreMasterFrame")
     end
