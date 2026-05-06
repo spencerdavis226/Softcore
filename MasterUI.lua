@@ -3505,22 +3505,35 @@ local function BuildAchievementGroups(rows)
 
     for _, group in ipairs(groups) do
         table.sort(group.rows, function(left, right)
+            -- Unearned first (highest progress at top); earned rows at the bottom of the bucket.
+            if left.earned ~= right.earned then
+                return not left.earned
+            end
+
+            if not left.earned then
+                local leftProgress = tonumber(left.progressValue or 0) or 0
+                local rightProgress = tonumber(right.progressValue or 0) or 0
+                if leftProgress ~= rightProgress then
+                    return leftProgress > rightProgress
+                end
+                local leftOrder = tonumber(left.sortOrder or 0) or 0
+                local rightOrder = tonumber(right.sortOrder or 0) or 0
+                if leftOrder ~= rightOrder then
+                    return leftOrder < rightOrder
+                end
+                return tostring(left.name or "") < tostring(right.name or "")
+            end
+
             local leftOrder = tonumber(left.sortOrder or 0) or 0
             local rightOrder = tonumber(right.sortOrder or 0) or 0
             if leftOrder ~= rightOrder then
                 return leftOrder < rightOrder
             end
-
-            local leftProgress = tonumber(left.progressValue or 0) or 0
-            local rightProgress = tonumber(right.progressValue or 0) or 0
-            if leftProgress ~= rightProgress then
-                return leftProgress > rightProgress
+            local leftAt = tonumber(left.earnedAt or 0) or 0
+            local rightAt = tonumber(right.earnedAt or 0) or 0
+            if leftAt ~= rightAt then
+                return leftAt > rightAt
             end
-
-            if left.earned ~= right.earned then
-                return not left.earned
-            end
-
             return tostring(left.name or "") < tostring(right.name or "")
         end)
     end

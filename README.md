@@ -90,7 +90,7 @@ Explorer Mode is an immersion rule. While active, Softcore hides Blizzard quest 
 
 ## Achievements And Completion
 
-Achievements are grouped by level milestones, max-level runs, preset challenges, class mastery, and rule families for access, travel, gear/items, and party/instance restrictions. Harder preset variants can satisfy their base preset achievement where appropriate: Head Chef's Special counts for Chef's Table, and Bronze Vigil counts for Bronzeman.
+Achievements are grouped by level milestones, max-level runs, preset challenges, class mastery, and rule families for access, travel, gear/items, and party/instance restrictions. Inside each group, in-progress achievements sort by highest percent progress first; completed achievements move to the bottom of that group. Harder preset variants can satisfy their base preset achievement where appropriate: Head Chef's Special counts for Chef's Table, and Bronze Vigil counts for Bronzeman.
 
 Max-level completion uses the same discovered run label shown on Overview. When an active valid run completes, Softcore records the completion, plays restrained feedback, and opens a parchment-style award with concise run statistics. The latest completion award is stored per character and can be reopened from the Achievements tab.
 
