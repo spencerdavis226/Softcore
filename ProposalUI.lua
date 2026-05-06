@@ -59,6 +59,7 @@ local function GetRulesetSyncOrder(self)
         "consumables",
         "instancedPvP",
         "actionCam",
+        "explorerMode",
         "maxDeaths",
         "maxDeathsValue",
     }
@@ -96,6 +97,7 @@ local RULE_WIRE_KEYS = {
     consumables = "cu",
     instancedPvP = "pv",
     actionCam = "ac",
+    explorerMode = "ex",
     maxDeaths = "md",
     maxDeathsValue = "mv",
 }

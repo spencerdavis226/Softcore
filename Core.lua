@@ -9,6 +9,14 @@ local SC = Softcore
 SC.name = "Softcore"
 SC.version = "0.5.0"
 
+function Softcore_OnAddonCompartmentClick()
+    if Softcore and Softcore.ToggleMasterWindow then
+        Softcore:ToggleMasterWindow()
+    elseif Softcore and Softcore.OpenMasterWindow then
+        Softcore:OpenMasterWindow()
+    end
+end
+
 local PRESET_KEY_ALIASES = {
     IRONMAN = "BRONZEMAN",
     IRON_VIGIL = "BRONZE_VIGIL",
@@ -406,6 +414,7 @@ local function CreateDefaultRuleset()
         consumables = "ALLOWED",
         instancedPvP = "ALLOWED",
         actionCam = "ALLOWED",
+        explorerMode = "ALLOWED",
         maxDeaths = false,
         maxDeathsValue = 3,
     }
@@ -878,6 +887,9 @@ function SC:CompleteRunAtMaxLevel(maxLevel)
     db.run.active = false
     db.run.activeTimeUpdatedAt = nil
     db.run.partyStatus = "COMPLETED"
+    if self.RestoreQuestGuidanceSettings then
+        self:RestoreQuestGuidanceSettings()
+    end
 
     Print("max level reached. Run completed.")
     self:PlayUISound("RUN_COMPLETED")
@@ -2215,6 +2227,9 @@ function SC:StartRun(runOptions)
     if self.EnforceActionCamSettings then
         self:EnforceActionCamSettings()
     end
+    if self.EnforceQuestGuidanceSettings then
+        self:EnforceQuestGuidanceSettings()
+    end
     self:RefreshParticipantsFromRoster()
     self:PlayUISound("RUN_STARTED")
     Print("run started.")
@@ -2274,6 +2289,9 @@ function SC:ResetRun()
     db.proposals = {}
     db.ruleAmendments = {}
 
+    if self.RestoreQuestGuidanceSettings then
+        self:RestoreQuestGuidanceSettings()
+    end
     if self.RestoreActionCamSettings then
         self:RestoreActionCamSettings()
     end
@@ -2574,6 +2592,7 @@ function SC:PrintRules()
         "consumables",
         "instancedPvP",
         "actionCam",
+        "explorerMode",
     }
 
     Print("current rules:")
@@ -2774,6 +2793,7 @@ local function BuildDebugExportText()
     AddCsvLine(lines, "Run", "Ruleset Hash", SC.GetRulesetHash and SC:GetRulesetHash() or "unknown")
     AddCsvLine(lines, "Rule", "enchants", run.ruleset and run.ruleset.enchants or "")
     AddCsvLine(lines, "Rule", "actionCam", run.ruleset and run.ruleset.actionCam or "")
+    AddCsvLine(lines, "Rule", "explorerMode", run.ruleset and run.ruleset.explorerMode or "")
     AddCsvLine(lines, "Rule", "cameraMode", run.cameraMode or "")
     AddCsvLine(lines, "Sync", "Last Sent", db.sync and db.sync.lastSentAt and FormatTime(db.sync.lastSentAt) or "never")
     AddCsvLine(lines, "Sync", "Last Received", db.sync and db.sync.lastReceivedAt and FormatTime(db.sync.lastReceivedAt) or "never")

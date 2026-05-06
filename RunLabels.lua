@@ -28,6 +28,7 @@ local SEVERITY_RULE_KEYS = {
     consumables = true,
     instancedPvP = true,
     actionCam = true,
+    explorerMode = true,
 }
 
 local RUN_LABEL_RULE_KEYS = {
@@ -52,6 +53,7 @@ local RUN_LABEL_RULE_KEYS = {
     "consumables",
     "instancedPvP",
     "actionCam",
+    "explorerMode",
 }
 
 local function CopyTable(source)
@@ -126,6 +128,7 @@ local function ApplyPresetProfile(rules, preset)
     rules.consumables = bronzeman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.instancedPvP = DISALLOWED_OUTCOME
     rules.actionCam = "ALLOWED"
+    rules.explorerMode = "ALLOWED"
 
     if chef then
         rules.auctionHouse = DISALLOWED_OUTCOME
@@ -152,6 +155,7 @@ local function ApplyPresetProfile(rules, preset)
 
     if bronzeVigil then
         rules.actionCam = DISALLOWED_OUTCOME
+        rules.explorerMode = DISALLOWED_OUTCOME
         selectedCameraMode = "CINEMATIC"
     end
 
@@ -204,6 +208,7 @@ local function BuildAllRestrictionsRuleset()
         unsyncedMembers = DISALLOWED_OUTCOME,
         instancedPvP = DISALLOWED_OUTCOME,
         actionCam = DISALLOWED_OUTCOME,
+        explorerMode = DISALLOWED_OUTCOME,
     })
     SetRules(rules, ECONOMY_RULE_KEYS, DISALLOWED_OUTCOME)
     SetRules(rules, MOVEMENT_RULE_KEYS, DISALLOWED_OUTCOME)

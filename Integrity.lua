@@ -1108,6 +1108,14 @@ local function IsCameraModeRequired(ruleset)
     return IsCameraRuleEnforcedValue(ruleset and ruleset.actionCam)
 end
 
+local function IsExplorerModeRuleEnforcedValue(value)
+    return value ~= nil and value ~= "ALLOWED" and value ~= "LOG_ONLY" and value ~= false
+end
+
+local function IsExplorerModeRequired(ruleset)
+    return IsExplorerModeRuleEnforcedValue(ruleset and ruleset.explorerMode)
+end
+
 local function DefaultCameraModeForRules(ruleset)
     if IsCameraRuleEnforcedValue(ruleset and ruleset.actionCam) then return "CINEMATIC" end
     return nil
@@ -1324,13 +1332,265 @@ function SC:EnforceActionCamSettings()
     ApplyActionCamProfileSettings(ACTION_CAM_PROFILES[actionCamTestProfile] or ACTION_CAM_PROFILES.CINEMATIC)
 end
 
+local QUEST_GUIDANCE_CVARS = {
+    "questPOI",
+    "autoQuestWatch",
+    "autoQuestProgress",
+}
+
+local questGuidanceOriginals = nil
+local questGuidanceTray = nil
+
+local function GetQuestGuidanceBackup()
+    local db = GetDB()
+    return db and db.questGuidanceBackup
+end
+
+local function IsQuestGuidanceRequired()
+    local db = GetDB()
+    return IsRunActive() and IsExplorerModeRequired(db and db.run and db.run.ruleset)
+end
+
+local function GetMinimapFrame()
+    return _G.MinimapCluster or _G.Minimap
+end
+
+local function CreateQuestGuidanceTray()
+    if questGuidanceTray then
+        return questGuidanceTray
+    end
+
+    local button = CreateFrame("Button", "SoftcoreExplorerModeTrayButton", UIParent, "BackdropTemplate")
+    button:SetSize(34, 34)
+    button:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -24, -24)
+    button:SetFrameStrata("MEDIUM")
+    button:SetFrameLevel(60)
+    button:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+        tile = false,
+        edgeSize = 12,
+        insets = { left = 3, right = 3, top = 3, bottom = 3 },
+    })
+    button:SetBackdropColor(0.055, 0.032, 0.014, 0.94)
+    button:SetBackdropBorderColor(0.78, 0.56, 0.24, 0.92)
+    button:RegisterForClicks("LeftButtonUp")
+
+    local icon = button:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(22, 22)
+    icon:SetPoint("CENTER")
+    icon:SetTexture("Interface\\AddOns\\Softcore\\Assets\\SoftcoreLogoMinimap")
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+    button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+    button:SetScript("OnClick", function()
+        if SC.ToggleMasterWindow then
+            SC:ToggleMasterWindow()
+        elseif SC.OpenMasterWindow then
+            SC:OpenMasterWindow()
+        end
+    end)
+    button:SetScript("OnEnter", function()
+        GameTooltip:SetOwner(button, "ANCHOR_LEFT")
+        GameTooltip:SetText("Softcore", 1, 1, 1)
+        GameTooltip:AddLine("Explorer Mode is hiding the minimap. Click to open Softcore.", 0.74, 0.66, 0.50, true)
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    button:Hide()
+
+    questGuidanceTray = button
+    return questGuidanceTray
+end
+
+local function ShowQuestGuidanceTray()
+    CreateQuestGuidanceTray():Show()
+end
+
+local function HideQuestGuidanceTray()
+    if questGuidanceTray then
+        questGuidanceTray:Hide()
+    end
+end
+
+local function CaptureQuestGuidanceOriginals()
+    if questGuidanceOriginals then return end
+
+    local db = GetDB()
+    if db and db.questGuidanceBackup then
+        questGuidanceOriginals = {
+            cvars = {},
+            minimapShown = db.questGuidanceBackup.minimapShown,
+        }
+        for _, key in ipairs(QUEST_GUIDANCE_CVARS) do
+            questGuidanceOriginals.cvars[key] = db.questGuidanceBackup.cvars and db.questGuidanceBackup.cvars[key]
+        end
+        return
+    end
+
+    questGuidanceOriginals = {
+        cvars = {},
+        minimapShown = not GetMinimapFrame() or GetMinimapFrame():IsShown(),
+    }
+    for _, key in ipairs(QUEST_GUIDANCE_CVARS) do
+        questGuidanceOriginals.cvars[key] = GetCVarCompat(key)
+    end
+
+    if db then
+        db.questGuidanceBackup = {
+            cvars = {},
+            minimapShown = questGuidanceOriginals.minimapShown,
+        }
+        for _, key in ipairs(QUEST_GUIDANCE_CVARS) do
+            db.questGuidanceBackup.cvars[key] = questGuidanceOriginals.cvars[key]
+        end
+    end
+end
+
+local function RefreshQuestGuidanceMap()
+    if WorldMapFrame then
+        if WorldMapFrame.RefreshAllDataProviders then
+            pcall(WorldMapFrame.RefreshAllDataProviders, WorldMapFrame)
+        elseif WorldMapFrame.RefreshOverlayFrames then
+            pcall(WorldMapFrame.RefreshOverlayFrames, WorldMapFrame)
+        end
+    end
+end
+
+local function ClearSuperTracking()
+    if not C_SuperTrack then return end
+
+    if C_SuperTrack.ClearAllSuperTracked then
+        pcall(C_SuperTrack.ClearAllSuperTracked)
+        return
+    end
+
+    if C_SuperTrack.SetSuperTrackedQuestID then
+        pcall(C_SuperTrack.SetSuperTrackedQuestID, 0)
+    elseif SetSuperTrackedQuestID then
+        pcall(SetSuperTrackedQuestID, 0)
+    end
+    if C_SuperTrack.SetSuperTrackedUserWaypoint then
+        pcall(C_SuperTrack.SetSuperTrackedUserWaypoint, false)
+    end
+    if C_SuperTrack.ClearSuperTrackedContent then
+        pcall(C_SuperTrack.ClearSuperTrackedContent)
+    end
+    if C_SuperTrack.ClearSuperTrackedMapPin then
+        pcall(C_SuperTrack.ClearSuperTrackedMapPin)
+    end
+end
+
+local function ApplyQuestGuidanceSettings()
+    CaptureQuestGuidanceOriginals()
+
+    for _, key in ipairs(QUEST_GUIDANCE_CVARS) do
+        SetCVarIfChanged(key, "0")
+    end
+
+    ClearSuperTracking()
+    RefreshQuestGuidanceMap()
+
+    local minimapFrame = GetMinimapFrame()
+    if minimapFrame and minimapFrame.Hide then
+        minimapFrame:Hide()
+    end
+    ShowQuestGuidanceTray()
+end
+
+function SC:IsExplorerModeRequired()
+    local db = GetDB()
+    return IsRunActive() and IsExplorerModeRequired(db and db.run and db.run.ruleset)
+end
+
+function SC:EnforceQuestGuidanceSettings()
+    if not IsQuestGuidanceRequired() then
+        return
+    end
+
+    ApplyQuestGuidanceSettings()
+
+    local db = GetDB()
+    if db and db.run and db.run.active and not db.run.questGuidanceLoggedActive then
+        db.run.questGuidanceLoggedActive = true
+        db.run.questGuidanceLoggedRestored = nil
+        self:AddLog("EXPLORER_MODE_ENABLED", "Explorer Mode enabled. Quest guidance reduced for this run.", {
+            ruleName = "explorerMode",
+        })
+    end
+end
+
+function SC:RestoreQuestGuidanceSettings()
+    local db = GetDB()
+    local backup = questGuidanceOriginals or GetQuestGuidanceBackup()
+    if not backup then
+        HideQuestGuidanceTray()
+        return
+    end
+
+    for _, key in ipairs(QUEST_GUIDANCE_CVARS) do
+        local value = backup.cvars and backup.cvars[key]
+        if value ~= nil then
+            SetCVarIfChanged(key, value)
+        end
+    end
+
+    local minimapFrame = GetMinimapFrame()
+    if minimapFrame and minimapFrame.Show and backup.minimapShown ~= false then
+        minimapFrame:Show()
+    end
+    HideQuestGuidanceTray()
+    RefreshQuestGuidanceMap()
+
+    if db then
+        db.questGuidanceBackup = nil
+        if db.run and db.run.questGuidanceLoggedActive and not db.run.questGuidanceLoggedRestored then
+            db.run.questGuidanceLoggedRestored = true
+            self:AddLog("EXPLORER_MODE_RESTORED", "Explorer Mode restored quest guidance settings.", {
+                ruleName = "explorerMode",
+            })
+        end
+        if db.run then
+            db.run.questGuidanceLoggedActive = nil
+        end
+    end
+    questGuidanceOriginals = nil
+end
+
+function SC:CleanupQuestGuidanceIfNeeded()
+    if IsQuestGuidanceRequired() then
+        self:EnforceQuestGuidanceSettings()
+        return
+    end
+    if questGuidanceOriginals or GetQuestGuidanceBackup() then
+        self:RestoreQuestGuidanceSettings()
+    else
+        HideQuestGuidanceTray()
+    end
+end
+
 do
     local elapsed = 0
     local frame = CreateFrame("Frame")
     frame:RegisterEvent("PLAYER_LOGIN")
-    frame:SetScript("OnEvent", function()
-        if SC.CleanupActionCamIfNeeded then
+    for _, event in ipairs({
+        "PLAYER_ENTERING_WORLD",
+        "QUEST_ACCEPTED",
+        "QUEST_LOG_UPDATE",
+        "QUEST_WATCH_LIST_CHANGED",
+        "SUPER_TRACKING_CHANGED",
+        "WORLD_MAP_OPEN",
+        "ZONE_CHANGED",
+        "ZONE_CHANGED_NEW_AREA",
+    }) do
+        pcall(frame.RegisterEvent, frame, event)
+    end
+    frame:SetScript("OnEvent", function(_, event)
+        if event == "PLAYER_LOGIN" and SC.CleanupActionCamIfNeeded then
             SC:CleanupActionCamIfNeeded()
+        end
+        if SC.CleanupQuestGuidanceIfNeeded then
+            SC:CleanupQuestGuidanceIfNeeded()
         end
     end)
     frame:SetScript("OnUpdate", function(_, dt)
@@ -1342,6 +1602,11 @@ do
             SC:EnforceActionCamSettings()
         elseif actionCamOriginals then
             SC:RestoreActionCamSettings()
+        end
+        if IsQuestGuidanceRequired() then
+            SC:EnforceQuestGuidanceSettings()
+        elseif questGuidanceOriginals or GetQuestGuidanceBackup() then
+            SC:RestoreQuestGuidanceSettings()
         end
     end)
 end

@@ -188,6 +188,7 @@ local ACHIEVEMENT_RULE_ICONS = {
     consumables = "Interface\\Icons\\INV_Potion_54",
     dungeonRepeat = "Interface\\Icons\\Achievement_Dungeon_GloryoftheRaider",
     enchants = "Interface\\Icons\\Trade_Engraving",
+    explorerMode = "Interface\\Icons\\INV_Misc_Map_01",
     flightPaths = "Interface\\Icons\\Ability_Mount_Gryphon_01",
     flying = "Interface\\Icons\\Ability_Mount_Wyvern_01",
     gearQuality = "Interface\\Icons\\INV_Chest_Cloth_17",
@@ -277,6 +278,7 @@ local EDITABLE_RULE_ORDER = {
     "consumables",
     "instancedPvP",
     "actionCam",
+    "explorerMode",
 }
 
 local function Print(message)
@@ -358,6 +360,8 @@ local LOG_HIDDEN_EVENTS = {
 local LOG_EVENT_DISPLAY = {
     ACHIEVEMENT_EARNED = { label = "Achievement", group = "achievement" },
     DEATH = { label = "Death", group = "failure" },
+    EXPLORER_MODE_ENABLED = { label = "Explorer Mode", group = "system" },
+    EXPLORER_MODE_RESTORED = { label = "Explorer Mode", group = "system" },
     FORCED_MOVEMENT = { label = "Forced Movement", group = "system" },
     FORCED_MOVEMENT_ENDED = { label = "Forced Movement ..", group = "system" },
     GROUP_ROSTER = { label = "Group Changed", group = "party" },
@@ -1630,7 +1634,7 @@ local function IsCheckedRuleValue(ruleName, value)
     if ruleName == "groupingMode" or ruleName == "gearQuality" or ruleName == "maxLevelGapValue" then
         return nil
     end
-    if ruleName == "maxLevelGap" or ruleName == "actionCam" then
+    if ruleName == "maxLevelGap" or ruleName == "actionCam" or ruleName == "explorerMode" then
         return value ~= "ALLOWED"
     end
     return not IsDisallowed(value)
@@ -1723,6 +1727,7 @@ local function ConfigureRulesForPreset(rules, preset)
     SetDisallowedRule(rules, "consumables", not bronzeman)
     SetDisallowedRule(rules, "instancedPvP", false)
     rules.actionCam = "ALLOWED"
+    rules.explorerMode = "ALLOWED"
 
     if chef then
         rules.auctionHouse = DISALLOWED_OUTCOME
@@ -1756,6 +1761,7 @@ local function ConfigureRulesForPreset(rules, preset)
     if bronzeVigil then
         selectedCameraMode = "CINEMATIC"
         SetCameraRules(rules, selectedCameraMode)
+        rules.explorerMode = DISALLOWED_OUTCOME
     end
 
     rules.maxDeaths = false
@@ -1846,6 +1852,7 @@ local RULE_DISPLAY_NAMES = {
     consumables    = "Consumables",
     instancedPvP   = "Instanced PvP",
     actionCam      = "Cinematic Camera",
+    explorerMode   = "Explorer Mode",
 }
 
 local function FriendlyRuleValue(ruleName, value)
@@ -3857,7 +3864,7 @@ function SC:OpenMasterWindow(focusTab)
     local runLayout = SC.MasterUIRunLayout
     frame.start.charterSection = CreateRunSection(startPanel, "Run Charter", 0, 0, runLayout.CONTENT_WIDTH, runLayout:SectionHeight(2, 4))
     frame.start.accessSection = CreateRunSection(startPanel, "Access and Economy", 0, 0, runLayout.COLUMN_WIDTH, runLayout:SectionHeight(#ECONOMY_RULES))
-    frame.start.travelSection = CreateRunSection(startPanel, "Travel and Camera", 0, 0, runLayout.COLUMN_WIDTH, runLayout:SectionHeight(#MOVEMENT_RULES + 1))
+    frame.start.travelSection = CreateRunSection(startPanel, "Travel and Immersion", 0, 0, runLayout.COLUMN_WIDTH, runLayout:SectionHeight(#MOVEMENT_RULES + 2))
     frame.start.gearSection = CreateRunSection(startPanel, "Gear and Items", runLayout.RIGHT_COLUMN_X, 0, runLayout.COLUMN_WIDTH, runLayout:SectionHeight(5))
     frame.start.partyDungeonSection = CreateRunSection(startPanel, "Party and Dungeons", runLayout.RIGHT_COLUMN_X, 0, runLayout.COLUMN_WIDTH, runLayout:SectionHeight(4, 8))
     table.insert(frame.start.sections, frame.start.charterSection)
@@ -3979,6 +3986,27 @@ function SC:OpenMasterWindow(focusTab)
         SC:MasterUI_Refresh()
     end)
     RegisterRunControl(frame.start, frame.start.cameraRuleCheck, frame.start.travelSection)
+
+    frame.start.explorerModeRow = runLayout:CreateRow(frame.start.travelSection.content, 0, -((#MOVEMENT_RULES + 1) * runLayout.ROW_HEIGHT), runLayout.COLUMN_WIDTH)
+    frame.start.explorerModeCheck = CreateFrame("CheckButton", nil, frame.start.travelSection.content, "UICheckButtonTemplate")
+    runLayout:PlaceRowCheckbox(frame.start.explorerModeRow, frame.start.explorerModeCheck, 0)
+    frame.start.explorerModeCheck.label = frame.start.explorerModeCheck:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    runLayout:PlaceCheckboxText(frame.start.explorerModeCheck)
+    frame.start.explorerModeCheck.label:SetTextColor(BODY_TEXT.r, BODY_TEXT.g, BODY_TEXT.b)
+    frame.start.explorerModeCheck.label:SetText("Explorer Mode")
+    frame.start.explorerModeCheck.ruleKey = "explorerMode"
+    frame.start.explorerModeCheck:SetScript("OnClick", function(btn)
+        frame.start.selectedRules.explorerMode = btn:GetChecked() and DISALLOWED_OUTCOME or "ALLOWED"
+        SC:MasterUI_Refresh()
+    end)
+    frame.start.explorerModeCheck:SetScript("OnEnter", function(btn)
+        GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Explorer Mode", 1, 1, 1)
+        GameTooltip:AddLine("Hides Blizzard quest guidance during active runs, including quest blobs, super-tracked arrows, auto quest watch, and the minimap.", 0.74, 0.66, 0.50, true)
+        GameTooltip:Show()
+    end)
+    frame.start.explorerModeCheck:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    RegisterRunControl(frame.start, frame.start.explorerModeCheck, frame.start.travelSection)
 
     local gearLimitRow = runLayout:CreateRow(frame.start.gearSection.content, 0, 0, runLayout.COLUMN_WIDTH)
     frame.start.gearLimitCheck = CreateFrame("CheckButton", nil, frame.start.gearSection.content, "UICheckButtonTemplate")
@@ -4178,6 +4206,7 @@ function SC:OpenMasterWindow(focusTab)
                 and checkbox ~= self.maxGapCheck
                 and checkbox ~= self.gearLimitCheck
                 and checkbox ~= self.cameraRuleCheck
+                and checkbox ~= self.explorerModeCheck
                 and checkbox ~= self.selfCraftedCheck then
                 local text = checkbox.label:GetText()
                 for _, spec in ipairs(ECONOMY_RULES) do
@@ -4244,6 +4273,13 @@ function SC:OpenMasterWindow(focusTab)
             SetFontStringRGB(self.cameraRuleCheck.label, cameraRuleOn and GREEN_TEXT or RED_TEXT)
         else
             SetFontStringRGB(self.cameraRuleCheck.label, BODY_TEXT)
+        end
+        self.explorerModeCheck:SetChecked(IsDisallowed(self.selectedRules.explorerMode))
+        self.explorerModeCheck:SetEnabled(canEdit)
+        if highlightingRuleChanges and tostring(self.draftBaseRules.explorerMode) ~= tostring(self.selectedRules.explorerMode) then
+            SetFontStringRGB(self.explorerModeCheck.label, IsDisallowed(self.selectedRules.explorerMode) and GREEN_TEXT or RED_TEXT)
+        else
+            SetFontStringRGB(self.explorerModeCheck.label, BODY_TEXT)
         end
         self.selectedRules.maxDeaths = false
         self.selectedRules.maxDeathsValue = self.selectedRules.maxDeathsValue or 3

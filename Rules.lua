@@ -39,6 +39,7 @@ local RULE_ORDER = {
     "consumables",
     "instancedPvP",
     "actionCam",
+    "explorerMode",
     "maxDeaths",
     "maxDeathsValue",
 }
@@ -75,6 +76,7 @@ local HASH_RULE_ORDER = {
     "consumables",
     "instancedPvP",
     "actionCam",
+    "explorerMode",
     "maxDeaths",
     "maxDeathsValue",
 }
@@ -122,6 +124,7 @@ local SEVERITY_ONLY_RULES = {
     consumables = true,
     instancedPvP = true,
     actionCam = true,
+    explorerMode = true,
 }
 
 local GEAR_QUALITY_VALUES = {
@@ -171,6 +174,7 @@ local RULE_LOG_LABELS = {
     consumables = "Consumables",
     instancedPvP = "Instanced PvP",
     actionCam = "Cinematic camera",
+    explorerMode = "Explorer Mode",
     maxDeaths = "Max deaths rule",
     maxDeathsValue = "Max deaths",
 }

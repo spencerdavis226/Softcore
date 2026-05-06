@@ -43,7 +43,7 @@ Softcore includes four visible presets:
 | Casual | Low-restriction grouped baseline. Unsynced party play, economy access, mounts, flying, flight paths, consumables, heirlooms, enchants, and repeated dungeons are allowed; instanced PvP is blocked. |
 | Chef's Special | Creator-preferred profile. Synced party members are required by default, white/gray gear limits are enabled, bank is allowed, trade/auction/mailbox/warband/guild banks are blocked, flying mounts are blocked, and enchants stay enabled. |
 | Bronzeman | Stricter solo-leaning challenge profile, with flight paths allowed and unsynced party play disabled. |
-| Bronze Vigil | A harder Bronzeman variant with no flight paths and cinematic camera enforced. |
+| Bronze Vigil | A harder Bronzeman variant with no flight paths, cinematic camera, and Explorer Mode enforced. |
 
 There are also hidden custom rule profiles that can still be recognized by the run-label system when their exact rules match. Any edited or unmatched ruleset becomes **Custom Run**.
 
@@ -86,6 +86,8 @@ Opening a mailbox or trade window alone is allowed so accidental clicks or anoth
 
 Clearing a violation preserves the audit trail and logs the clear event. Death and fatal/character-fail violations are not clearable. Live-state checks, such as equipped gear or active movement forms, are rechecked after clearing so unresolved behavior can create a fresh active violation.
 
+Explorer Mode is an immersion rule. While active, Softcore hides Blizzard quest guidance such as quest objective blobs, super-tracked arrows, auto quest watch, and the minimap, then restores the prior settings when the rule no longer applies. Third-party quest helpers may still draw their own arrows or pins.
+
 ## Achievements And Completion
 
 Achievements cover account-level leveling, classes, rule profiles, rule-specific restrictions, and max-level milestones.
@@ -97,6 +99,8 @@ Max-level completion uses the same discovered run label shown on Overview. When 
 The HUD is a small status strip for the active run, party state, and pending governance. It also appears for proposal or amendment review before a run is active. Click it to open the most relevant menu tab.
 
 HUD text is intentionally short, using labels such as `Review`, `Waiting`, `Settling`, `Syncing`, `Invite`, `Run Sync`, `No Addon`, `Offline`, `Raid Local`, `Version`, `Rules`, `Run ID`, `Not In Run`, and `Level Gap`.
+
+Explorer Mode hides the minimap during active runs, but Softcore remains available through the HUD, addon compartment, and a small Explorer tray button.
 
 Softcore UI sounds are restrained and limited to important moments such as run start/completion, achievements, local deaths or violations, incoming review, accepted or applied governance, cancellations, and violation clears. Use `/sc sound off` to mute them or `/sc sound test list` to inspect available cues.
 
@@ -172,7 +176,7 @@ Important boundaries:
 - Deaths, violations, cleared violations, and audit log entries.
 - Participants, peer display state, conflicts, proposals, invites, and rule amendments.
 - Dungeon repeat state and relevant instance entries.
-- Gear quality, heirloom, permanent enchant, consumable, economy, storage, movement, and access rule events.
+- Gear quality, heirloom, permanent enchant, consumable, economy, storage, movement, Explorer Mode, and access rule events.
 - Local PvP advisory warnings for War Mode and player PvP flagging.
 - Per-character max-level completion award snapshots.
 

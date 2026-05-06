@@ -24,6 +24,7 @@ local RESTRICTION_RULES = {
     { id = "level_gap_enforced", name = "Kept Together", rule = "maxLevelGap", description = "Reach max level after starting at level 10 or lower with Level Gap Enforcement enabled from run start through max level." },
     { id = "no_repeat_dungeons", name = "One Clear Only", rule = "dungeonRepeat", label = "Repeated Dungeons" },
     { id = "no_instanced_pvp", name = "No Battleground Detours", rule = "instancedPvP", label = "Instanced PvP" },
+    { id = "explorer_mode", name = "Explorer's Path", rule = "explorerMode", description = "Reach max level after starting at level 10 or lower with Explorer Mode enabled from run start through max level." },
 }
 
 local CLEAN_LEVEL_NAMES = {
@@ -81,6 +82,7 @@ local PLAYER_RULE_CHANGE_KEYS = {
     consumables = true,
     instancedPvP = true,
     actionCam = true,
+    explorerMode = true,
 }
 
 local ACHIEVEMENT_NAME_MAX_LEN = 34

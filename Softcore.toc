@@ -4,6 +4,7 @@
 ## Author: Spencer
 ## Version: 0.5.0
 ## IconTexture: Interface/AddOns/Softcore/Assets/SoftcoreLogoMinimap
+## AddonCompartmentFunc: Softcore_OnAddonCompartmentClick
 ## SavedVariables: SoftcoreDB, SoftcoreAchievementsDB
 ## SavedVariablesPerCharacter: SoftcoreCharDB
 

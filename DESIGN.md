@@ -209,7 +209,7 @@ Current preset intent:
 - Casual: low-restriction grouped baseline
 - Chef's Special: creator-preferred profile
 - Bronzeman: stricter solo-leaning challenge shape
-- Bronze Vigil: stricter Bronzeman with no flight paths and cinematic camera enforced
+- Bronze Vigil: stricter Bronzeman with no flight paths, cinematic camera, and Explorer Mode enforced
 
 Preset rules must stay aligned with:
 
