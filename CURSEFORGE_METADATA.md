@@ -29,7 +29,7 @@ Runs can be played solo or with friends. Grouped play uses Charter-tab proposals
 Key features:
 
 - Per-character run tracking for deaths, rule violations, active status, and audit history.
-- Four built-in presets: Casual, Chef's Special, Ironman, and Iron Vigil.
+- Four built-in presets: Casual, Chef's Special, Tinman, and Steelman.
 - Charter-tab group proposals, run sync, party invites, and rule amendments.
 - Compact Overview, Violations, Log, and Achievements tabs.
 - HUD and minimap button for quick status and menu access.

@@ -1206,7 +1206,7 @@ function SC:Sync_SendRunProposalDetails(proposal, requesterKey)
         proposedAt = proposal.proposedAt,
         proposalKind = proposal.proposalType or "RUN",
         proposalTargetPlayerKey = proposal.targetPlayerKey,
-        preset = proposal.preset or "CUSTOM",
+        preset = self.NormalizePresetKey and self:NormalizePresetKey(proposal.preset or "CUSTOM") or (proposal.preset or "CUSTOM"),
         ruleset = self:SerializeRuleset(proposal.ruleset),
         rulesetHash = proposal.rulesetHash,
         proposalRulesetHash = proposal.rulesetHash,
@@ -1386,7 +1386,7 @@ function SC:Sync_SendRunProposal(proposal)
         proposedAt = proposal.proposedAt,
         proposalKind = proposal.proposalType or "RUN",
         targetPlayerKey = proposal.targetPlayerKey,
-        preset = proposal.preset or "CUSTOM",
+        preset = self.NormalizePresetKey and self:NormalizePresetKey(proposal.preset or "CUSTOM") or (proposal.preset or "CUSTOM"),
         rulesetHash = proposal.rulesetHash,
         proposalRulesetHash = proposal.rulesetHash,
         voterKeys = SerializeKeySet(proposal.partyAtProposalTime),
@@ -1462,7 +1462,7 @@ function SC:Sync_SendRunProposalConfirmed(proposal)
         proposalId = proposal.proposalId,
         runId = proposal.runId,
         runName = proposal.runName,
-        preset = proposal.preset or "CUSTOM",
+        preset = self.NormalizePresetKey and self:NormalizePresetKey(proposal.preset or "CUSTOM") or (proposal.preset or "CUSTOM"),
     }, CONTROL_REPEAT_ATTEMPTS)
     return true
 end

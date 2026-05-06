@@ -92,14 +92,15 @@ local function SetUnsyncedPartyAllowed(rules, allowed)
 end
 
 local function ApplyPresetProfile(rules, preset)
-    local ironman = preset == "IRONMAN" or preset == "IRON_VIGIL"
-    local ironVigil = preset == "IRON_VIGIL"
+    preset = SC.NormalizePresetKey and SC:NormalizePresetKey(preset) or preset
+    local tinman = preset == "TINMAN" or preset == "STEELMAN"
+    local steelman = preset == "STEELMAN"
     local chef = preset == "CHEF_SPECIAL"
     local selectedCameraMode = nil
 
-    rules.groupingMode = ironman and "SOLO_SELF_FOUND" or "SYNCED_GROUP_ALLOWED"
-    rules.gearQuality = (ironman or chef) and "WHITE_GRAY_ONLY" or "ALLOWED"
-    if ironman then
+    rules.groupingMode = tinman and "SOLO_SELF_FOUND" or "SYNCED_GROUP_ALLOWED"
+    rules.gearQuality = (tinman or chef) and "WHITE_GRAY_ONLY" or "ALLOWED"
+    if tinman then
         rules.selfCraftedGearAllowed = false
     elseif chef then
         rules.selfCraftedGearAllowed = true
@@ -109,20 +110,20 @@ local function ApplyPresetProfile(rules, preset)
     rules.maxLevelGap = "ALLOWED"
     rules.maxLevelGapValue = 3
     rules.heirlooms = DISALLOWED_OUTCOME
-    rules.enchants = ironman and DISALLOWED_OUTCOME or "ALLOWED"
-    rules.dungeonRepeat = ironman and DISALLOWED_OUTCOME or "ALLOWED"
+    rules.enchants = tinman and DISALLOWED_OUTCOME or "ALLOWED"
+    rules.dungeonRepeat = tinman and DISALLOWED_OUTCOME or "ALLOWED"
     SetUnsyncedPartyAllowed(rules, preset == "CASUAL")
 
     SetRules(rules, ECONOMY_RULE_KEYS, DISALLOWED_OUTCOME)
-    SetRules(rules, MOVEMENT_RULE_KEYS, ironman and DISALLOWED_OUTCOME or "ALLOWED")
-    if ironman then
+    SetRules(rules, MOVEMENT_RULE_KEYS, tinman and DISALLOWED_OUTCOME or "ALLOWED")
+    if tinman then
         rules.flightPaths = "ALLOWED"
     end
-    if ironVigil then
+    if steelman then
         rules.flightPaths = DISALLOWED_OUTCOME
     end
 
-    rules.consumables = ironman and DISALLOWED_OUTCOME or "ALLOWED"
+    rules.consumables = tinman and DISALLOWED_OUTCOME or "ALLOWED"
     rules.instancedPvP = DISALLOWED_OUTCOME
     rules.actionCam = "ALLOWED"
 
@@ -143,13 +144,13 @@ local function ApplyPresetProfile(rules, preset)
         rules.instancedPvP = DISALLOWED_OUTCOME
         rules.actionCam = DISALLOWED_OUTCOME
         selectedCameraMode = "CINEMATIC"
-    elseif not ironman then
+    elseif not tinman then
         SetRules(rules, ECONOMY_RULE_KEYS, "ALLOWED")
         rules.heirlooms = "ALLOWED"
         rules.selfCraftedGearAllowed = false
     end
 
-    if ironVigil then
+    if steelman then
         rules.actionCam = DISALLOWED_OUTCOME
         selectedCameraMode = "CINEMATIC"
     end
@@ -214,8 +215,8 @@ end
 local RUN_LABEL_SPECS = {
     { label = "Casual", preset = "CASUAL", rules = BuildPresetRuleset("CASUAL") },
     { label = "Chef's Special", preset = "CHEF_SPECIAL", rules = BuildPresetRuleset("CHEF_SPECIAL") },
-    { label = "Ironman", preset = "IRONMAN", rules = BuildPresetRuleset("IRONMAN") },
-    { label = "Iron Vigil", preset = "IRON_VIGIL", rules = BuildPresetRuleset("IRON_VIGIL") },
+    { label = "Tinman", preset = "TINMAN", rules = BuildPresetRuleset("TINMAN") },
+    { label = "Steelman", preset = "STEELMAN", rules = BuildPresetRuleset("STEELMAN") },
 
     { label = "Party Animal", rules = BuildCasualVariant({ instancedPvP = "ALLOWED" }) },
     { label = "Mind the Gap", rules = BuildCasualVariant({ maxLevelGap = DISALLOWED_OUTCOME }) },
@@ -387,6 +388,7 @@ function SC:DetectRulesetPreset(ruleset)
 end
 
 function SC:GetPresetRunLabel(preset)
+    preset = self.NormalizePresetKey and self:NormalizePresetKey(preset) or preset
     for _, spec in ipairs(RUN_LABEL_SPECS) do
         if spec.preset == preset then
             return FormatRunLabel(spec.label)

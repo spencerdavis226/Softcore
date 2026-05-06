@@ -600,7 +600,11 @@ function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, r
     elseif self.ApplyGroupingMode then
         self:ApplyGroupingMode(proposalRuleset)
     end
-    local proposalName = runName or "Softcore Run"
+    if self.NormalizePresetKey then
+        proposalRuleset.achievementPreset = self:NormalizePresetKey(proposalRuleset.achievementPreset)
+        proposalRuleset.preset = self:NormalizePresetKey(proposalRuleset.preset)
+    end
+    local proposalName = self.NormalizePresetLabel and self:NormalizePresetLabel(runName) or runName or "Softcore Run"
     if not runName or runName == "Softcore Run" then
         proposalName = self.GetRunDisplayName and self:GetRunDisplayName({ ruleset = proposalRuleset }, "Custom Run") or "Custom Run"
     end
@@ -612,7 +616,7 @@ function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, r
         proposedAt = time(),
         ruleset = proposalRuleset,
         rulesetHash = self:ComputeRulesetHash(proposalRuleset),
-        preset = proposalRuleset.achievementPreset or proposalRuleset.preset or "CUSTOM",
+        preset = self.NormalizePresetKey and self:NormalizePresetKey(proposalRuleset.achievementPreset or proposalRuleset.preset or "CUSTOM") or (proposalRuleset.achievementPreset or proposalRuleset.preset or "CUSTOM"),
         acceptedBy = {},
         declinedBy = {},
         status = "PENDING",
@@ -1154,6 +1158,10 @@ function SC:ReceiveRunProposal(payload, proposerKey)
 
     local hasDetails = payload.ruleset and payload.ruleset ~= ""
     local ruleset = hasDetails and self:DeserializeRuleset(payload.ruleset) or self:GetDefaultRuleset()
+    if self.NormalizePresetKey then
+        ruleset.achievementPreset = self:NormalizePresetKey(ruleset.achievementPreset)
+        ruleset.preset = self:NormalizePresetKey(ruleset.preset)
+    end
     local computedHash = hasDetails and self:ComputeRulesetHash(ruleset) or (payload.proposalRulesetHash or payload.rulesetHash or "")
 
     if payload.addonVersion and payload.addonVersion ~= self.version then
@@ -1168,12 +1176,12 @@ function SC:ReceiveRunProposal(payload, proposerKey)
     local proposal = {
         proposalId = proposalId,
         runId = payload.proposalRunId,
-        runName = payload.runName or "Softcore Run",
+        runName = self.NormalizePresetLabel and self:NormalizePresetLabel(payload.runName or "Softcore Run") or (payload.runName or "Softcore Run"),
         proposedBy = proposerKey,
         proposedAt = proposedAt,
         ruleset = ruleset,
         rulesetHash = payload.proposalRulesetHash or computedHash,
-        preset = payload.preset or "CUSTOM",
+        preset = self.NormalizePresetKey and self:NormalizePresetKey(payload.preset or "CUSTOM") or (payload.preset or "CUSTOM"),
         acceptedBy = {},
         declinedBy = {},
         status = "PENDING",

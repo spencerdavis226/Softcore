@@ -208,8 +208,8 @@ Current preset intent:
 
 - Casual: low-restriction grouped baseline
 - Chef's Special: creator-preferred profile
-- Ironman: common WoW Challenges shape
-- Iron Vigil: stricter Ironman with no flight paths and cinematic camera enforced
+- Tinman: stricter solo-leaning challenge shape
+- Steelman: stricter Tinman with no flight paths and cinematic camera enforced
 
 Preset rules must stay aligned with:
 

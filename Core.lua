@@ -9,6 +9,17 @@ local SC = Softcore
 SC.name = "Softcore"
 SC.version = "0.5.0"
 
+local PRESET_KEY_ALIASES = {
+    IRONMAN = "TINMAN",
+    IRON_VIGIL = "STEELMAN",
+}
+
+function SC:NormalizePresetKey(preset)
+    if preset == nil then return nil end
+    preset = tostring(preset)
+    return PRESET_KEY_ALIASES[preset] or preset
+end
+
 -- CODEx/maintenance: local-only full violation forgiveness escape hatch.
 -- Rotate this token after use; keep the command hidden from help, README, and AGENTS.md.
 local CLEAN_RUN_FORGIVENESS_COMMAND = "forgive-clean-run"
@@ -454,6 +465,91 @@ local function DefaultCameraModeForRules(ruleset)
     return nil
 end
 
+local EnsureDatabase
+
+function SC:NormalizePresetLabel(value)
+    if value == "Ironman" then return "Tinman" end
+    if value == "Ironman Run" then return "Tinman Run" end
+    if value == "Iron Vigil" then return "Steelman" end
+    if value == "Iron Vigil Run" then return "Steelman Run" end
+    if value == "Iron Will" then return "Tinman" end
+    return value
+end
+
+local function MigrateRulesetPresetKeys(ruleset)
+    if type(ruleset) ~= "table" then return end
+    if ruleset.achievementPreset ~= nil then
+        ruleset.achievementPreset = SC:NormalizePresetKey(ruleset.achievementPreset)
+    end
+    if ruleset.preset ~= nil then
+        ruleset.preset = SC:NormalizePresetKey(ruleset.preset)
+    end
+end
+
+local function MigrateAchievementEntry(entry, id, detail)
+    if type(entry) ~= "table" then return end
+    entry.id = id
+    if entry.detail == "Iron Will" or entry.detail == "Ironman" then
+        entry.detail = "Tinman"
+    elseif entry.detail == "Iron Vigil" then
+        entry.detail = "Steelman"
+    elseif detail and (entry.detail == nil or entry.detail == "") then
+        entry.detail = detail
+    end
+end
+
+local function MigrateEarnedAchievementId(earned, oldId, newId, detail)
+    if type(earned) ~= "table" then return end
+    if earned[oldId] and not earned[newId] then
+        earned[newId] = earned[oldId]
+        MigrateAchievementEntry(earned[newId], newId, detail)
+    elseif earned[newId] then
+        MigrateAchievementEntry(earned[newId], newId, detail)
+    end
+    earned[oldId] = nil
+end
+
+local function MigrateAchievementStore(store)
+    if type(store) ~= "table" then return end
+    MigrateEarnedAchievementId(store.earned, "char_ironman_max_level", "char_tinman_max_level", "Tinman")
+    MigrateEarnedAchievementId(store.earned, "char_camera_ironman_no_flight_paths_max_level", "char_camera_steelman_no_flight_paths_max_level", "Steelman")
+
+    local eligibility = store.runEligibility
+    if type(eligibility) == "table" then
+        if eligibility.initialPreset ~= nil then
+            eligibility.initialPreset = SC:NormalizePresetKey(eligibility.initialPreset)
+        end
+        MigrateRulesetPresetKeys(eligibility.initialRules)
+    end
+end
+
+function SC:MigrateTinmanSteelmanPresetKeys()
+    local db = EnsureDatabase()
+
+    MigrateRulesetPresetKeys(db.run and db.run.ruleset)
+    if db.run then
+        db.run.runName = self:NormalizePresetLabel(db.run.runName)
+    end
+
+    for _, proposal in pairs(db.proposals or {}) do
+        if type(proposal) == "table" then
+            proposal.preset = self:NormalizePresetKey(proposal.preset or "CUSTOM")
+            proposal.runName = self:NormalizePresetLabel(proposal.runName)
+            MigrateRulesetPresetKeys(proposal.ruleset)
+        end
+    end
+
+    local award = db.completionAward
+    if type(award) == "table" then
+        award.preset = self:NormalizePresetKey(award.preset or "CUSTOM")
+        award.presetLabel = self:NormalizePresetLabel(award.presetLabel)
+        award.runName = self:NormalizePresetLabel(award.runName)
+    end
+
+    MigrateAchievementStore(db.achievements)
+    MigrateAchievementStore(SoftcoreAchievementsDB)
+end
+
 local function EnsureRunDefaults(run)
     if run.active == nil then run.active = false end
     if run.valid == nil then run.valid = true end
@@ -499,7 +595,7 @@ local function EnsureRunDefaults(run)
     end
 end
 
-local function EnsureDatabase()
+function EnsureDatabase()
     SoftcoreDB = SoftcoreDB or {}
 
     SoftcoreDB.character = SoftcoreDB.character or GetPlayerSnapshot()
@@ -652,8 +748,8 @@ end
 local PRESET_AWARD_LABELS = {
     CASUAL = "Casual",
     CHEF_SPECIAL = "Chef's Special",
-    IRONMAN = "Ironman",
-    IRON_VIGIL = "Iron Vigil",
+    TINMAN = "Tinman",
+    STEELMAN = "Steelman",
     CUSTOM = "Custom",
 }
 
@@ -2922,8 +3018,8 @@ local SAMPLE_AWARD_CLASSES = {
 local SAMPLE_AWARD_PRESETS = {
     { preset = "CASUAL", label = "Casual" },
     { preset = "CHEF_SPECIAL", label = "Chef's Special" },
-    { preset = "IRONMAN", label = "Ironman" },
-    { preset = "IRON_VIGIL", label = "Iron Vigil" },
+    { preset = "TINMAN", label = "Tinman" },
+    { preset = "STEELMAN", label = "Steelman" },
     { preset = "CUSTOM", label = "Custom" },
 }
 
@@ -3285,6 +3381,7 @@ end
 function SC:Initialize()
     BindCharacterDatabase()
     EnsureDatabase()
+    self:MigrateTinmanSteelmanPresetKeys()
     self:ResumeActiveRunTimer()
     self:RefreshCharacter()
     if self.ClearStalePendingProposal then
