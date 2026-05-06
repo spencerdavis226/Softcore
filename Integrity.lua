@@ -1340,6 +1340,7 @@ local QUEST_GUIDANCE_CVARS = {
 
 local questGuidanceOriginals = nil
 local questGuidanceTray = nil
+local questGuidanceSuperTrackGraceUntil = 0
 
 local function GetQuestGuidanceBackup()
     local db = GetDB()
@@ -1457,6 +1458,20 @@ local function RefreshQuestGuidanceMap()
     end
 end
 
+local function IsQuestGuidanceBrowserOpen()
+    return WorldMapFrame and WorldMapFrame.IsShown and WorldMapFrame:IsShown()
+end
+
+local function ShouldDeferQuestGuidanceClear()
+    if IsQuestGuidanceBrowserOpen() then
+        return true
+    end
+    if GetTime and GetTime() < questGuidanceSuperTrackGraceUntil then
+        return true
+    end
+    return false
+end
+
 local function ClearSuperTracking()
     if not C_SuperTrack then return end
 
@@ -1488,7 +1503,9 @@ local function ApplyQuestGuidanceSettings()
         SetCVarIfChanged(key, "0")
     end
 
-    ClearSuperTracking()
+    if not ShouldDeferQuestGuidanceClear() then
+        ClearSuperTracking()
+    end
     RefreshQuestGuidanceMap()
 
     local minimapFrame = GetMinimapFrame()
@@ -1580,12 +1597,16 @@ do
         "QUEST_WATCH_LIST_CHANGED",
         "SUPER_TRACKING_CHANGED",
         "WORLD_MAP_OPEN",
+        "WORLD_MAP_CLOSE",
         "ZONE_CHANGED",
         "ZONE_CHANGED_NEW_AREA",
     }) do
         pcall(frame.RegisterEvent, frame, event)
     end
     frame:SetScript("OnEvent", function(_, event)
+        if event == "SUPER_TRACKING_CHANGED" and GetTime then
+            questGuidanceSuperTrackGraceUntil = GetTime() + 0.75
+        end
         if event == "PLAYER_LOGIN" and SC.CleanupActionCamIfNeeded then
             SC:CleanupActionCamIfNeeded()
         end
