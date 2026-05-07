@@ -3410,10 +3410,24 @@ end
 
 function SC:Initialize()
     BindCharacterDatabase()
-    EnsureDatabase()
+    local db = EnsureDatabase()
     self:MigrateBronzemanPresetKeys()
     self:ResumeActiveRunTimer()
+
+    local levelAtLastSession = db.character and db.character.level or 0
+    local runWasActive = db.run and db.run.active == true
+
     self:RefreshCharacter()
+
+    if runWasActive and levelAtLastSession > 0 and db.character.level > levelAtLastSession then
+        local playerKey = GetPlayerKey(db.character)
+        local detail = string.format(
+            "Gained %d level(s) while addon was disabled (level %d to %d).",
+            db.character.level - levelAtLastSession, levelAtLastSession, db.character.level
+        )
+        self:MarkParticipantFailed(playerKey, detail)
+        self:AddViolation("offline_level_gain", detail, "FATAL", playerKey)
+    end
     if self.ClearStalePendingProposal then
         self:ClearStalePendingProposal()
     end
