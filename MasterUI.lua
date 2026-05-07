@@ -1219,6 +1219,7 @@ local function FormatAwardRunId(award)
 end
 
 local function FormatAwardAddonVersion()
+    ---@diagnostic disable-next-line: undefined-field
     local meta = (C_AddOns and C_AddOns.GetAddOnMetadata) or _G.GetAddOnMetadata
     local v = meta and meta("Softcore", "Version") or nil
     if not v or v == "" then return "Softcore" end
@@ -2101,6 +2102,7 @@ end
 
 local function GetClassColor(classFile)
     classFile = tostring(classFile or "")
+    ---@diagnostic disable-next-line: undefined-field
     local colors = (_G and _G.RAID_CLASS_COLORS) or RAID_CLASS_COLORS
     local color = colors and colors[classFile] or CLASS_COLORS[classFile]
     if color then

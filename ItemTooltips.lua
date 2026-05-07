@@ -100,6 +100,7 @@ end
 local function IsSelfCraftedTooltipLine(text)
     local markers = {}
     local formats = {
+        ---@diagnostic disable-next-line: undefined-field
         _G.ITEM_CREATED_BY,
         "Made by %s",
         "Crafted by %s",
