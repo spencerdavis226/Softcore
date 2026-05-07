@@ -63,6 +63,18 @@ local function LocalActiveViolations()
     return n
 end
 
+local function LocalHasDeathViolation()
+    local db = SC.db or SoftcoreDB
+    if not db or not db.violations then return false end
+    local playerKey = SC:GetPlayerKey()
+    for _, v in ipairs(db.violations) do
+        if v.playerKey == playerKey and v.type == "death" and v.status ~= "CLEARED" then
+            return true
+        end
+    end
+    return false
+end
+
 local function HasRemoteFailure(syncRows)
     local db = SC.db or SoftcoreDB
     local run = db and db.run or {}
@@ -333,6 +345,9 @@ local function GetHUDState(status, violations, syncRows)
     end
 
     if violations > 0 or localStatus == "WARNING" or localStatus == "VIOLATION" then
+        if LocalHasDeathViolation() then
+            return "RED", "Died", "VIOLATIONS"
+        end
         local text = violations == 1 and "1 Violation" or tostring(violations) .. " Violations"
         if violations <= 0 then text = "Violation" end
         return "YELLOW", text, "VIOLATIONS"
@@ -369,6 +384,7 @@ local HUD_HINTS = {
     ["No Run"]        = "You don't have an active run.",
     ["Pending"]       = "Waiting to sync with the party\226\128\166",
     ["Failed"]        = "Your run has ended.",
+    ["Died"]          = "You have died. Check the Violations tab for details.",
     ["Party Fail"]    = "A party member's run has failed.",
     ["Warning"]       = "A party member has active violations. Check the Run tab.",
     ["Blocked"]       = "Party progress is blocked. Check the Run tab.",

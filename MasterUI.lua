@@ -1955,6 +1955,16 @@ local function CountAllViolations(playerKey)
     return count
 end
 
+local function HasDeathViolation(playerKey)
+    local db = SC.db or SoftcoreDB
+    for _, v in ipairs(db and db.violations or {}) do
+        if v.playerKey == playerKey and v.type == "death" then
+            return true
+        end
+    end
+    return false
+end
+
 local PASSIVE_UNSYNCED_CONFLICTS = {
     RUN_MISMATCH = true,
     RULESET_MISMATCH = true,
@@ -1992,6 +2002,7 @@ local function GetPartyDisplayRows()
         class = db and db.character and db.character.class,
         status = localStatus.participantStatus or "NOT_IN_RUN",
         totalViolations = CountAllViolations(localKey),
+        hasDeath = HasDeathViolation(localKey),
         isLocal = true,
     })
     seen[localKey] = true
@@ -2006,7 +2017,7 @@ local function GetPartyDisplayRows()
         local sameRunPeer = db and db.run and db.run.runId and peer.runId and db.run.runId == peer.runId
         if allowsUnsyncedParty and (displayStatus ~= "FAILED" or not sameRunPeer) and not ((peer.activeViolations or 0) > 0) then
             displayStatus = "PARTY"
-        elseif (peer.activeViolations or 0) > 0 then
+        elseif (peer.activeViolations or 0) > 0 and displayStatus ~= "FAILED" then
             displayStatus = "VIOLATION"
         end
 
@@ -2021,6 +2032,7 @@ local function GetPartyDisplayRows()
                 class = peer.class or (pRow and pRow.class),
                 status = displayStatus,
                 totalViolations = CountAllViolations(peer.playerKey or ""),
+                hasDeath = HasDeathViolation(peer.playerKey or "") or (peer.deaths or 0) > 0,
             })
             seen[peerKey] = true
         end
@@ -2044,6 +2056,7 @@ local function GetPartyDisplayRows()
                     class = participant.class,
                     status = participantStatus,
                     totalViolations = CountAllViolations(participantKey),
+                    hasDeath = HasDeathViolation(participantKey) or (participant.deathCount or 0) > 0,
                 })
                 seen[participantKey] = true
             end
@@ -2300,17 +2313,27 @@ local function RefreshOverviewLedger(ledger, rows, grouped, inRaid)
     for index, row in ipairs(ledger.rows) do
         local display = rows[index]
         if display then
-            local statusColor = GetOverviewStatusColor(display.status)
             local statusBase = GetStatusBase(display.status)
             local total = tonumber(display.totalViolations or 0) or 0
-            local splitAccent = total > 0 and (statusBase == "VALID" or statusBase == "ACTIVE")
+            local hasDeath = display.hasDeath == true
+            local statusColor = hasDeath and RED_TEXT or GetOverviewStatusColor(display.status)
+            local splitAccent = not hasDeath and total > 0 and (statusBase == "VALID" or statusBase == "ACTIVE")
 
             row:Show()
             row.name:SetText((display.isLocal and "|cffffd100" or "") .. Trunc(display.name, 30) .. (display.isLocal and "|r" or ""))
             row.meta:SetText(FormatOverviewLevelText(display.level, display.startLevel))
             SetOverviewBadgeTone(row.classBadge, Trunc(FormatClassName(display.class), 14), GetClassColor(display.class))
             SetStatusPill(row.statusPill, display.status)
-            SetOverviewSmallBadge(row.totalBadge, FormatTotalViolations(total), total > 0 and GOLD_TEXT or MUTED_TEXT)
+            if hasDeath and row.statusPill.SetBackdropColor then
+                row.statusPill:SetBackdropColor(RED_TEXT.r * 0.16, RED_TEXT.g * 0.12, RED_TEXT.b * 0.08, 0.9)
+                row.statusPill:SetBackdropBorderColor(RED_TEXT.r, RED_TEXT.g, RED_TEXT.b, 0.85)
+                row.statusPill.text:SetTextColor(RED_TEXT.r, RED_TEXT.g, RED_TEXT.b)
+            end
+            if hasDeath then
+                SetOverviewSmallBadge(row.totalBadge, "Died", RED_TEXT)
+            else
+                SetOverviewSmallBadge(row.totalBadge, FormatTotalViolations(total), total > 0 and GOLD_TEXT or MUTED_TEXT)
+            end
             row.accent:ClearAllPoints()
             if splitAccent then
                 row.accent:SetPoint("TOPLEFT", row, "TOPLEFT", 3, -3)
