@@ -2979,13 +2979,6 @@ local function RefreshRunPanel(frame)
                 frame.start.activeText:SetText("Active run rules are locked. Camera mode can be switched anytime without a rule amendment.")
             end
         end
-    elseif partySyncRoute and partySyncRoute.action == "JOIN_RUN" then
-        frame.start.activeText:SetShown(true)
-        if SC.pendingJoinRunId then
-            frame.start.activeText:SetText("|cfffbbf24Requesting run details from party...|r")
-        else
-            frame.start.activeText:SetText("|cffffd100" .. (partySyncRoute.message or "Party members are on a run.") .. "|r")
-        end
     end
 
     if frame.start.RefreshControls then
