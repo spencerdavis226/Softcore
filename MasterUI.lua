@@ -3695,21 +3695,6 @@ local function RefreshAchievementsPanel(frame)
     frame.achievements.content:SetSize(ACHIEVEMENT_LAYOUT.CONTENT_WIDTH, contentHeight)
 end
 
-local function ConfirmStopRun()
-    SC:ResetRun()
-    if SC.masterFrame then
-        if SC.masterFrame.start then
-            SC.masterFrame.start.stopConfirmPending = false
-            if SC.masterFrame.start.cancelRunBox then
-                SC.masterFrame.start.cancelRunBox:SetText("")
-                SC.masterFrame.start.cancelRunBox:ClearFocus()
-            end
-        end
-        SC.masterFrame.activeTab = TAB_RUN
-        SC:MasterUI_Refresh()
-    end
-end
-
 local function ArmStopRunConfirmation(frame)
     local start = frame and frame.start
     if not start then return end
@@ -3735,7 +3720,18 @@ local function CancelStopRunConfirmation(frame)
 end
 
 function SC:ConfirmStopRun()
-    ConfirmStopRun()
+    SC:ResetRun()
+    if SC.masterFrame then
+        if SC.masterFrame.start then
+            SC.masterFrame.start.stopConfirmPending = false
+            if SC.masterFrame.start.cancelRunBox then
+                SC.masterFrame.start.cancelRunBox:SetText("")
+                SC.masterFrame.start.cancelRunBox:ClearFocus()
+            end
+        end
+        SC.masterFrame.activeTab = TAB_RUN
+        SC:MasterUI_Refresh()
+    end
 end
 
 function SC:ShowJoinRunPicker(candidates)
@@ -4457,7 +4453,7 @@ function SC:OpenMasterWindow(focusTab)
     end)
     frame.start.confirmStopBtn = CreateButton(startPanel, "Confirm End", 110, 24)
     frame.start.confirmStopBtn:SetPoint("LEFT", frame.start.stopBtn, "RIGHT", 8, 0)
-    frame.start.confirmStopBtn:SetScript("OnClick", ConfirmStopRun)
+    frame.start.confirmStopBtn:SetScript("OnClick", function() SC:ConfirmStopRun() end)
     frame.start.cancelRunHint = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     frame.start.cancelRunHint:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 32, 52)
     frame.start.cancelRunHint:SetTextColor(MUTED_TEXT.r * 0.7, MUTED_TEXT.g * 0.7, MUTED_TEXT.b * 0.7)
@@ -4470,7 +4466,7 @@ function SC:OpenMasterWindow(focusTab)
     end)
     frame.start.cancelRunBox:SetScript("OnEnterPressed", function(self)
         if string.lower(strtrim(self:GetText() or "")) == "end run" then
-            ConfirmStopRun()
+            SC:ConfirmStopRun()
         end
     end)
     frame.start.cancelStopBtn = CreateButton(startPanel, "Cancel", 80, 24)
