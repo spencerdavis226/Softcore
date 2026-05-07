@@ -106,7 +106,8 @@ local function HandleLevelUp(...)
 
     -- PLAYER_LEVEL_UP passes the new level as the first payload; prefer it over UnitLevel in this callback.
     local previousLevel = tonumber(db.character and db.character.level or 0) or 0
-    local newLevel = tonumber(select(1, ...)) or UnitLevel("player") or previousLevel
+    local eventLevel = select(1, ...)
+    local newLevel = tonumber(eventLevel) or UnitLevel("player") or previousLevel
     if newLevel < previousLevel then
         if SC.TraceDebug then
             SC:TraceDebug("LEVEL_UP_REGRESSED", {
