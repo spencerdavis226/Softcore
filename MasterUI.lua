@@ -2619,6 +2619,23 @@ local function AnchorRunFooterButtons(frame)
     anchorRight(start.proposalAcceptBtn)
 end
 
+--- Party Sync visibility when in a party (not raid). Shows BLOCKED routes so tooltips and status text stay discoverable during governance.
+local function RefreshPartySyncButtonInParty(btn)
+    if not btn then
+        return nil, false
+    end
+    if not IsInGroup() or IsInRaid() or not SC.GetPartySyncAction then
+        btn:Hide()
+        btn:SetEnabled(false)
+        return nil, false
+    end
+    local route = SC:GetPartySyncAction()
+    local show = route and route.action ~= "NONE" and route.action ~= "HIDDEN"
+    btn:SetShown(show)
+    btn:SetEnabled(route and route.enabled == true)
+    return route, show
+end
+
 local function RefreshRunPanel(frame)
     local active = IsActiveRun()
     local db = SC.db or SoftcoreDB
@@ -2668,7 +2685,7 @@ local function RefreshRunPanel(frame)
         if frame.start.cancelRunHint then frame.start.cancelRunHint:Hide() end
         frame.start.stopConfirmPending = false
         frame.start.modifyBtn:Hide()
-        if frame.start.partySyncBtn then frame.start.partySyncBtn:Hide() end
+        RefreshPartySyncButtonInParty(frame.start.partySyncBtn)
         frame.start.applyChangesBtn:Hide()
         frame.start.cancelChangesBtn:Hide()
         frame.start.proposalAcceptBtn:SetShown(not isProposer)
@@ -2721,7 +2738,13 @@ local function RefreshRunPanel(frame)
             acceptBlocked = true
             blockText = "Proposal details are still loading."
         end
-        if (not isProposer) and (not acceptedLocally) and active and db and db.run and db.run.ruleset then
+        if (not isProposer) and (not acceptedLocally) and active and db and db.run and pendingProposal.proposalType == "RUN" then
+            if (not pendingProposal.detailsPending) and db.run.runId and pendingProposal.runId and db.run.runId ~= pendingProposal.runId then
+                acceptBlocked = true
+                blockText = "Different run ID than your active run. Decline or Cancel Wait, then use Party Sync (or /sc reset to join this proposal as a new run)."
+            end
+        end
+        if not acceptBlocked and (not isProposer) and (not acceptedLocally) and active and db and db.run and db.run.ruleset then
             local localHash = SC.GetRulesetHash and SC:GetRulesetHash() or ""
             if (not pendingProposal.detailsPending) and pendingProposal.rulesetHash and pendingProposal.rulesetHash ~= "" and localHash ~= "" and localHash ~= pendingProposal.rulesetHash then
                 acceptBlocked = true
@@ -2747,13 +2770,22 @@ local function RefreshRunPanel(frame)
         SetRunSetupEnabled(frame, false)
         frame.start.inactiveText:SetShown(false)
         frame.start.activeText:SetShown(false)
+        local proposeMismatchHint = ""
+        if isProposer and pendingProposal.proposalType == "RUN" and IsInGroup() and not IsInRaid() then
+            for _, c in pairs(db and db.run and db.run.conflicts or {}) do
+                if c.active and not c.dismissed and c.type == "RUN_MISMATCH" then
+                    proposeMismatchHint = "\n|cffffd100Party reports a run ID mismatch — cancel this proposal so everyone can use Party Sync.|r"
+                    break
+                end
+            end
+        end
         if isProposer then
             if pendingProposal.proposalType == "SYNC_RUN" then
                 frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your run sync proposal...|r")
             elseif pendingProposal.proposalType == "ADD_PARTICIPANT" then
                 frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your run invite...|r")
             else
-                frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your run proposal...|r")
+                frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your run proposal...|r" .. proposeMismatchHint)
             end
         elseif acceptedLocally then
             if pendingProposal.proposalType == "SYNC_RUN" then
@@ -2789,7 +2821,7 @@ local function RefreshRunPanel(frame)
         if frame.start.cancelRunHint then frame.start.cancelRunHint:Hide() end
         frame.start.stopConfirmPending = false
         frame.start.modifyBtn:Hide()
-        if frame.start.partySyncBtn then frame.start.partySyncBtn:Hide() end
+        RefreshPartySyncButtonInParty(frame.start.partySyncBtn)
         frame.start.applyChangesBtn:Hide()
         frame.start.cancelChangesBtn:Hide()
         frame.start.proposalAcceptBtn:SetShown((not isProposer) and not acceptedLocally)
@@ -2876,15 +2908,14 @@ local function RefreshRunPanel(frame)
     local partySyncRoute = nil
     local showPartySync = false
     if frame.start.partySyncBtn then
-        local canShowPartySync = active and not modifying and not confirmingStop and IsInGroup() and not IsInRaid()
-        if canShowPartySync and SC.GetPartySyncAction then
-            partySyncRoute = SC:GetPartySyncAction()
-            showPartySync = partySyncRoute and partySyncRoute.action ~= "NONE" and partySyncRoute.action ~= "HIDDEN"
-            frame.start.partySyncBtn:SetEnabled(partySyncRoute and partySyncRoute.enabled == true)
+        local canShowPartySync = not modifying and not confirmingStop and IsInGroup() and not IsInRaid()
+        if canShowPartySync then
+            partySyncRoute = select(1, RefreshPartySyncButtonInParty(frame.start.partySyncBtn))
+            showPartySync = frame.start.partySyncBtn:IsShown()
         else
+            frame.start.partySyncBtn:Hide()
             frame.start.partySyncBtn:SetEnabled(false)
         end
-        frame.start.partySyncBtn:SetShown(showPartySync)
     end
     frame.start.modifyBtn:SetShown(active and not modifying and not confirmingStop and not showPartySync)
     frame.start.applyChangesBtn:SetShown(modifying)

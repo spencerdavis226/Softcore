@@ -880,14 +880,14 @@ function SC:GetPartySyncAction(allowActivePlan)
     if pending and (pending.status == "PENDING" or pending.status == "ACCEPTED") then
         return {
             action = "BLOCKED",
-            enabled = true,
-            message = "Finish or cancel the current proposal before starting another party sync.",
+            enabled = false,
+            message = "Finish or cancel this Charter proposal first (Cancel Proposal / Decline / Cancel Wait). Then use Party Sync to align run IDs or rules.",
         }
     end
     if HasPendingRuleAmendment(db) then
         return {
             action = "BLOCKED",
-            enabled = true,
+            enabled = false,
             message = "Finish or cancel the current rule amendment before starting another party sync.",
         }
     end

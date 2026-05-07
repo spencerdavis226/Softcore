@@ -65,7 +65,7 @@ Pending proposals expire after 30 minutes. Declining cancels the proposal for ev
 
 Softcore syncs with Blizzard addon messages using the `SOFTCORE` prefix on party or instance-chat channels. Normal parties are supported; raid groups are treated as local-only because the UI is designed for party scale.
 
-Use **Party Sync** in the Charter tab, or `/sc sync`, when the party display looks stale or when players want to align active runs.
+Use **Party Sync** in the Charter tab, or `/sc sync`, when the party display looks stale or when players want to align active runs. In a party, the Charter Party Sync button can stay visible (sometimes disabled) during an open proposal so the tooltip still explains what to do next.
 
 Party Sync can:
 
