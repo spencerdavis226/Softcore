@@ -1933,7 +1933,7 @@ local function GetSortedActiveViolations()
     local result = {}
 
     for _, violation in ipairs(source) do
-        if violation.status ~= "CLEARED" then
+        if violation.status ~= "CLEARED" and not (SC.IsViolationIgnoredForCleanRun and SC:IsViolationIgnoredForCleanRun(violation)) then
             table.insert(result, violation)
         end
     end
@@ -1949,7 +1949,7 @@ local function CountAllViolations(playerKey)
     local db = SC.db or SoftcoreDB
     local count = 0
     for _, v in ipairs(db and db.violations or {}) do
-        if v.playerKey == playerKey then
+        if v.playerKey == playerKey and not (SC.IsViolationIgnoredForCleanRun and SC:IsViolationIgnoredForCleanRun(v)) then
             count = count + 1
         end
     end
@@ -1959,7 +1959,7 @@ end
 local function HasDeathViolation(playerKey)
     local db = SC.db or SoftcoreDB
     for _, v in ipairs(db and db.violations or {}) do
-        if v.playerKey == playerKey and v.type == "death" then
+        if v.playerKey == playerKey and v.type == "death" and not (SC.IsViolationIgnoredForCleanRun and SC:IsViolationIgnoredForCleanRun(v)) then
             return true
         end
     end

@@ -348,6 +348,106 @@ local function GetPlayerKey(character)
     return BuildPlayerKey(character.name, character.realm)
 end
 
+local function MaxNumber(current, candidate)
+    candidate = tonumber(candidate)
+    if candidate and candidate > (tonumber(current) or 0) then
+        return candidate
+    end
+    return tonumber(current) or 0
+end
+
+local function ExtractLevelFromLogMessage(message)
+    return tonumber(string.match(tostring(message or ""), "Reached level%s+(%d+)"))
+end
+
+local function ExtractOfflineLevelRange(detail)
+    local fromLevel, toLevel = string.match(tostring(detail or ""), "level%s+(%d+)%s+to%s+(%d+)")
+    return tonumber(fromLevel), tonumber(toLevel)
+end
+
+local function IsViolationIgnoredForCleanRun(violation)
+    return violation
+        and (violation.falsePositive == true
+            or violation.achievementIgnored == true
+            or violation.cleanRunIgnored == true)
+end
+
+function SC:IsViolationIgnoredForCleanRun(violation)
+    return IsViolationIgnoredForCleanRun(violation)
+end
+
+local function GetHighestObservedLocalLevel(db, playerKey, includeAuditEvidence)
+    if not db then
+        return 0
+    end
+
+    local highest = 0
+    highest = MaxNumber(highest, db.character and db.character.level)
+
+    local participant = db.run and db.run.participants and playerKey and db.run.participants[playerKey]
+    if participant then
+        highest = MaxNumber(highest, participant.currentLevel)
+    end
+
+    highest = MaxNumber(highest, db.completionAward and db.completionAward.completedLevel)
+    highest = MaxNumber(highest, db.run and db.run.completionAward and db.run.completionAward.completedLevel)
+
+    if includeAuditEvidence then
+        for _, entry in ipairs(db.eventLog or {}) do
+            if entry
+                and entry.kind == "LEVEL_UP"
+                and entry.shared ~= true
+                and (not playerKey or entry.playerKey == playerKey or entry.actorKey == playerKey) then
+                highest = MaxNumber(highest, entry.level or entry.newLevel or ExtractLevelFromLogMessage(entry.message))
+            end
+        end
+    end
+
+    return highest
+end
+
+local function HasPriorLocalLevelEvidence(db, playerKey, targetLevel, beforeTime)
+    targetLevel = tonumber(targetLevel or 0) or 0
+    if targetLevel <= 0 then
+        return false
+    end
+
+    for _, entry in ipairs((db and db.eventLog) or {}) do
+        if entry
+            and entry.kind == "LEVEL_UP"
+            and entry.shared ~= true
+            and (not playerKey or entry.playerKey == playerKey or entry.actorKey == playerKey)
+            and (not beforeTime or (tonumber(entry.time or 0) or 0) < beforeTime) then
+            local level = tonumber(entry.level or entry.newLevel or ExtractLevelFromLogMessage(entry.message))
+            if level and level >= targetLevel then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+local function ReconcileLocalObservedLevel(db, observedLevel)
+    observedLevel = tonumber(observedLevel or 0) or 0
+    if observedLevel <= 0 or not db then
+        return observedLevel
+    end
+
+    db.character = db.character or GetPlayerSnapshot()
+    if (tonumber(db.character.level or 0) or 0) < observedLevel then
+        db.character.level = observedLevel
+    end
+
+    local playerKey = GetPlayerKey(db.character)
+    local participant = db.run and db.run.participants and db.run.participants[playerKey]
+    if participant and (tonumber(participant.currentLevel or 0) or 0) < observedLevel then
+        participant.currentLevel = observedLevel
+    end
+
+    return observedLevel
+end
+
 local function ApplyGroupingModeRules(ruleset)
     ruleset = ruleset or {}
     ruleset.groupingMode = ruleset.groupingMode or "SYNCED_GROUP_ALLOWED"
@@ -776,11 +876,13 @@ end
 local function CountAwardViolations(violations)
     local total, active, cleared = 0, 0, 0
     for _, violation in ipairs(violations or {}) do
-        total = total + 1
-        if violation.status == "CLEARED" then
-            cleared = cleared + 1
-        else
-            active = active + 1
+        if not IsViolationIgnoredForCleanRun(violation) then
+            total = total + 1
+            if violation.status == "CLEARED" then
+                cleared = cleared + 1
+            else
+                active = active + 1
+            end
         end
     end
     return total, active, cleared
@@ -928,7 +1030,25 @@ end
 
 function SC:RefreshCharacter()
     local db = EnsureDatabase()
-    db.character = GetPlayerSnapshot()
+    local previousKey = GetPlayerKey(db.character)
+    local previousObservedLevel = GetHighestObservedLocalLevel(db, previousKey, false)
+    local snapshot = GetPlayerSnapshot()
+    local snapshotKey = GetPlayerKey(snapshot)
+    local liveLevel = tonumber(snapshot.level or 0) or 0
+
+    if previousKey == snapshotKey and previousObservedLevel > liveLevel then
+        if self.TraceDebug then
+            self:TraceDebug("LEVEL_SNAPSHOT_REGRESSED", {
+                playerKey = previousKey,
+                liveLevel = liveLevel,
+                observedLevel = previousObservedLevel,
+            })
+        end
+        snapshot.level = previousObservedLevel
+    end
+
+    db.character = snapshot
+    ReconcileLocalObservedLevel(db, snapshot.level)
     return db.character
 end
 
@@ -1169,7 +1289,9 @@ function SC:GetActiveViolationSnapshot(playerKey)
     local latest = nil
 
     for _, violation in ipairs(db.violations or {}) do
-        if violation.status ~= "CLEARED" and (not playerKey or violation.playerKey == playerKey) then
+        if violation.status ~= "CLEARED"
+            and not IsViolationIgnoredForCleanRun(violation)
+            and (not playerKey or violation.playerKey == playerKey) then
             count = count + 1
             if not latest or (violation.createdAt or 0) > (latest.createdAt or 0) then
                 latest = violation
@@ -1692,6 +1814,209 @@ function SC:ClearViolation(violationId, clearedBy, clearReason)
     return nil
 end
 
+local function RecomputeLocalCleanRunState(db, playerKey)
+    local activeFatal = false
+    local activeWarnings = 0
+    local hadViolation = false
+    local ruleViolations = {}
+
+    for _, violation in ipairs(db.violations or {}) do
+        if violation
+            and violation.playerKey == playerKey
+            and violation.shared ~= true
+            and not IsViolationIgnoredForCleanRun(violation) then
+            hadViolation = true
+            if violation.type then
+                ruleViolations[violation.type] = true
+            end
+            if violation.status ~= "CLEARED" then
+                if violation.severity == "FATAL" or violation.severity == "CHARACTER_FAIL" or violation.type == "death" then
+                    activeFatal = true
+                else
+                    activeWarnings = activeWarnings + 1
+                end
+            end
+        end
+    end
+
+    return hadViolation, ruleViolations, activeWarnings, activeFatal
+end
+
+function SC:RecomputeLocalCleanRunEligibility(reason)
+    local db = EnsureDatabase()
+    local playerKey = GetPlayerKey(db.character)
+    local hadViolation, ruleViolations, activeWarnings, activeFatal = RecomputeLocalCleanRunState(db, playerKey)
+
+    if not activeFatal then
+        db.run.failed = false
+        db.run.valid = true
+        local participant = db.run.participants and db.run.participants[playerKey]
+        if participant and participant.status == "FAILED" then
+            participant.status = activeWarnings > 0 and "WARNING" or "ACTIVE"
+            participant.failedAt = nil
+            participant.failReason = nil
+        end
+    end
+
+    if self.Achievements_RecomputeLocalCleanRunState then
+        self:Achievements_RecomputeLocalCleanRunState(hadViolation, ruleViolations, activeFatal)
+    end
+    if not activeFatal and self.Achievements_OnLevelChanged then
+        self:Achievements_OnLevelChanged(db.character and db.character.level)
+    end
+    if self.TraceDebug then
+        self:TraceDebug("CLEAN_RUN_ELIGIBILITY_RECOMPUTED", {
+            reason = reason or "repair",
+            runId = db.run and db.run.runId,
+            playerKey = playerKey,
+            hadViolation = hadViolation,
+            activeFatal = activeFatal,
+            activeWarnings = activeWarnings,
+        })
+    end
+
+    return not activeFatal, hadViolation, activeWarnings
+end
+
+function SC:MarkViolationFalsePositive(violation, reason, repairedBy)
+    if not violation then
+        return false
+    end
+    local db = EnsureDatabase()
+    repairedBy = repairedBy or GetPlayerKey(db.character)
+
+    violation.falsePositive = true
+    violation.cleanRunIgnored = true
+    violation.achievementIgnored = true
+    violation.falsePositiveReason = reason or "False positive repaired."
+    violation.falsePositiveAt = time()
+    violation.falsePositiveBy = repairedBy
+
+    if violation.status ~= "CLEARED" then
+        self:ClearViolation(violation.id, repairedBy, violation.falsePositiveReason)
+    end
+
+    self:AddLog("FALSE_POSITIVE_REPAIR", "False positive repaired: " .. tostring(violation.type or "violation") .. ".", {
+        violationId = violation.id,
+        violationType = violation.type,
+        violationDetail = violation.detail,
+        violationPlayerKey = violation.playerKey,
+        playerKey = repairedBy,
+        actorKey = repairedBy,
+        falsePositiveReason = violation.falsePositiveReason,
+        suppressAuditSync = true,
+    })
+    return true
+end
+
+local function FindLocalRepairTarget(db, playerKey, target)
+    target = string.lower(strtrim(tostring(target or "")))
+    local best = nil
+
+    for _, violation in ipairs(db.violations or {}) do
+        if violation
+            and violation.playerKey == playerKey
+            and violation.shared ~= true
+            and violation.type ~= "death"
+            and not IsViolationIgnoredForCleanRun(violation) then
+            local id = string.lower(tostring(violation.id or violation.violationId or ""))
+            local vType = string.lower(tostring(violation.type or ""))
+            local matches = target == "last"
+                or target == "newest"
+                or target == id
+                or target == vType
+                or (target == "offline" and vType == "offline_level_gain")
+
+            if matches and (not best or (tonumber(violation.createdAt or 0) or 0) > (tonumber(best.createdAt or 0) or 0)) then
+                best = violation
+            end
+        end
+    end
+
+    return best
+end
+
+function SC:RepairFalsePositiveViolation(input)
+    local db = EnsureDatabase()
+    local playerKey = GetPlayerKey(db.character)
+    local target, reason = string.match(strtrim(tostring(input or "")), "^(%S*)%s*(.-)$")
+    target = string.lower(strtrim(target or ""))
+    reason = strtrim(reason or "")
+
+    if target == "" then
+        Print("usage: /sc repair-false-positive <last|offline|violation-id|type> [reason]")
+        return false
+    end
+
+    local violation = FindLocalRepairTarget(db, playerKey, target)
+    if not violation then
+        Print("no matching local repairable violation found.")
+        return false
+    end
+
+    local repairReason = reason ~= "" and reason or "Manual false-positive repair."
+    self:MarkViolationFalsePositive(violation, repairReason, playerKey)
+    self:RecomputeLocalCleanRunEligibility("manual false-positive repair")
+    if self.Sync_BroadcastStatus then
+        self:Sync_BroadcastStatus("FALSE_POSITIVE_REPAIR", { fast = true })
+    end
+    if self.MasterUI_Refresh then
+        self:MasterUI_Refresh()
+    end
+    if self.HUD_Refresh then
+        self:HUD_Refresh()
+    end
+    Print("false-positive repair applied to " .. tostring(violation.type or violation.id or "violation") .. ".")
+    return true
+end
+
+function SC:RepairFalseOfflineLevelGain()
+    local db = EnsureDatabase()
+    local playerKey = GetPlayerKey(db.character)
+    local repaired = 0
+
+    for _, violation in ipairs(db.violations or {}) do
+        if violation
+            and violation.shared ~= true
+            and violation.playerKey == playerKey
+            and violation.type == "offline_level_gain"
+            and not IsViolationIgnoredForCleanRun(violation) then
+            local _, targetLevel = ExtractOfflineLevelRange(violation.detail)
+            if HasPriorLocalLevelEvidence(db, playerKey, targetLevel, violation.createdAt) then
+                self:MarkViolationFalsePositive(violation, "Prior level-up audit already observed level " .. tostring(targetLevel) .. ".", playerKey)
+                repaired = repaired + 1
+            end
+        end
+    end
+
+    if repaired <= 0 then
+        return false
+    end
+
+    local repairedClean, _, activeWarnings = self:RecomputeLocalCleanRunEligibility("offline level false-positive repair")
+
+    if self.TraceDebug then
+        self:TraceDebug("OFFLINE_LEVEL_GAIN_REPAIRED", {
+            runId = db.run and db.run.runId,
+            playerKey = playerKey,
+            repaired = repaired,
+            activeFatal = not repairedClean,
+            activeWarnings = activeWarnings,
+        })
+    end
+    if self.Sync_BroadcastStatus then
+        self:Sync_BroadcastStatus("OFFLINE_LEVEL_GAIN_REPAIRED", { fast = true })
+    end
+    if self.MasterUI_Refresh then
+        self:MasterUI_Refresh()
+    end
+    if self.HUD_Refresh then
+        self:HUD_Refresh()
+    end
+
+    return true
+end
+
 function SC:ImportSharedLog(entry)
     if type(entry) ~= "table" or not entry.id then
         return nil
@@ -1936,7 +2261,7 @@ function SC:GetActiveViolations()
     local db = self.db or SoftcoreDB
     local result = {}
     for _, v in ipairs((db and db.violations) or {}) do
-        if v.status ~= "CLEARED" then
+        if v.status ~= "CLEARED" and not IsViolationIgnoredForCleanRun(v) then
             table.insert(result, v)
         end
     end
@@ -2677,7 +3002,9 @@ local function BuildDebugExportText()
             lines,
             "Violation",
             violation.id or "?",
-            tostring(violation.status or "?") .. " shared=" .. tostring(violation.shared == true),
+            tostring(violation.status or "?")
+                .. " shared=" .. tostring(violation.shared == true)
+                .. " ignored=" .. tostring(IsViolationIgnoredForCleanRun(violation) == true),
             FormatTime(violation.createdAt),
             violation.playerKey or "",
             violation.type or "?",
@@ -3100,6 +3427,8 @@ function SC:HandleSlash(input)
         else
             Print("debug trace is not available.")
         end
+    elseif command == "repair-false-positive" or command == "repairfalsepositive" or command == "repairfp" then
+        self:RepairFalsePositiveViolation(rest)
     elseif command == "awardtest" or command == "sampleaward" then
         self:ShowSampleCompletionAward()
     elseif command == "announce" or command == "deathannounce" then
@@ -3248,7 +3577,9 @@ function SC:Initialize()
     self:MigrateBronzemanPresetKeys()
     self:ResumeActiveRunTimer()
 
-    local levelAtLastSession = db.character and db.character.level or 0
+    local lastPlayerKey = GetPlayerKey(db.character)
+    local trustedLevelAtLastSession = GetHighestObservedLocalLevel(db, lastPlayerKey, true)
+    local levelAtLastSession = trustedLevelAtLastSession > 0 and trustedLevelAtLastSession or (db.character and db.character.level or 0)
     local runWasActive = db.run and db.run.active == true
 
     self:RefreshCharacter()
@@ -3261,6 +3592,9 @@ function SC:Initialize()
         )
         self:MarkParticipantFailed(playerKey, detail)
         self:AddViolation("offline_level_gain", detail, "FATAL", playerKey)
+    end
+    if self.RepairFalseOfflineLevelGain then
+        self:RepairFalseOfflineLevelGain()
     end
     if self.ClearStalePendingProposal then
         self:ClearStalePendingProposal()

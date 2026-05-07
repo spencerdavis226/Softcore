@@ -723,6 +723,9 @@ function SC:Achievements_CatchUp()
     if not db or not db.run or not db.run.active then
         return
     end
+    if self.RefreshCharacter then
+        self:RefreshCharacter()
+    end
     if self.IsLocalCharacterFailed and self:IsLocalCharacterFailed() then
         return
     end
@@ -870,6 +873,7 @@ end
 
 function SC:Achievements_OnViolationAdded(violation)
     if not violation or violation.playerKey ~= (self.GetPlayerKey and self:GetPlayerKey()) then return end
+    if self.IsViolationIgnoredForCleanRun and self:IsViolationIgnoredForCleanRun(violation) then return end
 
     local eligibility = CurrentEligibility()
     if eligibility then
@@ -890,6 +894,15 @@ function SC:Achievements_OnParticipantFailed(playerKey)
     local eligibility = CurrentEligibility()
     if eligibility then
         eligibility.failed = true
+    end
+end
+
+function SC:Achievements_RecomputeLocalCleanRunState(hadViolation, ruleViolations, failed)
+    local eligibility = CurrentEligibility()
+    if eligibility then
+        eligibility.hadViolation = hadViolation == true
+        eligibility.ruleViolations = ruleViolations or {}
+        eligibility.failed = failed == true
     end
 end
 

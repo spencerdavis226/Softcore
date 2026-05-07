@@ -1342,6 +1342,7 @@ function SC:Sync_BroadcastActiveViolations(reason)
     for _, violation in ipairs(db.violations or {}) do
         if violation
             and violation.status ~= "CLEARED"
+            and not (self.IsViolationIgnoredForCleanRun and self:IsViolationIgnoredForCleanRun(violation))
             and not violation.shared
             and violation.playerKey == localKey
             and violation.runId == db.run.runId
