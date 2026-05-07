@@ -359,8 +359,9 @@ local function ApplyAccessRule(ruleName, detail, force)
     Broadcast(ruleName)
 end
 
-local function HandleTradeAcceptUpdate(playerAccepted)
-    if playerAccepted ~= 1 and playerAccepted ~= true then
+local function HandleTradeAcceptUpdate(playerAccepted, targetAccepted)
+    if (playerAccepted ~= 1 and playerAccepted ~= true) or
+       (targetAccepted ~= 1 and targetAccepted ~= true) then
         return
     end
 
