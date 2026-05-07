@@ -137,6 +137,8 @@ local function ParticipantHUDLabel(status)
         return "Not In Run"
     elseif status == "PENDING" or status == "UNSYNCED" then
         return "Unsynced"
+    elseif status == "WARNING" then
+        return "Warning"
     elseif status == "FAILED" then
         return "Party Fail"
     end
@@ -181,39 +183,41 @@ local function GetPartyEdgeHUDState(db, syncRows, partyStatus)
 
     local now = time()
     for _, peer in ipairs(syncRows or {}) do
-        local status = tostring(peer.participantStatus or "")
-        local hasNeverSeenAddon = not peer.lastSeen or peer.lastSeen <= 0
-        if peer.participantStatus == "FAILED" or peer.failed then
-            local sameRunPeer = run.runId and peer.runId and run.runId == peer.runId
-            if allowsUnsyncedParty and not sameRunPeer then
-                -- Failed state from a different unsynced run is diagnostic only.
+        if IsCurrentPartyMember(peer.playerKey) then
+            local status = tostring(peer.participantStatus or "")
+            local hasNeverSeenAddon = not peer.lastSeen or peer.lastSeen <= 0
+            if peer.participantStatus == "FAILED" or peer.failed then
+                local sameRunPeer = run.runId and peer.runId and run.runId == peer.runId
+                if allowsUnsyncedParty and not sameRunPeer then
+                    -- Failed state from a different unsynced run is diagnostic only.
+                    status = ""
+                else
+                    return "ORANGE", "Party Fail", "OVERVIEW"
+                end
+            elseif allowsUnsyncedParty then
+                -- Mixed-party play is allowed; keep HUD quiet unless a real failed member is reported.
                 status = ""
-            else
-                return "ORANGE", "Party Fail", "OVERVIEW"
-            end
-        elseif allowsUnsyncedParty then
-            -- Mixed-party play is allowed; keep HUD quiet unless a real failed member is reported.
-            status = ""
-        elseif hasNeverSeenAddon then
-            local rosterAge = now - (tonumber(peer.rosterSeen) or now)
-            if rosterAge >= NO_ADDON_GRACE_SECONDS then
-                local label = IsActiveRunParticipant(run, peer.playerKey) and "Run: No Addon" or "No Addon"
+            elseif hasNeverSeenAddon then
+                local rosterAge = now - (tonumber(peer.rosterSeen) or now)
+                if rosterAge >= NO_ADDON_GRACE_SECONDS then
+                    local label = IsActiveRunParticipant(run, peer.playerKey) and "Run: No Addon" or "No Addon"
+                    return "YELLOW", label, "RUN"
+                end
+                return "BLUE", "Syncing", "RUN"
+            elseif peer.unsynced then
+                local label = IsActiveRunParticipant(run, peer.playerKey) and "Run: Offline" or "Offline"
                 return "YELLOW", label, "RUN"
+            elseif peer.addonVersion and peer.addonVersion ~= SC.version then
+                return "YELLOW", "Version", "RUN"
+            elseif peer.active == false then
+                return "YELLOW", "Not In Run", "RUN"
             end
-            return "BLUE", "Syncing", "RUN"
-        elseif peer.unsynced then
-            local label = IsActiveRunParticipant(run, peer.playerKey) and "Run: Offline" or "Offline"
-            return "YELLOW", label, "RUN"
-        elseif peer.addonVersion and peer.addonVersion ~= SC.version then
-            return "YELLOW", "Version", "RUN"
-        elseif peer.active == false then
-            return "YELLOW", "Not In Run", "RUN"
-        end
 
-        local label = ParticipantHUDLabel(status)
-        if label then
-            local color = status == "FAILED" and "ORANGE" or "YELLOW"
-            return color, label, label == "Party Fail" and "OVERVIEW" or "RUN"
+            local label = ParticipantHUDLabel(status)
+            if label then
+                local color = status == "FAILED" and "ORANGE" or "YELLOW"
+                return color, label, label == "Party Fail" and "OVERVIEW" or "RUN"
+            end
         end
     end
 
@@ -359,6 +363,40 @@ local function GetHUDState(status, violations, syncRows)
     return "GREEN", "Valid", "OVERVIEW"
 end
 
+local HUD_HINTS = {
+    ["Valid"]         = "Your run is active and all party members are in sync.",
+    ["Synced"]        = "Your run is active and all party members are in sync.",
+    ["No Run"]        = "You don't have an active run.",
+    ["Pending"]       = "Waiting to sync with the party\226\128\166",
+    ["Failed"]        = "Your run has ended.",
+    ["Party Fail"]    = "A party member's run has failed.",
+    ["Warning"]       = "A party member has active violations. Check the Run tab.",
+    ["Blocked"]       = "Party progress is blocked. Check the Run tab.",
+    ["Conflict"]      = "A run conflict exists. Use Party Sync to resolve it.",
+    ["Syncing"]       = "Waiting for a party member to respond\226\128\166",
+    ["Unsynced"]      = "A party member's state is stale. Use Party Sync to refresh.",
+    ["No Addon"]      = "A party member doesn't have the Softcore addon. Ask them to install or enable it.",
+    ["Run: No Addon"] = "A run partner doesn't have the Softcore addon enabled. Ask them to enable it.",
+    ["Offline"]       = "A party member went quiet. Use Party Sync to request fresh state.",
+    ["Run: Offline"]  = "A run partner's addon went quiet. Use Party Sync to request fresh state.",
+    ["Not In Run"]    = "A party member isn't on a run. Use Party Sync to invite them.",
+    ["Run ID"]        = "A party member is on a different run. Use Party Sync to align run IDs.",
+    ["Rules"]         = "A party member has a different ruleset. Use Party Sync to align rules.",
+    ["Version"]       = "A party member has a different addon version. They need to update Softcore.",
+    ["Level Gap"]     = "The party level gap is too large to continue. Check the Run tab.",
+    ["Raid Local"]    = "You're in a raid. Runs are tracked individually in raids.",
+}
+
+local function GetHUDHint(text)
+    if not text then return nil end
+    local hint = HUD_HINTS[text]
+    if hint then return hint end
+    if string.find(text, "Violation") then
+        return "You have active violations. Check the Violations tab."
+    end
+    return nil
+end
+
 function SC:HUD_Create()
     if self.hudFrame then
         self:HUD_Refresh()
@@ -424,7 +462,13 @@ function SC:HUD_Create()
     frame:SetScript("OnEnter", function()
         GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
         GameTooltip:SetText("Softcore HUD", 1, 1, 1)
-        GameTooltip:AddLine("Click to open or close details. Drag to move.", 0.74, 0.66, 0.50)
+        local hint = GetHUDHint(frame.hudStateText)
+        if hint then
+            GameTooltip:AddLine(hint, 0.74, 0.66, 0.50, true)
+            GameTooltip:AddLine("Click to open or close details. Drag to move.", 0.48, 0.44, 0.36)
+        else
+            GameTooltip:AddLine("Click to open or close details. Drag to move.", 0.74, 0.66, 0.50)
+        end
         GameTooltip:Show()
     end)
     frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -455,6 +499,7 @@ function SC:HUD_Refresh()
     end
 
     frame.focusTab = focusTab
+    frame.hudStateText = text
     SetLamp(frame, state)
     frame.statusText:SetText(text)
     frame.statusText:SetTextColor(textColor[1], textColor[2], textColor[3])
