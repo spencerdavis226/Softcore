@@ -2632,7 +2632,16 @@ local function RefreshPartySyncButtonInParty(btn)
     local route = SC:GetPartySyncAction()
     local show = route and route.action ~= "NONE" and route.action ~= "HIDDEN"
     btn:SetShown(show)
-    btn:SetEnabled(route and route.enabled == true)
+    if SC.pendingJoinRunId then
+        btn:SetText("Joining...")
+        btn:SetEnabled(false)
+    elseif route and route.action == "JOIN_RUN" then
+        btn:SetText("Join Run")
+        btn:SetEnabled(route.enabled == true)
+    else
+        btn:SetText("Party Sync")
+        btn:SetEnabled(route and route.enabled == true)
+    end
     return route, show
 end
 
@@ -2969,6 +2978,13 @@ local function RefreshRunPanel(frame)
             else
                 frame.start.activeText:SetText("Active run rules are locked. Camera mode can be switched anytime without a rule amendment.")
             end
+        end
+    elseif partySyncRoute and partySyncRoute.action == "JOIN_RUN" then
+        frame.start.activeText:SetShown(true)
+        if SC.pendingJoinRunId then
+            frame.start.activeText:SetText("|cfffbbf24Requesting run details from party...|r")
+        else
+            frame.start.activeText:SetText("|cffffd100" .. (partySyncRoute.message or "Party members are on a run.") .. "|r")
         end
     end
 
@@ -3722,6 +3738,41 @@ function SC:ConfirmStopRun()
     ConfirmStopRun()
 end
 
+function SC:ShowJoinRunPicker(candidates)
+    if not candidates or #candidates == 0 then return end
+    if not SC._joinRunMenuFrame then
+        SC._joinRunMenuFrame = CreateFrame("Frame", "SoftcoreJoinRunMenuFrame", UIParent, "UIDropDownMenuTemplate")
+    end
+    local captured = candidates
+    UIDropDownMenu_Initialize(SC._joinRunMenuFrame, function(_, level)
+        if level ~= 1 then return end
+        for _, candidate in ipairs(captured) do
+            local names = {}
+            for _, pk in ipairs(candidate.playerKeys) do
+                local label = SC.FormatPlayerLabel and SC:FormatPlayerLabel(pk) or tostring(pk)
+                table.insert(names, label)
+            end
+            local info = UIDropDownMenu_CreateInfo()
+            local candidateRef = candidate
+            info.text = table.concat(names, ", ")
+            info.notCheckable = true
+            info.func = function()
+                if SC.PartySync_RequestJoinRun then
+                    SC:PartySync_RequestJoinRun(candidateRef)
+                end
+                if SC.MasterUI_Refresh then SC:MasterUI_Refresh() end
+            end
+            UIDropDownMenu_AddButton(info, level)
+        end
+        local cancelInfo = UIDropDownMenu_CreateInfo()
+        cancelInfo.text = "Cancel"
+        cancelInfo.notCheckable = true
+        cancelInfo.func = function() end
+        UIDropDownMenu_AddButton(cancelInfo, level)
+    end, "MENU")
+    ToggleDropDownMenu(1, nil, SC._joinRunMenuFrame, "cursor", 0, 0)
+end
+
 function SC:MasterUI_Refresh()
     local frame = self.masterFrame
     if not frame or not frame:IsShown() then return end
@@ -4454,14 +4505,27 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.partySyncBtn:SetScript("OnEnter", function(self)
         if not GameTooltip then return end
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Party Sync", 1, 0.82, 0.2)
         local route = SC.GetPartySyncAction and SC:GetPartySyncAction()
-        if route and route.message then
-            GameTooltip:AddLine(route.message, 0.94, 0.86, 0.68, true)
+        if SC.pendingJoinRunId then
+            GameTooltip:SetText("Joining Run...", 1, 0.82, 0.2)
+            GameTooltip:AddLine("Requesting run details from party. Please wait.", 0.94, 0.86, 0.68, true)
+        elseif route and route.action == "JOIN_RUN" then
+            GameTooltip:SetText("Join Run", 1, 0.82, 0.2)
+            if route.message then
+                GameTooltip:AddLine(route.message, 0.94, 0.86, 0.68, true)
+            end
+            if route.candidates and #route.candidates > 1 then
+                GameTooltip:AddLine("Click to choose which run to join.", 0.68, 0.56, 0.38, true)
+            end
+        else
+            GameTooltip:SetText("Party Sync", 1, 0.82, 0.2)
+            if route and route.message then
+                GameTooltip:AddLine(route.message, 0.94, 0.86, 0.68, true)
+            end
+            GameTooltip:AddLine("One click starts a staged sync plan. Required member approvals still use the Run tab.", 0.68, 0.56, 0.38, true)
+            GameTooltip:AddLine("After each accepted stage, Softcore waits briefly for addon messages to settle, then continues automatically.", 0.68, 0.56, 0.38, true)
+            GameTooltip:AddLine("If state is stale, Softcore requests fresh state before proposing another change.", 0.68, 0.56, 0.38, true)
         end
-        GameTooltip:AddLine("One click starts a staged sync plan. Required member approvals still use the Run tab.", 0.68, 0.56, 0.38, true)
-        GameTooltip:AddLine("After each accepted stage, Softcore waits briefly for addon messages to settle, then continues automatically.", 0.68, 0.56, 0.38, true)
-        GameTooltip:AddLine("If state is stale, Softcore requests fresh state before proposing another change.", 0.68, 0.56, 0.38, true)
         GameTooltip:Show()
     end)
     frame.start.partySyncBtn:SetScript("OnLeave", function()

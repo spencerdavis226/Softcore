@@ -860,6 +860,37 @@ function SC:GetPartySyncAction(allowActivePlan)
         }
     end
     if not db.run or not db.run.active then
+        if IsInGroup() and not IsInRaid() then
+            local rows = self.Sync_GetGroupRows and self:Sync_GetGroupRows() or {}
+            local runCandidates = {}
+            local distinctRuns = {}
+            for _, peer in ipairs(rows) do
+                if peer.active and peer.runId and peer.runId ~= "" then
+                    if not distinctRuns[peer.runId] then
+                        distinctRuns[peer.runId] = {
+                            runId = peer.runId,
+                            playerKeys = {},
+                            rulesetHash = peer.rulesetHash,
+                            remoteRuleset = peer.remoteRuleset,
+                        }
+                        table.insert(runCandidates, distinctRuns[peer.runId])
+                    end
+                    table.insert(distinctRuns[peer.runId].playerKeys, peer.playerKey)
+                end
+            end
+            if #runCandidates > 0 then
+                local primary = runCandidates[1]
+                local label = self.FormatPlayerLabel and self:FormatPlayerLabel(primary.playerKeys[1]) or tostring(primary.playerKeys[1] or "a party member")
+                return {
+                    action = "JOIN_RUN",
+                    enabled = true,
+                    message = #runCandidates == 1
+                        and (label .. " is on a run. Join it, or start your own.")
+                        or "Party members are on different runs. Choose one to join, or start your own.",
+                    candidates = runCandidates,
+                }
+            end
+        end
         return {
             action = "BLOCKED",
             enabled = true,
@@ -1087,6 +1118,22 @@ function SC:RunPartySyncAction(continueExisting)
             self:PartySync_StartPlan()
         end
         return self:CreateRunSyncProposal(route.partyAtProposalTime)
+    elseif route.action == "JOIN_RUN" then
+        local candidates = route.candidates
+        if not candidates or #candidates == 0 then
+            Print("no active party run found to join.")
+            return nil
+        end
+        if #candidates > 1 then
+            if self.ShowJoinRunPicker then
+                self:ShowJoinRunPicker(candidates)
+            else
+                Print("Party members are on " .. #candidates .. " different runs. Choose which run to join in the Softcore panel.")
+            end
+            return route
+        end
+        self:PartySync_RequestJoinRun(candidates[1])
+        return route
     end
 
     Print(route.message or "party sync could not choose an action.")
@@ -1141,6 +1188,62 @@ function SC:ApplyRunSyncProposal(proposal, sourceKey)
     if self.MasterUI_Refresh then self:MasterUI_Refresh() end
 
     return true
+end
+
+function SC:PartySync_RequestJoinRun(candidate)
+    if not candidate or not candidate.runId then
+        Print("no run to join.")
+        return
+    end
+    -- Use cached ruleset if already available from a prior full-state response
+    if candidate.remoteRuleset then
+        self:PartySync_ApplyJoinRun(candidate.runId, candidate.remoteRuleset, candidate.playerKeys and candidate.playerKeys[1])
+        return
+    end
+    local targetKey = candidate.playerKeys and candidate.playerKeys[1]
+    if not targetKey then
+        Print("cannot find party member to request run details from.")
+        return
+    end
+    self.pendingJoinRunId = candidate.runId
+    self.pendingJoinFromKey = targetKey
+    local requestId = self:Sync_RequestFullState({
+        targetPlayerKey = targetKey,
+        includeRules = true,
+        reason = "JOIN_RUN",
+    })
+    self.pendingJoinRequestId = requestId
+    if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+    C_Timer.After(10, function()
+        if self.pendingJoinRunId == candidate.runId then
+            self.pendingJoinRunId = nil
+            self.pendingJoinFromKey = nil
+            self.pendingJoinRequestId = nil
+            Print("Join run request timed out. Try Party Sync again.")
+            if self.MasterUI_Refresh then self:MasterUI_Refresh() end
+        end
+    end)
+end
+
+function SC:PartySync_ApplyJoinRun(runId, ruleset, fromKey)
+    if not runId or not ruleset then
+        Print("cannot join run: missing run data from party.")
+        return false
+    end
+    local db = GetDB()
+    if db.run and db.run.active then
+        Print("cannot join: you already have an active run.")
+        return false
+    end
+    local fromLabel = self.FormatPlayerLabel and fromKey and self:FormatPlayerLabel(fromKey) or tostring(fromKey or "party")
+    local ok = self:StartRun({
+        runId = runId,
+        ruleset = ruleset,
+    })
+    if ok then
+        self:AddLog("RUN_JOINED", "Joined " .. fromLabel .. "'s run.", { runId = runId })
+    end
+    return ok == true
 end
 
 function SC:ReceiveRunProposal(payload, proposerKey)

@@ -1896,6 +1896,19 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
         self:PartySync_OnFreshState(key, payload.type == "FULL_STATE_RESPONSE" and "FULL_STATE_RESPONSE" or payload.reason, payload.requestId)
     end
 
+    -- Complete a pending join-run initiated by the local player
+    if payload.type == "FULL_STATE_RESPONSE" and self.pendingJoinRunId then
+        if payload.runId == self.pendingJoinRunId and remoteRuleset then
+            local joinRunId = self.pendingJoinRunId
+            self.pendingJoinRunId = nil
+            self.pendingJoinFromKey = nil
+            self.pendingJoinRequestId = nil
+            if self.PartySync_ApplyJoinRun then
+                self:PartySync_ApplyJoinRun(joinRunId, remoteRuleset, key)
+            end
+        end
+    end
+
     -- Remote sync is advisory/display-only. A peer payload may update that peer's
     -- display record, but it must never fail, reset, or otherwise invalidate the
     -- local character's individual run state or bypass run join rules.
