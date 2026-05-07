@@ -156,7 +156,9 @@ local function GetMaxLevel()
         if ok and tonumber(level) then return tonumber(level) end
     end
 
+    ---@diagnostic disable-next-line: undefined-global
     if MAX_PLAYER_LEVEL and tonumber(MAX_PLAYER_LEVEL) then
+        ---@diagnostic disable-next-line: undefined-global
         return tonumber(MAX_PLAYER_LEVEL)
     end
 

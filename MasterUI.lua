@@ -3829,7 +3829,7 @@ function SC:ToggleMasterWindow(focusTab)
     end
 end
 
-local function CreateOverviewTab(frame)
+function SC:MasterUI_CreateOverviewTab(frame)
     local overviewPanel = CreatePanel(frame)
     frame.panels[TAB_OVERVIEW] = overviewPanel
     local contentX = CenteredOffset(PANEL_WIDTH, OVERVIEW_LAYOUT.CONTENT_WIDTH)
@@ -4592,7 +4592,7 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.proposalDeclineBtn:Hide()
     frame.start.proposalCancelBtn:Hide()
 
-    CreateOverviewTab(frame)
+    self:MasterUI_CreateOverviewTab(frame)
 
     CreateViolationsTab(frame)
     CreateLogTab(frame)

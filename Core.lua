@@ -2518,6 +2518,7 @@ function SC:AnnounceLocalDeath(detail)
         if not channel then
             Print(IsInRaid() and "death announcement skipped: raid groups are not supported." or "death announcement skipped: not in a group.")
         else
+            ---@diagnostic disable-next-line: deprecated
             SendChatMessage(message, channel)
             announced = true
         end
@@ -2527,6 +2528,7 @@ function SC:AnnounceLocalDeath(detail)
         if not IsInGuild() then
             Print("death announcement skipped: not in a guild.")
         else
+            ---@diagnostic disable-next-line: deprecated
             SendChatMessage(message, "GUILD")
             announced = true
         end

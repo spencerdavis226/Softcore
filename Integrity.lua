@@ -129,6 +129,7 @@ end
 local function GetSelfCraftedTooltipMarkers()
     local markers = {}
     local formats = {
+        ---@diagnostic disable-next-line: undefined-field
         _G.ITEM_CREATED_BY,
         "Made by %s",
         "Crafted by %s",
@@ -206,6 +207,7 @@ local function GetItemInfoCompat(itemLink)
         return C_Item.GetItemInfo(itemLink)
     end
 
+    ---@diagnostic disable-next-line: deprecated
     return GetItemInfo(itemLink)
 end
 
@@ -214,7 +216,9 @@ local function GetItemInfoInstantCompat(itemLink)
         return C_Item.GetItemInfoInstant(itemLink)
     end
 
+    ---@diagnostic disable-next-line: deprecated
     if GetItemInfoInstant then
+        ---@diagnostic disable-next-line: deprecated
         return GetItemInfoInstant(itemLink)
     end
 
@@ -670,7 +674,10 @@ local function GetInvalidProgressPartyDetails()
         for _, peer in ipairs(SC:Sync_GetGroupRows()) do
             local peerKey = peer and peer.playerKey
             if peerKey then
-                local compatible, reason = SC.IsRemoteStateCompatible and SC:IsRemoteStateCompatible(peer)
+                local compatible, reason = true, nil
+                if SC.IsRemoteStateCompatible then
+                    compatible, reason = SC:IsRemoteStateCompatible(peer)
+                end
                 if peer.unsynced then
                     AddUniqueDetail(details, seen, peerKey, "no addon response")
                 elseif not compatible then
@@ -1401,6 +1408,7 @@ local function IsQuestGuidanceRequired()
 end
 
 local function GetMinimapCluster()
+    ---@diagnostic disable-next-line: undefined-field
     return _G.MinimapCluster
 end
 

@@ -352,7 +352,9 @@ local function DispatchAddonMessageNow(message, channel, messageType, chunkText)
         local r1, r2 = C_ChatInfo.SendAddonMessage(PREFIX, message, channel)
         result = r2 ~= nil and r2 or r1
     else
+        ---@diagnostic disable-next-line: undefined-field
         if _G.SendAddonMessage then
+            ---@diagnostic disable-next-line: undefined-field
             result = _G.SendAddonMessage(PREFIX, message, channel)
         end
     end

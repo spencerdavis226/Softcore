@@ -1,3 +1,4 @@
+---@diagnostic disable: undefined-global, undefined-field
 -- Event handlers for local-only MVP tracking.
 
 local SC = Softcore
@@ -637,7 +638,9 @@ local function GetItemInfoCompat(itemRef)
         if ok then
             return itemName, link, quality, itemLevel, reqLevel, itemType, itemSubType
         end
+    ---@diagnostic disable-next-line: deprecated
     elseif GetItemInfo then
+        ---@diagnostic disable-next-line: deprecated
         local ok, itemName, link, quality, itemLevel, reqLevel, itemType, itemSubType = pcall(GetItemInfo, itemRef)
         if ok then
             return itemName, link, quality, itemLevel, reqLevel, itemType, itemSubType
@@ -653,7 +656,9 @@ local function GetItemSpellCompat(itemRef)
         if ok then
             return spellName, spellID
         end
+    ---@diagnostic disable-next-line: deprecated
     elseif GetItemSpell then
+        ---@diagnostic disable-next-line: deprecated
         local ok, spellName, spellID = pcall(GetItemSpell, itemRef)
         if ok then
             return spellName, spellID

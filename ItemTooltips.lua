@@ -16,7 +16,9 @@ local function GetItemInfoCompat(itemRef)
         if ok then
             return itemName, itemLink, itemQuality, itemLevel, itemMinLevel, itemType, itemSubType
         end
+    ---@diagnostic disable-next-line: deprecated
     elseif GetItemInfo then
+        ---@diagnostic disable-next-line: deprecated
         local ok, itemName, itemLink, itemQuality, itemLevel, itemMinLevel, itemType, itemSubType = pcall(GetItemInfo, itemRef)
         if ok then
             return itemName, itemLink, itemQuality, itemLevel, itemMinLevel, itemType, itemSubType
@@ -32,7 +34,9 @@ local function GetItemInfoInstantCompat(itemRef)
         if ok then
             return itemID, itemType, itemSubType, itemEquipLoc, icon, classID, subclassID
         end
+    ---@diagnostic disable-next-line: deprecated
     elseif GetItemInfoInstant then
+        ---@diagnostic disable-next-line: deprecated
         local ok, itemID, itemType, itemSubType, itemEquipLoc, icon, classID, subclassID = pcall(GetItemInfoInstant, itemRef)
         if ok then
             return itemID, itemType, itemSubType, itemEquipLoc, icon, classID, subclassID
@@ -155,6 +159,7 @@ local function AddSoftcoreTooltipLine(tooltip, itemRef, data)
     end
 
     if not itemRef then
+        ---@diagnostic disable-next-line: unbalanced-assignments
         local _, itemLink = tooltip.GetItem and tooltip:GetItem()
         itemRef = itemLink or data and data.hyperlink
     end
