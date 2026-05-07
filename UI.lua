@@ -121,6 +121,11 @@ local function ConflictHUDLabel(conflictType)
     return "Conflict"
 end
 
+local function IsActiveRunParticipant(run, playerKey)
+    local p = run and run.participants and run.participants[playerKey]
+    return p and p.status ~= "OUT_OF_PARTY" and p.status ~= "FAILED" and p.status ~= "RETIRED"
+end
+
 local function ParticipantHUDLabel(status)
     if status == "ADDON_VERSION_MISMATCH" or status == "VERSION_MISMATCH" then
         return "Version"
@@ -192,11 +197,13 @@ local function GetPartyEdgeHUDState(db, syncRows, partyStatus)
         elseif hasNeverSeenAddon then
             local rosterAge = now - (tonumber(peer.rosterSeen) or now)
             if rosterAge >= NO_ADDON_GRACE_SECONDS then
-                return "YELLOW", "No Addon", "RUN"
+                local label = IsActiveRunParticipant(run, peer.playerKey) and "Run: No Addon" or "No Addon"
+                return "YELLOW", label, "RUN"
             end
             return "BLUE", "Syncing", "RUN"
         elseif peer.unsynced then
-            return "YELLOW", "Offline", "RUN"
+            local label = IsActiveRunParticipant(run, peer.playerKey) and "Run: Offline" or "Offline"
+            return "YELLOW", label, "RUN"
         elseif peer.addonVersion and peer.addonVersion ~= SC.version then
             return "YELLOW", "Version", "RUN"
         elseif peer.active == false then
