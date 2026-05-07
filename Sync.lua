@@ -1662,6 +1662,26 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
 
     if payload.type == "PARTY_LOG" then
         if CanImportSharedAudit(payload) and self.ImportSharedLog then
+            local claimedPlayerKey = payload.auditPlayerKey or payload.playerKey
+            local claimedActorKey = payload.actorKey or payload.playerKey
+            local claimedViolationPlayerKey = payload.violationPlayerKey
+            local claimedClearedBy = payload.clearedBy
+            if (claimedPlayerKey and claimedPlayerKey ~= "" and claimedPlayerKey ~= key)
+                or (claimedActorKey and claimedActorKey ~= "" and claimedActorKey ~= key)
+                or (claimedViolationPlayerKey and claimedViolationPlayerKey ~= "" and claimedViolationPlayerKey ~= key)
+                or (claimedClearedBy and claimedClearedBy ~= "" and claimedClearedBy ~= key) then
+                if self.TraceDebug then
+                    self:TraceDebug("SYNC_PARTY_LOG_SENDER_MISMATCH", {
+                        sender = key,
+                        auditId = payload.auditId,
+                        auditPlayerKey = claimedPlayerKey,
+                        actorKey = claimedActorKey,
+                        violationPlayerKey = claimedViolationPlayerKey,
+                        clearedBy = claimedClearedBy,
+                    })
+                end
+                return
+            end
             self:ImportSharedLog({
                 id = payload.auditId,
                 logEntryId = payload.auditId,
@@ -1669,13 +1689,13 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
                 time = tonumber(payload.auditTime) or time(),
                 kind = payload.auditKind,
                 message = payload.auditMessage,
-                playerKey = payload.auditPlayerKey or payload.playerKey or key,
-                actorKey = payload.actorKey or payload.playerKey or key,
+                playerKey = key,
+                actorKey = key,
                 violationId = payload.violationId,
                 violationType = payload.violationType,
                 violationDetail = payload.violationDetail,
-                violationPlayerKey = payload.violationPlayerKey,
-                clearedBy = payload.clearedBy,
+                violationPlayerKey = claimedViolationPlayerKey,
+                clearedBy = claimedClearedBy,
                 shared = true,
             })
         end
@@ -1900,7 +1920,27 @@ function SC:Sync_HandleMessage(message, sender, isReassembled)
 
     -- Complete a pending join-run initiated by the local player
     if payload.type == "FULL_STATE_RESPONSE" and self.pendingJoinRunId then
-        if payload.runId == self.pendingJoinRunId and remoteRuleset then
+        local expectedJoinFrom = self.pendingJoinFromKey
+        local expectedRequestId = self.pendingJoinRequestId
+        if expectedJoinFrom and expectedJoinFrom ~= key then
+            if self.TraceDebug then
+                self:TraceDebug("JOIN_RUN_RESPONSE_SENDER_MISMATCH", {
+                    expected = expectedJoinFrom,
+                    sender = key,
+                    runId = payload.runId,
+                    requestId = payload.requestId,
+                })
+            end
+        elseif expectedRequestId and payload.requestId ~= expectedRequestId then
+            if self.TraceDebug then
+                self:TraceDebug("JOIN_RUN_RESPONSE_REQUEST_MISMATCH", {
+                    expected = expectedRequestId,
+                    sender = key,
+                    runId = payload.runId,
+                    requestId = payload.requestId,
+                })
+            end
+        elseif payload.runId == self.pendingJoinRunId and remoteRuleset then
             local joinRunId = self.pendingJoinRunId
             self.pendingJoinRunId = nil
             self.pendingJoinFromKey = nil

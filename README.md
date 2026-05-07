@@ -165,6 +165,7 @@ Important boundaries:
 
 - Remote deaths, failures, mismatches, stale messages, resets, and violation clears do not mutate local authoritative state.
 - Incomplete chunked sync messages expire without applying partial state.
+- Shared audit rows are accepted only as sender-owned rows, and targeted Party Sync join responses must come from the peer/request being joined.
 - Proposals and amendments expire after 30 minutes.
 - Raid conversion makes Softcore local-only and expires pending group governance.
 - Remote violation clears can only clear imported shared violations owned by that peer, not local authoritative violations.

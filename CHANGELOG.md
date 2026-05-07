@@ -27,6 +27,8 @@ Beta candidate for first public CurseForge upload.
 - `/sc rules chat` hides legacy death-limit internals that are not part of the current player-facing rules.
 - Warband bank access is detected on current Retail bank panels and account-bank interactions.
 - Visible logs hide forced-movement start/end audit rows while keeping the stored history available to exports.
+- Removed the hidden clean-run forgiveness escape hatch so local violations and achievement eligibility cannot be rewritten by an in-addon command.
+- Party Sync now requires targeted join-run full-state responses to match the requested peer/request, and imported shared audit rows must be sender-owned.
 - TOC-loaded Lua files pass syntax checks for this release candidate.
 
 ### Known Limitations
