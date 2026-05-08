@@ -151,6 +151,10 @@ local function IsDisallowed(value)
 end
 
 local function GetMaxLevel()
+    if SC.GetMaxLevel then
+        return SC:GetMaxLevel()
+    end
+
     if GetMaxLevelForPlayerExpansion then
         local ok, level = pcall(GetMaxLevelForPlayerExpansion)
         if ok and tonumber(level) then return tonumber(level) end

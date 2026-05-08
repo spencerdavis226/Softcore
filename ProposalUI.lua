@@ -428,9 +428,54 @@ function SC:CanProposeRun()
     return participant and (participant.status == "ACTIVE" or participant.status == "WARNING")
 end
 
--- Returns true if all members still in the party (from partyAtProposalTime) have accepted.
--- Members who have left the party since the proposal was created are ignored — they can't
--- accept anyway and shouldn't block the run from starting.
+-- Shared proposal/start guard for max-level characters. Softcore tracks leveling runs,
+-- so max-level starts, joins, and synced legacy max-level runs stay ineligible.
+function SC:GetProposalRunStartBlocker(proposal)
+    if not proposal then
+        return nil
+    end
+
+    local db = GetDB()
+    local proposalType = proposal.proposalType or "RUN"
+    local maxLevel = self.GetMaxLevel and self:GetMaxLevel() or 80
+    local proposalStartLevel = tonumber(proposal.startLevel)
+    if proposalStartLevel and proposalStartLevel >= maxLevel then
+        local label = self.FormatPlayerLabel and self:FormatPlayerLabel(proposal.proposedBy) or tostring(proposal.proposedBy or "The proposer")
+        return label .. " started this run at max level. It cannot be joined as a leveling run.", "MAX_LEVEL"
+    end
+
+    if proposal.proposedBy and self.GetRemotePeerStatus then
+        local peer = self:GetRemotePeerStatus(proposal.proposedBy)
+        if peer and self.IsLevelMaxForRun and self:IsLevelMaxForRun(peer.level) then
+            local label = self.FormatPlayerLabel and self:FormatPlayerLabel(proposal.proposedBy) or tostring(proposal.proposedBy)
+            return label .. " is already max level and cannot propose a leveling run.", "MAX_LEVEL"
+        end
+    end
+
+    if proposalType == "SYNC_RUN" then
+        if self.GetActiveRunLevelingBlocker then
+            local activeBlocker = self:GetActiveRunLevelingBlocker()
+            if activeBlocker then
+                return activeBlocker, "MAX_LEVEL"
+            end
+        end
+        return nil
+    end
+
+    if (proposalType == "RUN" or proposalType == "ADD_PARTICIPANT") and (not db.run or not db.run.active) then
+        if self.GetLevelingRunStartBlocker then
+            local blocker = self:GetLevelingRunStartBlocker()
+            if blocker then
+                return blocker, "MAX_LEVEL"
+            end
+        end
+    end
+
+    return nil
+end
+
+-- Returns true if all members still in the party from partyAtProposalTime have accepted.
+-- Members who have left since creation are ignored because they cannot accept.
 function SC:CheckAllProposalMembersAccepted(proposal)
     if proposal.targetPlayerKey then
         local currentParty = GetCurrentPartyKeys()
@@ -479,6 +524,14 @@ function SC:CheckPendingProposalOnRosterUpdate()
     if proposal.proposalType ~= "RUN" and proposal.proposalType ~= "SYNC_RUN" and proposal.proposalType ~= "ADD_PARTICIPANT" then return end
 
     if self:CheckAllProposalMembersAccepted(proposal) then
+        if self.GetProposalRunStartBlocker then
+            local blocker = self:GetProposalRunStartBlocker(proposal)
+            if blocker then
+                Print("cannot confirm proposal: " .. blocker)
+                return
+            end
+        end
+
         proposal.status = "CONFIRMED"
         db.pendingProposalId = nil
 
@@ -525,6 +578,14 @@ function SC:ConfirmPendingProposalPeerActive(playerKey, runId, rulesetHash)
 
     if not self:CheckAllProposalMembersAccepted(proposal) then
         return false
+    end
+
+    if self.GetProposalRunStartBlocker then
+        local blocker = self:GetProposalRunStartBlocker(proposal)
+        if blocker then
+            Print("cannot confirm proposal: " .. blocker)
+            return false
+        end
     end
 
     proposal.status = "CONFIRMED"
@@ -595,6 +656,25 @@ function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, r
         Print("cannot propose a new run while an active run is in progress. Use /sc reset to stop it first.")
         return nil
     end
+    if (proposalType == "RUN" or not proposalType) and self.GetLevelingRunStartBlocker then
+        local blocker = self:GetLevelingRunStartBlocker({ includeParty = IsInGroup() and not IsInRaid() })
+        if blocker then
+            Print(blocker)
+            return nil
+        end
+    elseif proposalType == "ADD_PARTICIPANT" and self.GetLevelingRunStartBlocker then
+        local blocker = self:GetLevelingRunStartBlocker({ skipLocal = true, includeParty = true, targetPlayerKey = targetPlayerKey })
+        if blocker then
+            Print(blocker)
+            return nil
+        end
+    elseif proposalType == "SYNC_RUN" and self.GetActiveRunLevelingBlocker then
+        local blocker = self:GetActiveRunLevelingBlocker()
+        if blocker then
+            Print(blocker)
+            return nil
+        end
+    end
     local proposalRunId = runId or self:CreateRunId()
     local proposalRuleset = self:CopyTable(ruleset or self:GetDefaultRuleset())
     if self.NormalizeRulesetForSync then
@@ -619,6 +699,7 @@ function SC:CreateRunProposal(runName, ruleset, proposalType, targetPlayerKey, r
         ruleset = proposalRuleset,
         rulesetHash = self:ComputeRulesetHash(proposalRuleset),
         preset = self.NormalizePresetKey and self:NormalizePresetKey(proposalRuleset.achievementPreset or proposalRuleset.preset or "CUSTOM") or (proposalRuleset.achievementPreset or proposalRuleset.preset or "CUSTOM"),
+        startLevel = tonumber(options.startLevel or (db.run and db.run.active and db.run.startLevel) or (db.character and db.character.level) or UnitLevel("player") or 0) or 0,
         acceptedBy = {},
         declinedBy = {},
         status = "PENDING",
@@ -660,6 +741,7 @@ function SC:CreateRunSyncProposal(partyAtProposalTime)
     local runName = self.GetRunDisplayName and self:GetRunDisplayName(db.run, "Custom Run") or "Custom Run"
     return self:CreateRunProposal(runName, db.run.ruleset, "SYNC_RUN", nil, db.run.runId, {
         partyAtProposalTime = partyAtProposalTime,
+        startLevel = db.run.startLevel,
     })
 end
 
@@ -677,6 +759,7 @@ function SC:CreateRunInviteProposal(targetPlayerKey, partyAtProposalTime)
     local runName = self.GetRunDisplayName and self:GetRunDisplayName(db.run, "Custom Run") or "Custom Run"
     return self:CreateRunProposal(runName, db.run.ruleset, "ADD_PARTICIPANT", targetPlayerKey, db.run.runId, {
         partyAtProposalTime = partyAtProposalTime,
+        startLevel = db.run.startLevel,
     })
 end
 
@@ -860,6 +943,17 @@ function SC:GetPartySyncAction(allowActivePlan)
         }
     end
     if not db.run or not db.run.active then
+        if self.GetLevelingRunStartBlocker then
+            local blocker = self:GetLevelingRunStartBlocker({ includeParty = IsInGroup() and not IsInRaid() })
+            if blocker then
+                return {
+                    action = "BLOCKED",
+                    enabled = true,
+                    message = blocker,
+                    blockedCode = "MAX_LEVEL",
+                }
+            end
+        end
         if IsInGroup() and not IsInRaid() then
             local rows = self.Sync_GetGroupRows and self:Sync_GetGroupRows() or {}
             local runCandidates = {}
@@ -896,6 +990,18 @@ function SC:GetPartySyncAction(allowActivePlan)
             enabled = true,
             message = "Start a run before syncing with your party.",
         }
+    end
+
+    if self.GetActiveRunLevelingBlocker then
+        local activeBlocker = self:GetActiveRunLevelingBlocker()
+        if activeBlocker then
+            return {
+                action = "BLOCKED",
+                enabled = true,
+                message = activeBlocker,
+                blockedCode = "MAX_LEVEL",
+            }
+        end
     end
 
     local activePlan = db.partySyncPlan
@@ -949,8 +1055,15 @@ function SC:GetPartySyncAction(allowActivePlan)
         local label = self.FormatPlayerLabel and self:FormatPlayerLabel(peer.playerKey or peer.name) or tostring(peer.playerKey or peer.name or "party member")
         local hasNeverSeenAddon = (not peer.lastSeen or peer.lastSeen <= 0)
         local rosterAge = time() - (tonumber(peer.rosterSeen) or time())
+        local peerLevel = tonumber(peer.level)
+        if (not peerLevel) and self.GetKnownPartyLevel then
+            peerLevel = tonumber(self:GetKnownPartyLevel(peer.playerKey))
+        end
 
-        if hasNeverSeenAddon then
+        if self.IsLevelMaxForRun and self:IsLevelMaxForRun(peerLevel)
+            and ((not peer.active) or status == "NOT_IN_RUN" or status == "RUN_MISMATCH" or (localRunId and peer.runId and peer.runId ~= localRunId)) then
+            blocked = blocked or (label .. " is already max level and cannot start or join a leveling run.")
+        elseif hasNeverSeenAddon then
             if rosterAge >= PARTY_SYNC_NO_ADDON_GRACE_SECONDS then
                 unsupportedMember = unsupportedMember or label
             else
@@ -1002,6 +1115,7 @@ function SC:GetPartySyncAction(allowActivePlan)
             action = "BLOCKED",
             enabled = true,
             message = blocked,
+            blockedCode = string.find(blocked, "max level", 1, true) and "MAX_LEVEL" or nil,
         }
     end
     if wantsAmendRules then
@@ -1235,6 +1349,14 @@ function SC:PartySync_ApplyJoinRun(runId, ruleset, fromKey)
         Print("cannot join: you already have an active run.")
         return false
     end
+    if fromKey and self.GetRemotePeerStatus and self.IsLevelMaxForRun then
+        local peer = self:GetRemotePeerStatus(fromKey)
+        if peer and (self:IsLevelMaxForRun(peer.levelAtJoin) or self:IsLevelMaxForRun(peer.level)) then
+            local label = self.FormatPlayerLabel and self:FormatPlayerLabel(fromKey) or tostring(fromKey)
+            Print(label .. " is already max level and cannot start or share a leveling run.")
+            return false
+        end
+    end
     local fromLabel = self.FormatPlayerLabel and fromKey and self:FormatPlayerLabel(fromKey) or tostring(fromKey or "party")
     local ok = self:StartRun({
         runId = runId,
@@ -1284,6 +1406,7 @@ function SC:ReceiveRunProposal(payload, proposerKey)
         runName = self.NormalizePresetLabel and self:NormalizePresetLabel(payload.runName or "Softcore Run") or (payload.runName or "Softcore Run"),
         proposedBy = proposerKey,
         proposedAt = proposedAt,
+        startLevel = tonumber(payload.startLevel) or nil,
         ruleset = ruleset,
         rulesetHash = payload.proposalRulesetHash or computedHash,
         preset = self.NormalizePresetKey and self:NormalizePresetKey(payload.preset or "CUSTOM") or (payload.preset or "CUSTOM"),
@@ -1364,6 +1487,7 @@ function SC:ReceiveRunProposal(payload, proposerKey)
         end
         sameExisting.rulesetHash = proposal.rulesetHash
         sameExisting.preset = proposal.preset
+        sameExisting.startLevel = proposal.startLevel or sameExisting.startLevel
         sameExisting.partyAtProposalTime = sameExisting.partyAtProposalTime or proposal.partyAtProposalTime
         sameExisting.acceptedBy = sameExisting.acceptedBy or {}
         sameExisting.acceptedBy[proposerKey] = true
@@ -1411,6 +1535,13 @@ function SC:AcceptPendingProposal()
     if proposal.proposedBy == playerKey then
         Print("you already proposed this. Waiting for party responses.")
         return
+    end
+    if self.GetProposalRunStartBlocker then
+        local blocker = self:GetProposalRunStartBlocker(proposal)
+        if blocker then
+            Print("cannot accept: " .. blocker)
+            return
+        end
     end
     if proposal.detailsPending then
         Print("proposal details are still loading. Try again in a moment.")
@@ -1698,6 +1829,14 @@ function SC:ReceiveProposalResponse(payload, playerKey)
         -- Guard against DECLINED/CANCELLED → CONFIRMED: only act from PENDING state.
         if proposal.proposedBy == self:GetPlayerKey() and (proposal.proposalType == "RUN" or proposal.proposalType == "SYNC_RUN" or proposal.proposalType == "ADD_PARTICIPANT") and proposal.status == "PENDING" then
             if self:CheckAllProposalMembersAccepted(proposal) then
+                if self.GetProposalRunStartBlocker then
+                    local blocker = self:GetProposalRunStartBlocker(proposal)
+                    if blocker then
+                        Print("cannot confirm proposal: " .. blocker)
+                        return
+                    end
+                end
+
                 proposal.status = "CONFIRMED"
                 db.pendingProposalId = nil
 
@@ -1805,6 +1944,14 @@ function SC:ReceiveRunConfirmed(payload, confirmerKey)
     if not proposal.acceptedBy[playerKey] then return end
     if proposal.proposedBy == playerKey then return end
 
+    if self.GetProposalRunStartBlocker then
+        local blocker = self:GetProposalRunStartBlocker(proposal)
+        if blocker then
+            Print("cannot confirm proposal: " .. blocker)
+            return
+        end
+    end
+
     proposal.status = "CONFIRMED"
     if db.pendingProposalId == proposal.proposalId then
         db.pendingProposalId = nil
@@ -1879,6 +2026,14 @@ function SC:ConfirmAcceptedProposalFromStatus(proposerKey, runId, rulesetHash)
     local playerKey = self:GetPlayerKey()
     if not proposal.acceptedBy[playerKey] then return false end
     local wasRunActive = db.run and db.run.active == true
+
+    if self.GetProposalRunStartBlocker then
+        local blocker = self:GetProposalRunStartBlocker(proposal)
+        if blocker then
+            Print("cannot confirm proposal: " .. blocker)
+            return false
+        end
+    end
 
     proposal.status = "CONFIRMED"
     if db.pendingProposalId == proposal.proposalId then

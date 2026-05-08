@@ -2660,6 +2660,9 @@ local function RefreshPartySyncButtonInParty(btn)
     if SC.pendingJoinRunId then
         btn:SetText("Joining...")
         btn:SetEnabled(false)
+    elseif route and route.blockedCode == "MAX_LEVEL" then
+        btn:SetText("Max Level")
+        btn:SetEnabled(route.enabled == true)
     elseif route and route.action == "JOIN_RUN" then
         btn:SetText("Join Run")
         btn:SetEnabled(route.enabled == true)
@@ -2768,6 +2771,7 @@ local function RefreshRunPanel(frame)
         local proposer = FormatPlayerLabel(pendingProposal.proposedBy)
         local acceptBlocked = false
         local blockText = nil
+        local blockCode = nil
         if pendingProposal.detailsPending then
             acceptBlocked = true
             blockText = "Proposal details are still loading."
@@ -2789,6 +2793,14 @@ local function RefreshRunPanel(frame)
                         blockText = blockText .. " " .. tostring(diffs[1].ruleName) .. ": local " .. tostring(diffs[1].localValue) .. " / proposal " .. tostring(diffs[1].remoteValue)
                     end
                 end
+            end
+        end
+        if (not isProposer) and (not acceptedLocally) and SC.GetProposalRunStartBlocker then
+            local maxBlockText, maxBlockCode = SC:GetProposalRunStartBlocker(pendingProposal)
+            if maxBlockText then
+                acceptBlocked = true
+                blockText = maxBlockText
+                blockCode = maxBlockCode
             end
         end
         CopyRulesInto(frame.start.selectedRules, pendingProposal.ruleset)
@@ -2831,7 +2843,9 @@ local function RefreshRunPanel(frame)
             end
         else
             if acceptBlocked then
-                if pendingProposal.detailsPending then
+                if blockCode == "MAX_LEVEL" then
+                    frame.start.activeText:SetText("|cfff87171" .. blockText .. "|r")
+                elseif pendingProposal.detailsPending then
                     frame.start.activeText:SetText("|cffffd100Proposal from " .. proposer .. " received.|r Loading details...")
                 else
                     frame.start.activeText:SetText("|cfff87171Sync blocked: " .. blockText .. "|r Use /sc conflicts or /sc syncdebug for full details.")
@@ -2859,8 +2873,8 @@ local function RefreshRunPanel(frame)
         frame.start.applyChangesBtn:Hide()
         frame.start.cancelChangesBtn:Hide()
         frame.start.proposalAcceptBtn:SetShown((not isProposer) and not acceptedLocally)
-        frame.start.proposalAcceptBtn:SetText(pendingProposal.detailsPending and "Retry Details" or "Accept")
-        frame.start.proposalAcceptBtn:SetEnabled((not acceptBlocked) or pendingProposal.detailsPending)
+        frame.start.proposalAcceptBtn:SetText((acceptBlocked and blockCode == "MAX_LEVEL") and "Max Level" or (pendingProposal.detailsPending and "Retry Details" or "Accept"))
+        frame.start.proposalAcceptBtn:SetEnabled(((not acceptBlocked) or pendingProposal.detailsPending) and blockCode ~= "MAX_LEVEL")
         frame.start.proposalDeclineBtn:SetShown((not isProposer) and not acceptedLocally)
         frame.start.proposalDeclineBtn:SetEnabled(true)
         frame.start.proposalCancelBtn:SetShown(isProposer or acceptedLocally)
@@ -2909,7 +2923,28 @@ local function RefreshRunPanel(frame)
     for _, control in ipairs(frame.start.controls) do
         SetRunControlShown(control, true)
     end
+    local startBlocker = nil
+    local startBlockerKey = nil
+    if not active and SC.GetLevelingRunStartBlocker then
+        startBlocker, startBlockerKey = SC:GetLevelingRunStartBlocker({ includeParty = IsInGroup() and not IsInRaid() })
+    end
     frame.start.primaryBtn:SetShown(not active)
+    frame.start.primaryBtn.softcoreStartBlocker = startBlocker
+    if not active then
+        local localKey = SC.GetPlayerKey and SC:GetPlayerKey() or nil
+        if startBlocker and startBlockerKey == localKey then
+            frame.start.primaryBtn:SetText("Max Level")
+        elseif startBlocker then
+            frame.start.primaryBtn:SetText("Start Blocked")
+        elseif IsInGroup() and not IsInRaid() then
+            frame.start.primaryBtn:SetText("Propose Run")
+        else
+            frame.start.primaryBtn:SetText("Start Run")
+        end
+        frame.start.primaryBtn:SetEnabled(startBlocker == nil)
+        frame.start.inactiveText:SetShown(true)
+        frame.start.inactiveText:SetText(startBlocker and ("|cfff87171" .. startBlocker .. "|r") or "Choose a ruleset, review the rules, then start your run.")
+    end
     local confirmingStop = active and frame.start.stopConfirmPending
     local stopReady = confirmingStop and frame.start.cancelRunBox and string.lower(strtrim(frame.start.cancelRunBox:GetText() or "")) == "end run"
     if not active then
@@ -4441,6 +4476,10 @@ function SC:OpenMasterWindow(focusTab)
     frame.start.primaryBtn = CreateButton(startPanel, "Start Run", 120, 24)
     frame.start.primaryBtn:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", RUN_FOOTER_LEFT_INSET, RUN_FOOTER_BOTTOM)
     frame.start.primaryBtn:SetScript("OnClick", function()
+        if frame.start.primaryBtn.softcoreStartBlocker then
+            Print(frame.start.primaryBtn.softcoreStartBlocker)
+            return
+        end
         local ruleset = SC:CopyTable(frame.start.selectedRules)
         if SC.ApplyGroupingMode then
             SC:ApplyGroupingMode(ruleset)
@@ -4462,6 +4501,16 @@ function SC:OpenMasterWindow(focusTab)
             frame.activeTab = TAB_OVERVIEW
         end
         SC:MasterUI_Refresh()
+    end)
+    frame.start.primaryBtn:SetScript("OnEnter", function(btn)
+        if not btn.softcoreStartBlocker or not GameTooltip then return end
+        GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Run Start Blocked", 1, 0.82, 0.2)
+        GameTooltip:AddLine(btn.softcoreStartBlocker, 0.94, 0.86, 0.68, true)
+        GameTooltip:Show()
+    end)
+    frame.start.primaryBtn:SetScript("OnLeave", function()
+        if GameTooltip then GameTooltip:Hide() end
     end)
     ApplyStartPreset(frame, "CASUAL")
     frame.start.stopBtn = CreateButton(startPanel, "End Run", 100, 24)
@@ -4530,6 +4579,11 @@ function SC:OpenMasterWindow(focusTab)
             end
             if route.candidates and #route.candidates > 1 then
                 GameTooltip:AddLine("Click to choose which run to join.", 0.68, 0.56, 0.38, true)
+            end
+        elseif route and route.blockedCode == "MAX_LEVEL" then
+            GameTooltip:SetText("Max Level", 1, 0.82, 0.2)
+            if route.message then
+                GameTooltip:AddLine(route.message, 0.94, 0.86, 0.68, true)
             end
         else
             GameTooltip:SetText("Party Sync", 1, 0.82, 0.2)

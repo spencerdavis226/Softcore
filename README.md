@@ -94,6 +94,8 @@ Achievements are grouped by level milestones, max-level runs, preset challenges,
 
 Max-level completion uses the same discovered run label shown on Overview. When an active valid run completes, Softcore records the completion, plays restrained feedback, and opens a parchment-style award with concise run statistics. The latest completion award is stored per character and can be reopened from the Achievements tab.
 
+Characters that are already max level cannot start or join a new leveling run. In a party, Softcore blocks run proposals, join-run sync, and run invites when a known participant is already max level, and the Charter controls explain the restriction instead of creating an ineligible run.
+
 ## HUD And Sounds
 
 The HUD is a small status strip for the active run, party state, and pending governance. It also appears for proposal or amendment review before a run is active. Click it to open the most relevant menu tab.

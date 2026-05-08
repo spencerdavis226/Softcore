@@ -549,6 +549,33 @@ local function GetCurrentPartyKeys()
     return keys
 end
 
+local function GetPartyLevelForKey(playerKey)
+    if not playerKey or playerKey == "" then
+        return nil
+    end
+
+    if playerKey == GetPlayerKey() then
+        return UnitLevel("player")
+    end
+
+    if IsInRaid() or not IsInGroup() then
+        return nil
+    end
+
+    for index = 1, GetNumSubgroupMembers() do
+        local unit = "party" .. index
+        local name, realm
+        if not UnitIsPlayer or UnitIsPlayer(unit) then
+            name, realm = UnitFullName(unit)
+        end
+        if name and BuildPlayerKey(name, realm) == playerKey then
+            return UnitLevel(unit)
+        end
+    end
+
+    return nil
+end
+
 local function ShouldThrottleRunNotice(run, bucketName, playerKey, seconds)
     run[bucketName] = run[bucketName] or {}
     local now = time()
@@ -847,6 +874,102 @@ end
 
 function SC:GetDefaultRuleset()
     return CopyTable(CreateDefaultRuleset())
+end
+
+function SC:GetMaxLevel()
+    if GetMaxLevelForPlayerExpansion then
+        local ok, level = pcall(GetMaxLevelForPlayerExpansion)
+        if ok and tonumber(level) then return tonumber(level) end
+    end
+
+    ---@diagnostic disable-next-line: undefined-global
+    if MAX_PLAYER_LEVEL and tonumber(MAX_PLAYER_LEVEL) then
+        ---@diagnostic disable-next-line: undefined-global
+        return tonumber(MAX_PLAYER_LEVEL)
+    end
+
+    return 80
+end
+
+function SC:IsLevelMaxForRun(level)
+    level = tonumber(level)
+    local maxLevel = self.GetMaxLevel and self:GetMaxLevel() or 80
+    return level ~= nil and maxLevel ~= nil and maxLevel > 0 and level >= maxLevel
+end
+
+function SC:GetKnownPartyLevel(playerKey)
+    return GetPartyLevelForKey(playerKey)
+end
+
+function SC:GetLevelingRunStartBlocker(options)
+    options = options or {}
+    local db = EnsureDatabase()
+
+    if not options.skipLocal then
+        self:RefreshCharacter()
+        local localLevel = tonumber(db.character and db.character.level or UnitLevel("player") or 0) or 0
+        if self:IsLevelMaxForRun(localLevel) then
+            return "This character is already max level. Start a Softcore run on a leveling character.", GetPlayerKey(db.character), localLevel
+        end
+    end
+
+    if options.includeParty then
+        local candidates = {}
+        if options.targetPlayerKey then
+            candidates[options.targetPlayerKey] = true
+        elseif options.partyAtProposalTime then
+            for key in pairs(options.partyAtProposalTime) do
+                candidates[key] = true
+            end
+        else
+            candidates = GetCurrentPartyKeys()
+        end
+
+        local rowsByKey = {}
+        if self.Sync_GetGroupRows then
+            for _, peer in ipairs(self:Sync_GetGroupRows()) do
+                if peer and peer.playerKey then
+                    rowsByKey[peer.playerKey] = peer
+                end
+            end
+        end
+
+        local localKey = GetPlayerKey(db.character)
+        for playerKey in pairs(candidates) do
+            if playerKey ~= localKey then
+                local level = tonumber(GetPartyLevelForKey(playerKey))
+                if (not level) and rowsByKey[playerKey] then
+                    level = tonumber(rowsByKey[playerKey].level)
+                end
+                if self:IsLevelMaxForRun(level) then
+                    local label = self.FormatPlayerLabel and self:FormatPlayerLabel(playerKey) or tostring(playerKey)
+                    return label .. " is already max level and cannot start or join a leveling run.", playerKey, level
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+function SC:GetActiveRunLevelingBlocker()
+    local db = EnsureDatabase()
+    if not db.run or not db.run.active then
+        return nil
+    end
+
+    local startLevel = tonumber(db.run.startLevel or 0) or 0
+    if self:IsLevelMaxForRun(startLevel) then
+        return "This run was started at max level and cannot be synced as a leveling run. End it and start on a leveling character."
+    end
+
+    self:RefreshCharacter()
+    local currentLevel = tonumber(db.character and db.character.level or UnitLevel("player") or 0) or 0
+    if self:IsLevelMaxForRun(currentLevel) and db.run.completed ~= true then
+        return "This character is already max level. Complete or reset this run before syncing with the party."
+    end
+
+    return nil
 end
 
 function SC:ApplyGroupingMode(ruleset)
@@ -2311,6 +2434,12 @@ function SC:StartRun(runOptions)
     local startingRuleset = runOptions.ruleset and CopyTable(runOptions.ruleset) or CopyTable(db.run.ruleset or CreateDefaultRuleset())
     if self.NormalizeRulesetForSync then
         startingRuleset = self:NormalizeRulesetForSync(startingRuleset)
+    end
+
+    local startBlocker = self:GetLevelingRunStartBlocker()
+    if startBlocker then
+        Print(startBlocker)
+        return false
     end
 
     local preservedProposals = {}

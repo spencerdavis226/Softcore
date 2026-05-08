@@ -319,6 +319,9 @@ local function GetGovernanceHUDState(db, syncRows, partyStatus)
             elseif route.action == "INVITE" then
                 return "YELLOW", "Invite", "RUN"
             elseif route.action == "BLOCKED" then
+                if route.blockedCode == "MAX_LEVEL" then
+                    return "YELLOW", "Max Level", "RUN"
+                end
                 local edgeState, edgeText, edgeTab = GetPartyEdgeHUDState(db, syncRows, partyStatus)
                 if edgeState then
                     return edgeState, edgeText, edgeTab
@@ -399,6 +402,7 @@ local HUD_HINTS = {
     ["Run ID"]        = "A party member is on a different run. Use Party Sync to align run IDs.",
     ["Rules"]         = "A party member has a different ruleset. Use Party Sync to align rules.",
     ["Version"]       = "A party member has a different addon version. They need to update Softcore.",
+    ["Max Level"]     = "Max-level characters cannot start or join leveling runs.",
     ["Level Gap"]     = "The party level gap is too large to continue. Check the Run tab.",
     ["Raid Local"]    = "You're in a raid. Runs are tracked individually in raids.",
 }
