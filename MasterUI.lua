@@ -2677,8 +2677,6 @@ local function RefreshRunPanel(frame)
     local active = IsActiveRun()
     local db = SC.db or SoftcoreDB
     local modifying = active and frame.start.isModifyingRules
-    local rulesConflict = GetPendingRulesConflict()
-
     local pendingAmendment = GetPendingAmendment()
     if pendingAmendment then
         local localKey = SC:GetPlayerKey()
@@ -2702,15 +2700,6 @@ local function RefreshRunPanel(frame)
         if frame.start.chefBtn then SetRunControlShown(frame.start.chefBtn, false) end
         if frame.start.bronzeVigilBtn then SetRunControlShown(frame.start.bronzeVigilBtn, false) end
         SetRunSetupEnabled(frame, false)
-        frame.start.inactiveText:SetShown(false)
-        frame.start.activeText:SetShown(false)
-        if pendingAmendment.detailsPending then
-            frame.start.activeText:SetText("|cffffd100Rule change from " .. proposer .. " received.|r Loading changed rules...")
-        elseif isProposer then
-            frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your rule change.|r Changed rules are highlighted below.")
-        else
-            frame.start.activeText:SetText("|cffffd100Rule change from " .. proposer .. ".|r Review the highlighted rules below, then Accept or Decline.")
-        end
         frame.start.primaryBtn:Hide()
         frame.start.stopBtn:Hide()
         if frame.start.confirmStopBtn then frame.start.confirmStopBtn:Hide() end
@@ -2814,50 +2803,6 @@ local function RefreshRunPanel(frame)
         if frame.start.chefBtn then SetRunControlShown(frame.start.chefBtn, false) end
         if frame.start.bronzeVigilBtn then SetRunControlShown(frame.start.bronzeVigilBtn, false) end
         SetRunSetupEnabled(frame, false)
-        frame.start.inactiveText:SetShown(false)
-        frame.start.activeText:SetShown(false)
-        local proposeMismatchHint = ""
-        if isProposer and pendingProposal.proposalType == "RUN" and IsInGroup() and not IsInRaid() then
-            for _, c in pairs(db and db.run and db.run.conflicts or {}) do
-                if c.active and not c.dismissed and c.type == "RUN_MISMATCH" then
-                    proposeMismatchHint = "\n|cffffd100Party reports a run ID mismatch — cancel this proposal so everyone can use Party Sync.|r"
-                    break
-                end
-            end
-        end
-        if isProposer then
-            if pendingProposal.proposalType == "SYNC_RUN" then
-                frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your run sync proposal...|r")
-            elseif pendingProposal.proposalType == "ADD_PARTICIPANT" then
-                frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your run invite...|r")
-            else
-                frame.start.activeText:SetText("|cfffbbf24Waiting for party to accept your run proposal...|r" .. proposeMismatchHint)
-            end
-        elseif acceptedLocally then
-            if pendingProposal.proposalType == "SYNC_RUN" then
-                frame.start.activeText:SetText("|cfffbbf24Accepted run sync from " .. proposer .. ".|r Waiting for party confirmation.")
-            elseif pendingProposal.proposalType == "ADD_PARTICIPANT" then
-                frame.start.activeText:SetText("|cfffbbf24Accepted party run invite from " .. proposer .. ".|r Waiting for party confirmation.")
-            else
-                frame.start.activeText:SetText("|cfffbbf24Accepted run proposal from " .. proposer .. ".|r Waiting for party confirmation.")
-            end
-        else
-            if acceptBlocked then
-                if blockCode == "MAX_LEVEL" then
-                    frame.start.activeText:SetText("|cfff87171" .. blockText .. "|r")
-                elseif pendingProposal.detailsPending then
-                    frame.start.activeText:SetText("|cffffd100Proposal from " .. proposer .. " received.|r Loading details...")
-                else
-                    frame.start.activeText:SetText("|cfff87171Sync blocked: " .. blockText .. "|r Use /sc conflicts or /sc syncdebug for full details.")
-                end
-            elseif pendingProposal.proposalType == "SYNC_RUN" then
-                frame.start.activeText:SetText("|cffffd100Run sync proposal from " .. proposer .. ".|r Review the matching rules below, then Accept or Decline.")
-            elseif pendingProposal.proposalType == "ADD_PARTICIPANT" then
-                frame.start.activeText:SetText("|cffffd100Party run invite from " .. proposer .. ".|r Review the rules below, then Accept or Decline.")
-            else
-                frame.start.activeText:SetText("|cffffd100Run proposal from " .. proposer .. ".|r Review the proposed rules below, then Accept or Decline.")
-            end
-        end
         frame.start.primaryBtn:Hide()
         frame.start.stopBtn:Hide()
         if frame.start.confirmStopBtn then frame.start.confirmStopBtn:Hide() end
@@ -2902,8 +2847,6 @@ local function RefreshRunPanel(frame)
         return
     end
 
-    frame.start.inactiveText:SetShown(false)
-    frame.start.activeText:SetShown(false)
 
     if active and db and db.run and db.run.ruleset and not modifying then
         CopyRulesInto(frame.start.selectedRules, db.run.ruleset)
@@ -2942,8 +2885,6 @@ local function RefreshRunPanel(frame)
             frame.start.primaryBtn:SetText("Start Run")
         end
         frame.start.primaryBtn:SetEnabled(startBlocker == nil)
-        frame.start.inactiveText:SetShown(true)
-        frame.start.inactiveText:SetText(startBlocker and ("|cfff87171" .. startBlocker .. "|r") or "Choose a ruleset, review the rules, then start your run.")
     end
     local confirmingStop = active and frame.start.stopConfirmPending
     local stopReady = confirmingStop and frame.start.cancelRunBox and string.lower(strtrim(frame.start.cancelRunBox:GetText() or "")) == "end run"
@@ -2974,12 +2915,11 @@ local function RefreshRunPanel(frame)
     if frame.start.cancelRunHint then
         frame.start.cancelRunHint:SetShown(confirmingStop)
     end
-    local partySyncRoute = nil
     local showPartySync = false
     if frame.start.partySyncBtn then
         local canShowPartySync = not modifying and not confirmingStop and IsInGroup() and not IsInRaid()
         if canShowPartySync then
-            partySyncRoute = select(1, RefreshPartySyncButtonInParty(frame.start.partySyncBtn))
+            RefreshPartySyncButtonInParty(frame.start.partySyncBtn)
             showPartySync = frame.start.partySyncBtn:IsShown()
         else
             frame.start.partySyncBtn:Hide()
@@ -3014,29 +2954,10 @@ local function RefreshRunPanel(frame)
         if modifying then
             if IsInGroup() and not IsInRaid() then
                 frame.start.applyChangesBtn:SetText("Propose to Party")
-                frame.start.activeText:SetText("Draft rule amendment. This will be sent to all party members for approval.")
             elseif IsInRaid() then
                 frame.start.applyChangesBtn:SetText("Apply Changes")
-                frame.start.activeText:SetText("Raid groups are not supported. Rule changes apply locally and will be logged.")
             else
                 frame.start.applyChangesBtn:SetText("Apply Changes")
-                frame.start.activeText:SetText("Draft rule amendment. Changes apply going forward and will be logged.")
-            end
-        else
-            if confirmingStop then
-                frame.start.activeText:SetText("|cfffbbf24End run requested.|r This will reset local run progress.")
-            elseif partySyncRoute and partySyncRoute.message and IsInGroup() and not IsInRaid() then
-                if partySyncRoute.action == "NONE" then
-                    frame.start.activeText:SetText("|cff4ade80" .. partySyncRoute.message .. "|r Active run rules are locked.")
-                elseif partySyncRoute.action == "BLOCKED" then
-                    frame.start.activeText:SetText("|cfffbbf24" .. partySyncRoute.message .. "|r")
-                else
-                    frame.start.activeText:SetText("|cffffd100" .. partySyncRoute.message .. "|r")
-                end
-            elseif rulesConflict then
-                frame.start.activeText:SetText("|cfffbbf24Rules conflict detected with " .. FormatPlayerLabel(rulesConflict.playerKey) .. ".|r Use Party Sync to propose your local rule differences.")
-            else
-                frame.start.activeText:SetText("Active run rules are locked. Camera mode can be switched anytime without a rule amendment.")
             end
         end
     end
@@ -4041,13 +3962,6 @@ function SC:OpenMasterWindow(focusTab)
     frame.start = { panel = startPanel, controls = {}, selectedRules = SC:GetDefaultRuleset(), selectedPreset = "CASUAL" }
     frame.start.selectedRules.dungeonRepeat = "ALLOWED"
     SetUnsyncedPartyAllowed(frame.start.selectedRules, true)
-    frame.start.inactiveText = CreateField(startPanel, 0, 0, 620)
-    frame.start.inactiveText:SetText("Choose a ruleset, review the rules, then start your run.")
-    frame.start.inactiveText:Hide()
-    frame.start.activeText = CreateField(startPanel, 0, 0, 620)
-    frame.start.activeText:SetText("Active run rules are locked. Future rule changes will use a visible amendment flow.")
-    frame.start.activeText:Hide()
-
     frame.start.sections = {}
     local runLayout = SC.MasterUIRunLayout
     frame.start.charterSection = CreateRunSection(startPanel, "Run Charter", 0, 0, runLayout.CONTENT_WIDTH, runLayout:SectionHeight(2, 4))
